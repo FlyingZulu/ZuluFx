@@ -311,6 +311,7 @@ private:
     std::atomic<float> inBoost{1.f}, outBoost{1.f};
     std::atomic<bool> outLoud{false};
     float loudEnv = 0.f, loudGr = 1.f;
+public:
     void setInBoost(float v) { inBoost.store(v); }
     void setOutBoost(float v) { outBoost.store(v); }
     void setOutLoud(bool on) { outLoud.store(on); }
@@ -318,6 +319,7 @@ private:
     void setNetworkParams(float ch, float md, float al, float sp) {
         netChaos.store(ch); netMod.store(md); netAlias.store(al); netSpeed.store(sp);
     }
+private:
     void eq3SetCoefs(float fs, float gl, float gm, float gh);
     std::atomic<int> drumBank{0};
     float drumPos = -1.f, drumEnd = 0.f, drumRate = 1.f, drumEnv = 0.f;

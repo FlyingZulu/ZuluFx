@@ -245,6 +245,29 @@ communiquer les cibles entre elles (ce que fait un axe réagit sur l'autre).
 (doux/moyen/fort), **MODULATION** (léger/moyen/fort), **ALIASING**
 (off/léger/fort), **VITESSE** (lente → frénétique).
 
+## Projets : 32 slots, noms et couleurs (v0.32b)
+
+Le panneau **PROJET** a 4 pages de 8 slots (32 au total) : **swipe**
+gauche/droite ou flèches ‹ › pour changer de page. **Tap = charger**,
+**appui long = sauver**, **double-tap = nommer + choisir la couleur de
+l'étiquette** (6 couleurs). Les noms et couleurs sont mémorisés.
+
+## Template de base + panique (v0.32b)
+
+- **MENU · TEMPLATE DE BASE** : **SAUVER L'ETAT ACTUEL** — cet état se
+  recharge tout seul à chaque démarrage (niveau 0, là où tu te retrouves).
+  **EFFACER** revient au défaut d'usine au démarrage.
+- **MENU · PANIQUE** : **TOUT REMETRE A ZERO** — stoppe tout, éteint les FX,
+  remet filtre/axes/punch/solo/mute à zéro. Les sauvegardes sont conservées.
+
+## Logs et noms des samples (v0.32b)
+
+- Une **ligne de log** sous la grille affiche le dernier sample touché :
+  banque, nom, date/heure d'enregistrement, durée.
+- **MENU · LOGS SAMPLES** : ON/OFF (ON par défaut) pour cacher la ligne.
+- **MENU · NOMS DES SAMPLES** : nommer chaque banque B1-B8 (le « coin-coin »,
+  le « magnifique violon… »). Les noms partent dans les sauvegardes de projet.
+
 ## À venir (v0.27+)
 
 - Routage ARP et snapshots des tirettes (voyants rose/ambre).

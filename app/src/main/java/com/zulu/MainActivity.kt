@@ -355,6 +355,18 @@ class MainActivity : Activity() {
     private var netSpeedSel = 1
     private val masterFx = HashSet<Int>()
     private val snapFxOverride = HashMap<Int, Boolean>()
+    private val projNames = HashMap<Int, String>()
+    private val projCols = HashMap<Int, Int>()
+    private var projPage = 0
+    private var projPageLabel: TextView? = null
+    private var lastProjTapSlot = -1
+    private var lastProjTapAt = 0L
+    private val bankLabels = Array(8) { "" }
+    private val bankRecAt = LongArray(8)
+    private var showSampleLog = true
+    private var sampleLogView: TextView? = null
+    private val menuLogButtons = ArrayList<Button>()
+    private val menuNameButtons = ArrayList<Button>()
     private val axisMulti = Array(2) { ArrayList<Int>() }
     private val axisCurve = Array(2) { IntArray(10) }
     private var assignArm = -1
@@ -431,6 +443,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         verticalUi = getSharedPreferences("zulu", MODE_PRIVATE).getBoolean("verticalUi", false)
         snapTransp = getSharedPreferences("zulu", MODE_PRIVATE).getBoolean("snapTransp", true)
+        showSampleLog = getSharedPreferences("zulu", MODE_PRIVATE).getBoolean("sampleLog", true)
         requestedOrientation =
             if (verticalUi) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -797,6 +810,7 @@ class MainActivity : Activity() {
                         engine.nativeSetPlayerBank(n - 1)
                         bankOn[n - 1] = !bankOn[n - 1]
                         refreshBankFx()
+                        pushSampleLog("B$n \u00b7 ${bankDisplayName(n - 1)}")
                     } else if (midiLoops[n - 1].isNotEmpty()) {
                         midiPlaying[n - 1] = !midiPlaying[n - 1]
                         bankOn[n - 1] = midiPlaying[n - 1]
@@ -881,6 +895,21 @@ class MainActivity : Activity() {
         )
         gridParams.setMargins(0, (6 * d).toInt(), 0, 0)
         column.addView(padGrid, gridParams)
+        val slog = TextView(this)
+        slog.setTextColor(silk)
+        slog.textSize = 9f
+        slog.typeface = markerFont(this)
+        slog.maxLines = 1
+        slog.ellipsize = android.text.TextUtils.TruncateAt.START
+        slog.setPadding((4 * d).toInt(), 0, (4 * d).toInt(), 0)
+        slog.visibility = if (showSampleLog) View.VISIBLE else View.GONE
+        sampleLogView = slog
+        column.addView(
+            slog,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
         column.addView(zuLuBtns)
         column.addView(
             zuLuFader,
@@ -1284,6 +1313,211 @@ class MainActivity : Activity() {
             Toast.makeText(this, "AUDIO : demarrage impossible", Toast.LENGTH_LONG).show()
         }
         refreshPlayBtn()
+        if (globalFile(0).exists()) {
+            loadProject(0, global = true)
+            Toast.makeText(this, "TEMPLATE DE BASE CHARGE", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private var swipeX0 = 0f
+    private var swipeY0 = 0f
+
+    override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+        if (::projOverlay.isInitialized && projOverlay.visibility == View.VISIBLE) {
+            if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                swipeX0 = e.x
+                swipeY0 = e.y
+            } else if (e.actionMasked == MotionEvent.ACTION_UP) {
+                val dx = e.x - swipeX0
+                val dy = e.y - swipeY0
+                val dd = resources.displayMetrics.density
+                if (Math.abs(dx) > 80 * dd && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+                    if (dx < 0 && projPage < 3) {
+                        projPage++
+                        refreshProjSlots()
+                    } else if (dx > 0 && projPage > 0) {
+                        projPage--
+                        refreshProjSlots()
+                    }
+                }
+            }
+        }
+        return super.dispatchTouchEvent(e)
+    }
+
+    private fun metaFile(): File = File(projDir(), "meta.json")
+
+    private fun saveProjMeta() {
+        try {
+            val json = JSONObject()
+            val names = JSONObject()
+            for ((k, v) in projNames) names.put(k.toString(), v)
+            val cols = JSONObject()
+            for ((k, v) in projCols) cols.put(k.toString(), v)
+            json.put("names", names)
+            json.put("cols", cols)
+            metaFile().writeText(json.toString())
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun loadProjMeta() {
+        try {
+            val f = metaFile()
+            if (!f.exists()) return
+            val json = JSONObject(f.readText())
+            json.optJSONObject("names")?.let { nm ->
+                for (key in nm.keys()) projNames[key.toInt()] = nm.getString(key)
+            }
+            json.optJSONObject("cols")?.let { cl ->
+                for (key in cl.keys()) projCols[key.toInt()] = cl.getInt(key)
+            }
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun bankDisplayName(b: Int): String {
+        val custom = bankLabels[b]
+        if (custom.isNotEmpty()) return custom
+        val frames = engine.nativeBankFrames(b)
+        if (frames <= 0) return ""
+        val dur = String.format(java.util.Locale.US, "%.1f", frames / 48000f)
+        val t = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US).format(java.util.Date(bankRecAt[b]))
+        return "REC $t \u00b7 ${dur}s"
+    }
+
+    private fun pushSampleLog(msg: String) {
+        sampleLogView?.text = msg
+    }
+
+    private fun askSampleName(b: Int) {
+        val dd = resources.displayMetrics.density
+        val et = android.widget.EditText(this)
+        et.setText(bankLabels[b])
+        et.setSingleLine(true)
+        val wrap = android.widget.FrameLayout(this)
+        wrap.setPadding((48 * dd).toInt(), (16 * dd).toInt(), (48 * dd).toInt(), 0)
+        wrap.addView(et)
+        android.app.AlertDialog.Builder(this)
+            .setTitle("NOM SAMPLE B${b + 1}")
+            .setView(wrap)
+            .setPositiveButton("OK") { _, _ ->
+                bankLabels[b] = et.text.toString().trim()
+                pushSampleLog("B${b + 1} \u00b7 ${bankDisplayName(b)}")
+            }
+            .setNegativeButton("ANNULER", null)
+            .show()
+    }
+
+    private fun askProjName(slot: Int) {
+        val dd = resources.displayMetrics.density
+        val et = android.widget.EditText(this)
+        et.setText(projNames[slot] ?: "")
+        et.setSingleLine(true)
+        val cols = intArrayOf(cream, yellow, green, turquoise, pink, violet)
+        var sel = projCols[slot] ?: 0
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.VERTICAL
+        row.setPadding((48 * dd).toInt(), (16 * dd).toInt(), (48 * dd).toInt(), 0)
+        row.addView(et)
+        val swatches = ArrayList<Button>()
+        val swRow = LinearLayout(this)
+        for (c in cols) {
+            val sb = Button(this)
+            sb.text = "\u25a0"
+            sb.setTextColor(c)
+            sb.background = null
+            sb.setOnClickListener {
+                sel = c
+                for (i2 in 0 until swatches.size) swatches[i2].alpha = if (cols[i2] == sel) 1f else 0.4f
+            }
+            swatches.add(sb)
+            swRow.addView(sb, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        for (i2 in 0 until swatches.size) swatches[i2].alpha = if (cols[i2] == sel) 1f else 0.4f
+        row.addView(swRow)
+        android.app.AlertDialog.Builder(this)
+            .setTitle("PROJET $slot")
+            .setView(row)
+            .setPositiveButton("OK") { _, _ ->
+                val nm = et.text.toString().trim()
+                if (nm.isEmpty()) projNames.remove(slot) else projNames[slot] = nm
+                projCols[slot] = sel
+                saveProjMeta()
+                refreshProjSlots()
+            }
+            .setNegativeButton("ANNULER", null)
+            .show()
+    }
+
+    private fun panicReset() {
+        recEndHandler.removeCallbacksAndMessages(null)
+        motionHandler.removeCallbacksAndMessages(null)
+        if (recActive) engine.nativeStopRec()
+        recActive = false
+        recMotion = false
+        recArmed = false
+        recSnapSide = -1
+        recArmPad = -1
+        padGrid.recArmed = false
+        padGrid.recPad = -1
+        stopMotionPlayback()
+        for (b in 0 until 8) {
+            if (bankOn[b]) {
+                bankOn[b] = false
+                engine.nativeToggleBank(b)
+            }
+            midiPlaying[b] = false
+        }
+        for (f in 0 until 46) {
+            if (fxActive[f]) {
+                fxActive[f] = false
+                engine.nativeSetFx(f, false)
+            }
+            fxParamInit[f] = false
+            for (k in 0 until 8) engine.nativeSetFxParam(f, k, 0f)
+        }
+        paramActive.fill(false)
+        for (pp in 0 until 8) engine.nativeSetParam(pp, 0f, false)
+        activeFilter = 0
+        engine.nativeSetFilterType(0)
+        assignXIdx = 0
+        assignYIdx = 1
+        engine.nativeSetAssign(0, 0)
+        engine.nativeSetAssign(1, 1)
+        refreshAssignLabels()
+        axisMulti[0].clear()
+        axisMulti[1].clear()
+        pushAxisMulti(0)
+        pushAxisMulti(1)
+        exitAssignMode()
+        punchLatched.fill(false)
+        for (g in 0 until 4) soloGroups[g] = false
+        engine.nativeSetSoloMask(0)
+        padGrid.soloMask = 0
+        if (muteOn) {
+            muteOn = false
+            btnMute.text = "MUTE"
+        }
+        engine.nativeSetMute(false)
+        arpOn = false
+        engine.nativeSetArp(false, arpMode, arpRateIdx, arpOctIdx, arpGateIdx, arpOctJump)
+        for (i in 0 until 2) {
+            lfoOn[i] = false
+            engine.nativeSetCustomLfo(
+                i, lfoShapes[i], false, lfoRateIdxArr[i],
+                lfoDepthIdxArr[i].toFloat(), lfoAmountIdxArr[i].toFloat(),
+                lfoTargets[i], lfoWaves[i]
+            )
+        }
+        activeZu = -1
+        activeLu = -1
+        refreshSnapGrid()
+        refreshBlink()
+        refreshFxHighlight()
+        refreshBankFx()
+        refreshPlayBtn()
+        Toast.makeText(this, "PANIQUE : TOUT EST CALME", Toast.LENGTH_SHORT).show()
     }
 
     private fun wrapParams(marginStart: Int): LinearLayout.LayoutParams {
@@ -1788,6 +2022,7 @@ class MainActivity : Activity() {
         File(projDir(), if (global) "global_${slot}_b$bank.pcm" else "proj_${slot}_b$bank.pcm")
 
     private fun buildProjPanel(d: Float) {
+        loadProjMeta()
         projOverlay = FrameLayout(this)
         projOverlay.setBackgroundColor(Color.argb(190, 8, 9, 12))
         projOverlay.visibility = View.GONE
@@ -1819,11 +2054,39 @@ class MainActivity : Activity() {
         close.setPadding(0, 0, 0, 0)
         close.background = null
         close.setOnClickListener { closeProjPanel() }
+        val prevB = Button(this)
+        prevB.text = "\u2039"
+        prevB.setTextColor(silk)
+        prevB.textSize = 16f
+        prevB.minHeight = 0
+        prevB.minimumHeight = 0
+        prevB.setPadding(0, 0, 0, 0)
+        prevB.background = null
+        prevB.setOnClickListener { if (projPage > 0) { projPage--; refreshProjSlots() } }
+        titleRow.addView(prevB, LinearLayout.LayoutParams((30 * d).toInt(), (30 * d).toInt()))
+        val pageLbl = TextView(this)
+        pageLbl.setTextColor(Color.rgb(120, 128, 146))
+        pageLbl.textSize = 10f
+        pageLbl.typeface = markerFont(this)
+        projPageLabel = pageLbl
+        titleRow.addView(pageLbl, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        val nextB = Button(this)
+        nextB.text = "\u203a"
+        nextB.setTextColor(silk)
+        nextB.textSize = 16f
+        nextB.minHeight = 0
+        nextB.minimumHeight = 0
+        nextB.setPadding(0, 0, 0, 0)
+        nextB.background = null
+        nextB.setOnClickListener { if (projPage < 3) { projPage++; refreshProjSlots() } }
+        titleRow.addView(nextB, LinearLayout.LayoutParams((30 * d).toInt(), (30 * d).toInt()))
         titleRow.addView(close, LinearLayout.LayoutParams((30 * d).toInt(), (30 * d).toInt()))
         panel.addView(titleRow)
 
         val hint = TextView(this)
-        hint.text = "TAP = CHARGER \u00b7 APPUI LONG = SAUVER"
+        hint.text = "TAP = CHARGER \u00b7 APUI LONG = SAUVER \u00b7 DOUBLE-TAP = NOMMER \u00b7 SWIPE = PAGE"
         hint.setTextColor(Color.rgb(120, 128, 146))
         hint.textSize = 10f
         panel.addView(hint)
@@ -1841,8 +2104,19 @@ class MainActivity : Activity() {
             bg.setStroke((1 * d).toInt(), Color.rgb(60, 66, 82))
             bg.cornerRadius = 6 * d
             b.background = bg
-            b.setOnClickListener { loadProject(s) }
-            b.setOnLongClickListener { saveProject(s); true }
+            b.setOnClickListener {
+                val slot = projPage * 8 + s
+                val now = System.currentTimeMillis()
+                if (lastProjTapSlot == slot && now - lastProjTapAt < 400) {
+                    lastProjTapAt = 0
+                    askProjName(slot)
+                } else {
+                    lastProjTapSlot = slot
+                    lastProjTapAt = now
+                    loadProject(slot)
+                }
+            }
+            b.setOnLongClickListener { saveProject(projPage * 8 + s); true }
             projSlotButtons.add(b)
             panel.addView(
                 b,
@@ -1864,10 +2138,20 @@ class MainActivity : Activity() {
     }
 
     private fun refreshProjSlots() {
-        for (s in 1..8) {
-            val b = projSlotButtons[s - 1]
-            b.text = if (projFile(s).exists()) "PROJ $s \u25cf" else "PROJ $s"
+        for (i in 0 until 8) {
+            val slot = projPage * 8 + i + 1
+            val b = projSlotButtons[i]
+            val exists = projFile(slot).exists()
+            val name = projNames[slot]
+            b.text = (if (exists) "\u25cf " else "") + (name ?: "PROJ $slot")
+            val col = projCols[slot]
+            b.setTextColor(when {
+                col != null -> col
+                exists -> amber
+                else -> silk
+            })
         }
+        projPageLabel?.text = "PAGE ${projPage + 1}/4"
     }
 
     private fun openProjPanel() {
@@ -2000,6 +2284,7 @@ class MainActivity : Activity() {
             json.put("recFlavor", recFlavor)
             json.put("punchCol", punchCol)
             json.put("fxSend", JSONArray(bankFxSend.toList()))
+            json.put("bankNames", JSONArray(bankLabels.toList()))
             projFile(slot).writeText(json.toString())
             refreshProjSlots()
         } catch (e: Exception) {
@@ -2031,6 +2316,11 @@ class MainActivity : Activity() {
                     engine.nativeSetBankFxSend(b, bankFxSend[b])
                 }
             }
+            val bnArr = json.optJSONArray("bankNames")
+            if (bnArr != null) {
+                for (b in 0 until min(8, bnArr.length())) bankLabels[b] = bnArr.getString(b)
+            }
+            for (b in 0 until 8) bankRecAt[b] = System.currentTimeMillis()
             punchCol = json.optInt("punchCol", 0).coerceIn(0, punchLabels.size - 1)
             punchView?.setCollectionIndex(punchCol)
             punchView?.setLabels(punchLabels[punchCol])
@@ -2607,7 +2897,11 @@ class MainActivity : Activity() {
 
     private val recEndRunnable = Runnable {
         if (recActive) {
-            if (recMotion) finalizeMotionRec() else recActive = false
+            if (recMotion) finalizeMotionRec() else {
+                recActive = false
+                val b = recArmPad - 1
+                if (b in 0 until 8) pushSampleLog("B${b + 1} \u00b7 ${bankDisplayName(b)}")
+            }
             recMotion = false
             padGrid.recPad = -1
             refreshBlink()
@@ -2622,6 +2916,7 @@ class MainActivity : Activity() {
         recMotion = false
         recArmPad = bank
         recStartMs = System.currentTimeMillis()
+        bankRecAt[bank - 1] = recStartMs
         recLenMs = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
         padGrid.recPad = bank - 1
         recEndHandler.removeCallbacksAndMessages(null)
@@ -2707,6 +3002,8 @@ class MainActivity : Activity() {
         recMotion = false
         padGrid.recPad = -1
         recEndHandler.removeCallbacksAndMessages(null)
+        val b = recArmPad - 1
+        if (b in 0 until 8) pushSampleLog("B${b + 1} \u00b7 ${bankDisplayName(b)}")
         Toast.makeText(this, "REC STOP", Toast.LENGTH_SHORT).show()
         refreshBlink()
     }
@@ -3465,6 +3762,55 @@ class MainActivity : Activity() {
         }
         panel.addView(nspRow)
 
+        header("TEMPLATE DE BASE (AU DEMARRAGE)")
+        val tplRow = LinearLayout(this)
+        val tS = makeButton("SAUVER L'ETAT ACTUEL", silk)
+        tS.setOnClickListener {
+            saveProject(0, global = true)
+            Toast.makeText(this, "TEMPLATE DE BASE SAUVEGARDE", Toast.LENGTH_SHORT).show()
+        }
+        tplRow.addView(tS, wrapParams((4 * d).toInt()))
+        val tE = makeButton("EFFACER", silk)
+        tE.setOnClickListener {
+            globalFile(0).delete()
+            for (b in 0 until 8) bankFile(0, b, true).delete()
+            Toast.makeText(this, "TEMPLATE EFFACE", Toast.LENGTH_SHORT).show()
+        }
+        tplRow.addView(tE, wrapParams((4 * d).toInt()))
+        panel.addView(tplRow)
+
+        header("PANIQUE")
+        val panRow = LinearLayout(this)
+        val pB = makeButton("TOUT REMETRE A ZERO", red)
+        pB.setOnClickListener { panicReset() }
+        panRow.addView(pB, wrapParams((4 * d).toInt()))
+        panel.addView(panRow)
+
+        header("LOGS SAMPLES")
+        val logRow = LinearLayout(this)
+        for ((i, lbl) in listOf("OFF", "ON").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                showSampleLog = i == 1
+                getSharedPreferences("zulu", MODE_PRIVATE).edit().putBoolean("sampleLog", showSampleLog).apply()
+                sampleLogView?.visibility = if (showSampleLog) View.VISIBLE else View.GONE
+                refreshMenu()
+            }
+            menuLogButtons.add(b)
+            logRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(logRow)
+
+        header("NOMS DES SAMPLES (BANQUES 1-8)")
+        val nmRow = LinearLayout(this)
+        for (b in 1..8) {
+            val bt = makeButton("B$b", silk)
+            bt.setOnClickListener { askSampleName(b - 1) }
+            menuNameButtons.add(bt)
+            nmRow.addView(bt, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(nmRow)
+
         header("ORIENTATION (REDEMARRE)")
         val orientRow = LinearLayout(this)
         for ((i, lbl) in listOf("HORIZ", "VERT").withIndex()) {
@@ -3977,6 +4323,9 @@ class MainActivity : Activity() {
         }
         for ((i, b) in menuNetSpeedButtons.withIndex()) {
             b.setTextColor(if (i == netSpeedSel) amber else silk)
+        }
+        for ((i, b) in menuLogButtons.withIndex()) {
+            b.setTextColor(if ((i == 1) == showSampleLog) amber else silk)
         }
         for ((i, b) in menuOrientButtons.withIndex()) {
             b.setTextColor(if ((i == 1) == verticalUi) amber else silk)
