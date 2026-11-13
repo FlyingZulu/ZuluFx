@@ -1,6 +1,7 @@
 package com.zulu
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
@@ -8,6 +9,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.OpenableColumns
+import android.net.Uri
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -17,6 +20,9 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -24,6 +30,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.concurrent.thread
+import java.util.zip.ZipInputStream
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -144,6 +152,8 @@ class MainActivity : Activity() {
     private val lfoWaves = IntArray(2) { 0 }
     private var lfoSel = 0
     private var lfoDraw: LfoDrawView? = null
+    private var importTargetBank = -1
+    private val reqImport = 4242
 
     private data class UserPreset(
         val filter: Int,
@@ -2045,6 +2055,10 @@ class MainActivity : Activity() {
             panel.addView(projRow)
         }
 
+        val bImport = makeButton("IMPORTER \u00b7 WAV / KOALA", silk)
+        bImport.setOnClickListener { pickSampleFile(-1) }
+        panel.addView(bImport, wrapParams((4 * d).toInt()))
+
         header("LIVE")
         val liveRow = LinearLayout(this)
         val bScale = makeButton("GAMME", silk)
@@ -2205,6 +2219,16 @@ class MainActivity : Activity() {
         hint.textSize = 10f
         panel.addView(hint)
 
+        val bImp = makeButton("IMPORTER SAMPLE", silk)
+        bImp.setOnClickListener {
+            if (stepEditBank >= 0) pickSampleFile(stepEditBank)
+        }
+        panel.addView(
+            bImp,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = (8 * d).toInt() }
+        )
+
         val editor = StepEditorView(this)
         editor.onStepChange = { s, p, v ->
             if (stepEditBank >= 0) engine.nativeSetStep(stepEditBank, s, p, v)
@@ -2237,5 +2261,169 @@ class MainActivity : Activity() {
         e.invalidate()
         stepTitle?.text = "PAS \u00b7 BANQUE ${bank + 1}"
         stepOverlay.visibility = View.VISIBLE
+    }
+
+    private fun pickSampleFile(targetBank: Int) {
+        importTargetBank = targetBank
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("audio/*", "application/zip", "application/octet-stream"))
+        }
+        startActivityForResult(intent, reqImport)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != reqImport || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        Toast.makeText(this, "IMPORT...", Toast.LENGTH_SHORT).show()
+        thread {
+            val msg = importSamples(uri, importTargetBank)
+            runOnUiThread {
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                refreshMenu()
+            }
+        }
+    }
+
+    private fun importSamples(uri: Uri, targetBank: Int): String {
+        return try {
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return "FICHIER ILLISIBLE"
+            val name = queryName(uri).lowercase()
+            val isZip = bytes.size > 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()
+            val wavs: List<ByteArray> = if (isZip || name.endsWith(".koala")) koalaWavs(bytes) else listOf(bytes)
+            if (wavs.isEmpty()) return "AUCUN WAV TROUVE"
+            var loaded = 0
+            var bank = targetBank
+            for (w in wavs) {
+                val pcm = decodeWav(w) ?: continue
+                if (pcm.size < 9600) continue
+                if (bank !in 0..7) {
+                    bank = (0..7).firstOrNull { !engine.nativeBankHasLoop(it) } ?: break
+                }
+                resetSteps(bank)
+                engine.nativeLoadBank(bank, pcm, pcm.size / 2)
+                loaded++
+                bank = -1
+            }
+            if (loaded == 0) "ECHEC IMPORT (FORMAT ?)" else "IMPORTE $loaded BANQUE(S)"
+        } catch (e: Exception) {
+            "ERREUR IMPORT"
+        }
+    }
+
+    private fun queryName(uri: Uri): String {
+        return try {
+            contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (i >= 0 && c.moveToFirst()) c.getString(i) ?: "sample" else "sample"
+            } ?: "sample"
+        } catch (e: Exception) {
+            "sample"
+        }
+    }
+
+    private fun koalaWavs(bytes: ByteArray): List<ByteArray> {
+        val out = ArrayList<ByteArray>()
+        try {
+            val z = ZipInputStream(ByteArrayInputStream(bytes))
+            var e = z.nextEntry
+            while (e != null && out.size < 8) {
+                if (!e.isDirectory && e.name.lowercase().endsWith(".wav")) {
+                    val buf = ByteArrayOutputStream()
+                    z.copyTo(buf)
+                    out.add(buf.toByteArray())
+                }
+                e = z.nextEntry
+            }
+            z.close()
+        } catch (e: Exception) {
+        }
+        return out
+    }
+
+    private fun le16(b: ByteArray, p: Int): Int =
+        (b[p].toInt() and 0xFF) or ((b[p + 1].toInt() and 0xFF) shl 8)
+
+    private fun le16s(b: ByteArray, p: Int): Int {
+        val v = le16(b, p)
+        return if (v >= 0x8000) v - 0x10000 else v
+    }
+
+    private fun le32(b: ByteArray, p: Int): Int =
+        (b[p].toInt() and 0xFF) or ((b[p + 1].toInt() and 0xFF) shl 8) or
+            ((b[p + 2].toInt() and 0xFF) shl 16) or ((b[p + 3].toInt() and 0xFF) shl 24)
+
+    private fun decodeWav(b: ByteArray): FloatArray? {
+        if (b.size < 44) return null
+        if (!(b[0] == 'R'.code.toByte() && b[1] == 'I'.code.toByte() &&
+                b[2] == 'F'.code.toByte() && b[3] == 'F'.code.toByte())
+        ) return null
+        var fmt = -1
+        var ch = 0
+        var sr = 0
+        var bits = 0
+        var dataStart = -1
+        var dataLen = 0
+        var pos = 12
+        while (pos + 8 <= b.size) {
+            val id = String(b, pos, 4, Charsets.US_ASCII)
+            val len = le32(b, pos + 4)
+            if (len < 0) break
+            when (id) {
+                "fmt " -> {
+                    if (pos + 24 <= b.size) {
+                        fmt = le16(b, pos + 8)
+                        ch = le16(b, pos + 10)
+                        sr = le32(b, pos + 12)
+                        bits = le16(b, pos + 22)
+                    }
+                }
+                "data" -> {
+                    dataStart = pos + 8
+                    dataLen = min(len, b.size - dataStart)
+                }
+            }
+            pos += 8 + len + (len and 1)
+        }
+        if (dataStart < 0 || ch < 1 || sr < 8000 || bits == 0) return null
+        val bytesPer = bits / 8
+        val frames = min(dataLen / (bytesPer * ch), 2880000)
+        if (frames <= 0) return null
+        val st = FloatArray(frames * 2)
+        for (f in 0 until frames) {
+            for (c in 0 until 2) {
+                val src = if (c < ch) c else 0
+                val p = dataStart + (f * ch + src) * bytesPer
+                val v = when {
+                    fmt == 3 && bits == 32 -> Float.fromBits(le32(b, p))
+                    bits == 16 -> le16s(b, p) / 32768f
+                    bits == 24 -> {
+                        val x = (b[p].toInt() and 0xFF) or ((b[p + 1].toInt() and 0xFF) shl 8) or
+                            ((b[p + 2].toInt() and 0xFF) shl 16)
+                        val s = if (x and 0x800000 != 0) x or (0xFF shl 24) else x
+                        s / 8388608f
+                    }
+                    bits == 32 -> le32(b, p) / 2147483648f
+                    bits == 8 -> ((b[p].toInt() and 0xFF) - 128) / 128f
+                    else -> return null
+                }
+                st[f * 2 + c] = v
+            }
+        }
+        if (sr == 48000) return st
+        val nOut = ((frames.toLong() * 48000L) / sr).toInt()
+        val out = FloatArray(nOut * 2)
+        for (i in 0 until nOut) {
+            val t = i.toDouble() * sr / 48000.0
+            val i0 = t.toInt().coerceIn(0, frames - 1)
+            val i1 = min(i0 + 1, frames - 1)
+            val fr = (t - i0).toFloat()
+            out[i * 2] = st[i0 * 2] + (st[i1 * 2] - st[i0 * 2]) * fr
+            out[i * 2 + 1] = st[i0 * 2 + 1] + (st[i1 * 2 + 1] - st[i0 * 2 + 1]) * fr
+        }
+        return out
     }
 }
