@@ -422,6 +422,12 @@ SHIFT** : la boucle se lit **à l'envers** (mode reverse). Refais la même
 manip pour revenir en lecture normale. Fonctionne dans tous les modes,
 audio loop uniquement.
 
+## Demarrage silencieux (v0.37)
+
+L'app démarre **sans aucun son** : arpégiateur, générateur et boucles sont
+coupés à l'allumage, même si le template de base en contenait. C'est toi qui
+lances le son quand tu veux.
+
 ## Anti-Larsen (v0.36)
 
 - **MIC ON / MIC OFF** dans le **MENU · MICRO / ANTI-LARSEN** : active la vraie

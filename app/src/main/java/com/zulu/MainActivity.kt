@@ -1520,6 +1520,24 @@ class MainActivity : Activity() {
             loadProject(0, global = true)
             Toast.makeText(this, "TEMPLATE DE BASE CHARGE", Toast.LENGTH_SHORT).show()
         }
+        silenceAtStartup()
+    }
+
+    private fun silenceAtStartup() {
+        arpOn = false
+        pad.arpOn = false
+        pushArp()
+        engine.nativeSetGenTouch(false)
+        stopMotionPlayback()
+        motionPlaying = -1
+        for (b in 0 until 8) {
+            midiPlaying[b] = false
+            if (bankOn[b]) {
+                if (engine.nativeBankHasLoop(b)) engine.nativeToggleBank(b)
+                bankOn[b] = false
+            }
+        }
+        refreshBlink()
     }
 
     private var swipeX0 = 0f
