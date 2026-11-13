@@ -23,22 +23,19 @@ class MainActivity : Activity() {
     private lateinit var pad: ZuluPad
     private lateinit var vuMeter: VuMeterView
     private lateinit var bpmDial: BpmDialView
+    private lateinit var segAB: SegmentedABRecView
     private lateinit var padGrid: PadGridView
     private lateinit var zuLu: ZuLuSelector
     private lateinit var diagFader: DiagFaderView
-    private lateinit var jitterFader: JitterFaderView
-    private lateinit var btnA: Button
-    private lateinit var btnB: Button
-    private lateinit var btnRec: Button
-    private lateinit var btnShift: Button
+    private lateinit var jitterDial: JitterDialView
     private lateinit var btnStart: Button
     private lateinit var btnMute: Button
+    private lateinit var btnShift: Button
     private lateinit var btnMenu: Button
     private lateinit var btnTap: Button
 
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
-    private val red = Color.rgb(255, 90, 70)
     private val green = Color.rgb(140, 255, 150)
     private val silk = Color.rgb(165, 172, 185)
     private val amber = Color.rgb(255, 176, 0)
@@ -75,22 +72,18 @@ class MainActivity : Activity() {
         pad = ZuluPad(this)
         vuMeter = VuMeterView(this)
         bpmDial = BpmDialView(this)
+        segAB = SegmentedABRecView(this)
         padGrid = PadGridView(this)
         zuLu = ZuLuSelector(this)
         diagFader = DiagFaderView(this)
-        jitterFader = JitterFaderView(this)
+        jitterDial = JitterDialView(this)
 
-        btnA = makeButton("A MOM", yellow)
-        btnB = makeButton("B MOM", pink)
-        btnRec = makeButton("REC", red)
-        btnShift = makeButton("SHIFT", silk)
         btnStart = makeButton("START", green)
         btnMute = makeButton("MUTE", silk)
-        btnMenu = makeButton("\u2699", silk)
         btnTap = makeButton("\u25cf", amber)
+        btnShift = makeRoundButton("SHIFT", silk, 10f)
+        btnMenu = makeRoundButton("\u2699", silk, 16f)
 
-        btnA.setOnClickListener { toggleAxis(true) }
-        btnB.setOnClickListener { toggleAxis(false) }
         btnStart.setOnClickListener {
             playing = !playing
             btnStart.text = if (playing) "STOP" else "START"
@@ -114,19 +107,14 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_DOWN -> {
                     if (shiftLocked) {
                         shiftLocked = false
-                        btnShift.text = "SHIFT"
                     } else {
                         shiftHeld = true
-                        btnShift.text = "SHIFT \u25b2"
                     }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (shiftHeld) {
                         val now = System.currentTimeMillis()
-                        if (now - lastShiftUp < 300) {
-                            shiftLocked = true
-                            btnShift.text = "SHIFT \u2611"
-                        }
+                        if (now - lastShiftUp < 300) shiftLocked = true
                         lastShiftUp = now
                     }
                     shiftHeld = false
@@ -134,15 +122,6 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_CANCEL -> shiftHeld = false
             }
             refreshShift()
-            true
-        }
-
-        btnRec.setOnTouchListener { _, e ->
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> recHeld = true
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> recHeld = false
-            }
-            refreshBlink()
             true
         }
 
@@ -160,6 +139,19 @@ class MainActivity : Activity() {
             true
         }
 
+        segAB.onSegmentDown = { i ->
+            when (i) {
+                0 -> toggleAxis(true)
+                1 -> toggleAxis(false)
+                2 -> recHeld = true
+            }
+            refreshBlink()
+        }
+        segAB.onSegmentUp = { i ->
+            if (i == 2) recHeld = false
+            refreshBlink()
+        }
+
         padGrid.onPadTouch = { n ->
             if (shiftActive()) padGrid.activeBank = n
         }
@@ -173,14 +165,18 @@ class MainActivity : Activity() {
         row1.addView(bpmDial, dialParams)
         row1.addView(btnTap, wrapParams((4 * d).toInt()))
         row1.addView(btnStart, wrapParams((4 * d).toInt()))
-        row1.addView(btnMenu, wrapParams((4 * d).toInt()))
+        val shiftParams = LinearLayout.LayoutParams((42 * d).toInt(), (42 * d).toInt())
+        shiftParams.setMargins((6 * d).toInt(), 0, 0, 0)
+        row1.addView(btnShift, shiftParams)
+        val menuParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
+        menuParams.setMargins((6 * d).toInt(), 0, 0, 0)
+        row1.addView(btnMenu, menuParams)
 
         val row2 = LinearLayout(this)
-        row2.orientation = LinearLayout.HORIZONTAL
-        row2.addView(btnA, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        row2.addView(btnB, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        row2.addView(btnRec, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        row2.addView(btnShift, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row2.addView(
+            segAB,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (38 * d).toInt())
+        )
 
         val row3 = LinearLayout(this)
         row3.addView(
@@ -196,13 +192,14 @@ class MainActivity : Activity() {
 
         val row5 = LinearLayout(this)
         row5.orientation = LinearLayout.HORIZONTAL
+        row5.gravity = Gravity.CENTER_VERTICAL
         row5.addView(diagFader, LinearLayout.LayoutParams(0, (84 * d).toInt(), 1f))
         val muteParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         )
         muteParams.setMargins((8 * d).toInt(), 0, (8 * d).toInt(), 0)
         row5.addView(btnMute, muteParams)
-        row5.addView(jitterFader, LinearLayout.LayoutParams((34 * d).toInt(), (84 * d).toInt()))
+        row5.addView(jitterDial, LinearLayout.LayoutParams((76 * d).toInt(), (76 * d).toInt()))
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
@@ -297,6 +294,15 @@ class MainActivity : Activity() {
         return p
     }
 
+    private fun buttonBackground(round: Boolean): GradientDrawable {
+        val d = resources.displayMetrics.density
+        val bg = GradientDrawable()
+        bg.setColor(Color.rgb(38, 42, 52))
+        bg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
+        if (round) bg.shape = GradientDrawable.OVAL else bg.cornerRadius = 6 * d
+        return bg
+    }
+
     private fun makeButton(label: String, color: Int): Button {
         val d = resources.displayMetrics.density
         val b = Button(this)
@@ -309,26 +315,33 @@ class MainActivity : Activity() {
         b.minimumWidth = 0
         b.setPadding((10 * d).toInt(), (6 * d).toInt(), (10 * d).toInt(), (6 * d).toInt())
         b.typeface = markerFont(this)
-        val bg = GradientDrawable()
-        bg.setColor(Color.rgb(38, 42, 52))
-        bg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
-        bg.cornerRadius = 6 * d
-        b.background = bg
+        b.background = buttonBackground(false)
+        return b
+    }
+
+    private fun makeRoundButton(label: String, color: Int, textSize: Float): Button {
+        val b = Button(this)
+        b.text = label
+        b.setTextColor(color)
+        b.textSize = textSize
+        b.isAllCaps = false
+        b.minHeight = 0
+        b.minimumHeight = 0
+        b.minimumWidth = 0
+        b.setPadding(0, 0, 0, 0)
+        b.typeface = markerFont(this)
+        b.background = buttonBackground(true)
         return b
     }
 
     private fun toggleAxis(axisA: Boolean) {
         if (axisA) {
-            val on = pad.stateA != ZuluPad.AxisState.MOM
-            pad.stateA = if (on) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
-            btnA.text = if (on) "A MOM" else "A OFF"
-            btnA.setTextColor(if (on) yellow else silk)
+            segAB.aOn = segAB.aOn != true
         } else {
-            val on = pad.stateB != ZuluPad.AxisState.MOM
-            pad.stateB = if (on) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
-            btnB.text = if (on) "B MOM" else "B OFF"
-            btnB.setTextColor(if (on) pink else silk)
+            segAB.bOn = segAB.bOn != true
         }
+        pad.stateA = if (segAB.aOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
+        pad.stateB = if (segAB.bOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
     }
 
     private fun shiftActive() = shiftHeld || shiftLocked
@@ -339,7 +352,8 @@ class MainActivity : Activity() {
     }
 
     private fun refreshBlink() {
-        btnRec.alpha = if (recHeld && !blinkOn) 0.35f else 1f
+        segAB.blinkOn = blinkOn
+        segAB.recHeld = recHeld
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
     }
 

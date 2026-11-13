@@ -353,6 +353,127 @@ class DiagFaderView(context: Context) : View(context) {
     }
 }
 
+class SegmentedABRecView(context: Context) : View(context) {
+
+    val cmdId = "abRec"
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
+    private val yellow = Color.rgb(245, 255, 90)
+    private val pink = Color.rgb(255, 125, 205)
+    private val red = Color.rgb(255, 90, 70)
+
+    var aOn = true
+        set(value) { field = value; invalidate() }
+
+    var bOn = true
+        set(value) { field = value; invalidate() }
+
+    var recHeld = false
+        set(value) { field = value; invalidate() }
+
+    var blinkOn = true
+        set(value) { field = value; invalidate() }
+
+    var onSegmentDown: ((Int) -> Unit)? = null
+    var onSegmentUp: ((Int) -> Unit)? = null
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val segW = w / 3f
+
+        paint.fill(Color.rgb(30, 33, 40))
+        canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+
+        val labels = arrayOf("A", "B", "REC")
+        val colors = arrayOf(yellow, pink, red)
+        val states = booleanArrayOf(aOn, bOn, recHeld && blinkOn)
+
+        for (i in 0..2) {
+            val l = i * segW
+            val inset = 3f * d
+            paint.fill(if (states[i]) colors[i] else Color.rgb(40, 44, 54))
+            canvas.drawRoundRect(l + inset, inset, l + segW - inset, h - inset, 5f * d, 5f * d, paint)
+            paint.fill(if (states[i]) ink else colors[i])
+            paint.textAlign = Paint.Align.CENTER
+            paint.typeface = marker
+            paint.textSize = h * 0.38f
+            canvas.drawText(labels[i], l + segW / 2f, h * 0.64f, paint)
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN ->
+                onSegmentDown?.invoke(segmentAt(event.getX(event.actionIndex)))
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL ->
+                onSegmentUp?.invoke(segmentAt(event.getX(event.actionIndex)))
+        }
+        return true
+    }
+
+    private fun segmentAt(x: Float): Int = (x / width * 3f).toInt().coerceIn(0, 2)
+}
+
+class JitterDialView(context: Context) : DialView(context) {
+
+    val cmdId = "jitter"
+
+    var value = 0f
+        private set
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        drawBezelAndFace(canvas, w, h)
+
+        val cx = w / 2f
+        val cy = h * 0.46f
+        val radius = minOf(w, h) * 0.34f
+        val start = -52f
+        val sweep = 104f
+
+        for (i in 0..10) {
+            val a = start + sweep * i / 10f
+            val outer = needleXY(cx, cy, radius, a)
+            val inner = needleXY(cx, cy, radius * 0.88f, a)
+            paint.stroke(ink, 1f * d)
+            canvas.drawLine(inner[0], inner[1], outer[0], outer[1], paint)
+        }
+
+        val tip = needleXY(cx, cy, radius * 0.9f, start + sweep * value)
+        paint.stroke(ink, 1.8f * d)
+        canvas.drawLine(cx, cy, tip[0], tip[1], paint)
+        paint.fill(ink)
+        canvas.drawCircle(cx, cy, 3f * d, paint)
+
+        paint.fill(ink)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        paint.textSize = 8f * d
+        canvas.drawText("JITTER", cx, h * 0.86f, paint)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
+                val cx = width / 2f
+                val cy = height * 0.46f
+                val dx = (event.x - cx).toDouble()
+                val dy = (event.y - cy).toDouble()
+                var angle = Math.toDegrees(Math.atan2(dx, -dy))
+                if (angle > 180.0) angle -= 360.0
+                value = ((angle + 52.0) / 104.0).toFloat().coerceIn(0f, 1f)
+            }
+        }
+        invalidate()
+        return true
+    }
+}
+
 class JitterFaderView(context: Context) : View(context) {
 
     val cmdId = "jitter"
