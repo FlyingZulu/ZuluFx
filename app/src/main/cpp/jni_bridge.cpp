@@ -253,4 +253,14 @@ Java_com_zulu_AudioEngine_nativeSetStretchMode(JNIEnv*, jobject, jint bank, jint
     if (g) g->setStretchMode(bank, mode);
 }
 
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetSampleParam(JNIEnv*, jobject, jint bank, jint k, jfloat v) {
+    if (g) g->setSampleParam(bank, k, v);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetBankRev(JNIEnv*, jobject, jint bank, jboolean rev) {
+    if (g) g->setBankRev(bank, rev == JNI_TRUE);
+}
+
 }

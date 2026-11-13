@@ -61,6 +61,8 @@ class AudioEngine {
     external fun nativeGenHit(type: Int, x: Float, y: Float)
     external fun nativeSetEco(e: Boolean)
     external fun nativeSetStretchMode(bank: Int, mode: Int)
+    external fun nativeSetSampleParam(bank: Int, k: Int, v: Float)
+    external fun nativeSetBankRev(bank: Int, rev: Boolean)
 
     companion object {
         init { System.loadLibrary("zulu") }

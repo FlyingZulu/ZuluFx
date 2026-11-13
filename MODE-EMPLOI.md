@@ -392,6 +392,36 @@ change, la hauteur reste.
   granule et ça craque exprès.
 Le réglage est mémorisé par banque dans les sauvegardes de projet.
 
+## Éditer un sample : SHIFT + pad (v0.35)
+
+En mode **SAMPLES** : tap sur un pad = toggle on/off (comme avant).
+**SHIFT + pad** ouvre sa **page d'édition** (tirettes) :
+- **PITCH** : ±12 demi-tons (la vitesse de lecture suit le pitch).
+- **ATTAQUE** : fondu d'ouverture au (re)démarrage de la boucle.
+- **DECAY** : fondu de fermeture ; à fond = sustain (pas de decay).
+- **TONE** : filtre passe-bas du sample (aiguë → fermé → sourd).
+- **DÉBUT / FIN** : fenêtre de lecture dans le sample (coupe le début ou la fin).
+SHIFT + pad **sélectionne** aussi la banque : les FX sample dédiés se
+routent ensuite comme d'habitude (pad tenu + slot FX), et chaque tirette
+est assignable (**XY / LFO / ARP / SNAP** via Shift + zone, voyants colorés).
+Réglages mémorisés dans les sauvegardes de projet.
+
+## Effacer : SHIFT + double-tap (v0.35)
+
+- Mode **SCÈNE** : **SHIFT + double-tap** sur un pad = efface **toutes** les
+  données assignées sur ce pad (snapshot, motion, sélection de côté).
+- Mode **MOTION** : **SHIFT + tap** sur une banque = **doubler la longueur**
+  de la motion séquence (jusqu'à 19 temps, pour un overdub plus long) ;
+  **SHIFT + double-tap** = effacer la **motion** (le snapshot reste).
+- Le premier tap attend un instant (450 ms) avant d'agir : c'est normal.
+
+## Reverse : pad tenu + double-tap SHIFT (v0.35)
+
+**Appuie sur un pad (boucle audio) et garde-le appuyé, puis double-tap sur
+SHIFT** : la boucle se lit **à l'envers** (mode reverse). Refais la même
+manip pour revenir en lecture normale. Fonctionne dans tous les modes,
+audio loop uniquement.
+
 ## À venir (v0.34+)
 
 - Vendoring réel de Plaits (Mutable Instruments, MIT) — cette passe utilise

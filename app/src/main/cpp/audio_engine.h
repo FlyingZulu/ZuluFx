@@ -108,6 +108,8 @@ public:
     AudioEngine() {
         for (int a = 0; a < 2; a++) for (int i = 0; i < 8; i++) axisTg[a][i].store(-1);
         for (int i = 0; i < kNumBanks; i++) bankFxSend[i] = true;
+        const float sampDef[6] = {0.5f, 0.f, 1.f, 1.f, 0.f, 1.f};
+        for (int p = 0; p < 6; p++) fxParam[63 + p][0].store(sampDef[p]);
         for (int s = 0; s < kMaxSteps; s++) { undoStepPitch[s] = 0.f; undoStepVel[s] = 1.f; }
     }
     void setCustomLfo(int idx, const float* table, bool on, int rateIdx, float depth,
@@ -125,6 +127,11 @@ public:
 
     void recordBank(int bank, int steps, bool wet);
     void setStretchMode(int bank, int mode);
+    void setSampleParam(int bank, int k, float v);
+    void setBankRev(int bank, bool rev) {
+        if (bank < 0 || bank >= kNumBanks) return;
+        bankRev[bank] = rev;
+    }
     void startResample(int bank, int steps);
     void setInGain(float v) { inGain.store(v); }
     void setMasterVolume(float v) { masterVol.store(v); }
@@ -275,7 +282,7 @@ private:
     int freezeLen = kFreezeMax;
     float compEnv = 0.f;
     static constexpr int kNumFx = 46;
-    static constexpr int kNumSlots = 63;
+    static constexpr int kNumSlots = 69;
     std::atomic<float> fxParam[kNumSlots][8] = {};
     float fxMod[kNumSlots][8] = {};
     float fxAxisVal[kNumSlots][8] = {};
@@ -503,6 +510,11 @@ private:
     static constexpr int kTotalFrameBudget = 6553600;
     LoopBank banks[kNumBanks];
     bool bankFxSend[kNumBanks] = {};
+    float bankEnv[kNumBanks] = {};
+    float bankLpL[kNumBanks] = {};
+    float bankLpR[kNumBanks] = {};
+    bool bankWasOn[kNumBanks] = {};
+    bool bankRev[kNumBanks] = {};
     int undoBank = -1;
     float* undoBuf = nullptr;
     int undoSamples = 0;

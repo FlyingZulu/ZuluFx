@@ -171,6 +171,16 @@ class MainActivity : Activity() {
     private val menuLofiButtons = ArrayList<Button>()
     private val menuStretchButtons = ArrayList<Button>()
     private val bankStretch = IntArray(8)
+    private val sampleParamVals = Array(8) { floatArrayOf(0.5f, 0f, 1f, 1f, 0f, 1f) }
+    private val sampleParamAssign = IntArray(6)
+    private val sampleParamDefs =
+        listOf("PITCH", "ATTAQUE", "DECAY", "TONE", "D\u00c9BUT", "FIN")
+    private var sampleEditBank = 0
+    private var lastShiftPad = -1
+    private var lastShiftPadAt = 0L
+    private var shiftRecPending: Runnable? = null
+    private val shiftHandler = Handler(Looper.getMainLooper())
+    private val bankRev = BooleanArray(8)
     private var recFlavor = 0
     private var menuPunchBtn: Button? = null
     private var punchMode = false
@@ -717,7 +727,20 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_UP -> {
                     if (shiftHeld) {
                         val now = System.currentTimeMillis()
-                        if (now - lastShiftUp < 300) shiftLocked = true
+                        if (now - lastShiftUp < 300) {
+                            if (heldBankPad in 1..8 && engine.nativeBankHasLoop(heldBankPad - 1)) {
+                                val b = heldBankPad - 1
+                                bankRev[b] = !bankRev[b]
+                                engine.nativeSetBankRev(b, bankRev[b])
+                                Toast.makeText(
+                                    this,
+                                    "B${b + 1} " + if (bankRev[b]) "REVERSE" else "NORMAL",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                shiftLocked = true
+                            }
+                        }
                         lastShiftUp = now
                     }
                     shiftHeld = false
@@ -900,12 +923,44 @@ class MainActivity : Activity() {
                 recActive && recMotion && n == recArmPad -> recStop()
                 recActive && !recMotion && n == recArmPad -> recStop()
                 recArmed && n >= 1 && n <= min(padGrid.padCount, 14) -> armRecDest(n)
+                shiftActive() && padGrid.padMode == 2 && n in 1..8 -> {
+                    fxConsumed = true
+                    openSamplePage(n - 1)
+                }
+                shiftActive() && padGrid.padMode == 1 && n in 1..14 -> {
+                    fxConsumed = true
+                    val now = System.currentTimeMillis()
+                    if (n == lastShiftPad && now - lastShiftPadAt < 450) {
+                        lastShiftPad = -1
+                        shiftRecPending?.let { shiftHandler.removeCallbacks(it) }
+                        shiftRecPending = null
+                        clearMotion(n - 1)
+                    } else {
+                        lastShiftPad = n
+                        lastShiftPadAt = now
+                        val idx = n - 1
+                        shiftRecPending = Runnable { doubleMotion(idx) }
+                        shiftHandler.postDelayed(shiftRecPending!!, 450)
+                    }
+                }
                 shiftActive() -> {
                     fxConsumed = true
-                    startLoopRecording(n)
-                    sendPadBank = n - 1
-                    sendComboStart = bankFxSend[sendPadBank]
-                    sendPadAt = System.currentTimeMillis()
+                    val now = System.currentTimeMillis()
+                    if (n == lastShiftPad && now - lastShiftPadAt < 450) {
+                        lastShiftPad = -1
+                        shiftRecPending?.let { shiftHandler.removeCallbacks(it) }
+                        shiftRecPending = null
+                        clearPadData(n - 1)
+                    } else {
+                        lastShiftPad = n
+                        lastShiftPadAt = now
+                        sendPadBank = n - 1
+                        sendComboStart = bankFxSend[sendPadBank]
+                        sendPadAt = now
+                        val bank = n
+                        shiftRecPending = Runnable { startLoopRecording(bank) }
+                        shiftHandler.postDelayed(shiftRecPending!!, 450)
+                    }
                 }
                 padGrid.padCount == 12 && n in 9..12 -> toggleSolo(n - 9)
                 padGrid.padMode != 2 && n - 1 < 14 && snapPads[n - 1] != null -> recallSnap(n - 1)
@@ -1195,7 +1250,10 @@ class MainActivity : Activity() {
         ppage.visibility = View.GONE
         ppage.onParam = { k, v ->
             val fx = paramFx
-            if (fx >= 0) {
+            if (fx == -2) {
+                sampleParamVals[sampleEditBank][k] = v
+                engine.nativeSetSampleParam(sampleEditBank, k, v)
+            } else if (fx >= 0) {
                 if (snapHold && snapQuietFor(fx)) {
                     if (!snapHoldFx.containsKey(fx)) snapHoldFx[fx] = fxParamVals[fx].copyOf()
                     fxParamVals[fx][k] = v
@@ -2394,6 +2452,9 @@ class MainActivity : Activity() {
             json.put("punchCol", punchCol)
             json.put("fxSend", JSONArray(bankFxSend.toList()))
             json.put("stretch", JSONArray(bankStretch.toList()))
+            val spArr = JSONArray()
+            for (b in 0 until 8) spArr.put(JSONArray(sampleParamVals[b].toList()))
+            json.put("sampleParams", spArr)
             json.put("bankNames", JSONArray(bankLabels.toList()))
             projFile(slot).writeText(json.toString())
             refreshProjSlots()
@@ -2431,6 +2492,19 @@ class MainActivity : Activity() {
                 for (b in 0 until min(8, stArr.length())) {
                     bankStretch[b] = stArr.optInt(b, 0).coerceIn(0, 3)
                     engine.nativeSetStretchMode(b, bankStretch[b])
+                }
+            }
+            val spArr = json.optJSONArray("sampleParams")
+            if (spArr != null) {
+                for (b in 0 until min(8, spArr.length())) {
+                    val sa = spArr.optJSONArray(b)
+                    if (sa != null) {
+                        for (k in 0 until min(6, sa.length())) {
+                            val v = sa.optDouble(k, 0.0).toFloat().coerceIn(0f, 1f)
+                            sampleParamVals[b][k] = v
+                            engine.nativeSetSampleParam(b, k, v)
+                        }
+                    }
                 }
             }
             val bnArr = json.optJSONArray("bankNames")
@@ -4278,6 +4352,52 @@ class MainActivity : Activity() {
         btnPunch?.setTextColor(if (punchMode) amber else yellow)
     }
 
+    private fun openSamplePage(bank: Int) {
+        val pv = paramView ?: return
+        sampleEditBank = bank
+        paramFx = -2
+        playerBank = bank
+        engine.nativeSetPlayerBank(bank)
+        refreshBankFx()
+        pv.setContent(sampleParamDefs, sampleParamVals[bank], sampleParamAssign)
+        pv.masterOn = false
+        pv.snapMode = 0
+        pv.visibility = View.VISIBLE
+    }
+
+    private fun clearPadData(idx: Int) {
+        if (idx !in snapPads.indices) return
+        if (motionPlaying == idx) stopMotionPlayback()
+        snapPads[idx] = null
+        if (activeZu == idx) activeZu = -1
+        if (activeLu == idx) activeLu = -1
+        refreshSnapGrid()
+        Toast.makeText(this, "PAD ${idx + 1} EFFAC\u00c9", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun clearMotion(idx: Int) {
+        val s = snapPads.getOrNull(idx)
+        if (s == null) {
+            Toast.makeText(this, "PAD VIDE", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (motionPlaying == idx) stopMotionPlayback()
+        snapPads[idx] = s.copy(motA = null, motB = null, motLen = 0)
+        refreshSnapGrid()
+        Toast.makeText(this, "MOTION EFFAC\u00c9E", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun doubleMotion(idx: Int) {
+        val s = snapPads.getOrNull(idx)
+        if (s == null || s.motLen <= 0) {
+            Toast.makeText(this, "PAS DE MOTION SUR CE PAD", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val nl = (s.motLen * 2).coerceAtMost(19)
+        snapPads[idx] = s.copy(motLen = nl)
+        Toast.makeText(this, "MOTION \u00d72 : $nl TEMPS", Toast.LENGTH_SHORT).show()
+    }
+
     private fun openParamPage(fx: Int) {
         val pv = paramView ?: return
         val defs = fxParamDefs[fx] ?: return
@@ -4384,11 +4504,13 @@ class MainActivity : Activity() {
 
     private fun cycleParamAssign(k: Int) {
         val fx = paramFx
-        if (fx < 0) return
-        val prev = fxParamAssign[fx][k]
+        val isSamp = fx == -2
+        if (fx < 0 && !isSamp) return
+        val assigns = if (isSamp) sampleParamAssign else fxParamAssign[fx]
+        val prev = assigns[k]
         val next = (prev + 1) % 4
-        fxParamAssign[fx][k] = next
-        val target = 8 + fx * 8 + k
+        assigns[k] = next
+        val target = if (isSamp) 71 + k else 8 + fx * 8 + k
         if (prev == 1) engine.nativeSetAssign(0, assignXIdx)
         if (prev == 2 || prev == 3) {
             val l = prev - 2

@@ -995,6 +995,14 @@ void AudioEngine::setStretchMode(int bank, int mode) {
     stReset(banks[bank]);
 }
 
+void AudioEngine::setSampleParam(int bank, int k, float v) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    if (k < 0 || k > 5) return;
+    if (v < 0.f) v = 0.f;
+    if (v > 1.f) v = 1.f;
+    fxParam[63 + k][0].store(v, std::memory_order_relaxed);
+}
+
 bool AudioEngine::bankHasLoop(int bank) const {
     if (bank < 0 || bank >= kNumBanks) return false;
     return banks[bank].samples > 0;
@@ -1066,6 +1074,32 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             arpClock -= stepDur;
             arpFire();
         }
+    }
+
+    float sPitch[kNumBanks], sAtkC[kNumBanks], sDecC[kNumBanks], sToneA[kNumBanks];
+    int sW0[kNumBanks], sW1[kNumBanks];
+    for (int k = 0; k < kNumBanks; k++) {
+        float r0 = fxP(63, 0), r1 = fxP(64, 0), r2 = fxP(65, 0);
+        float r3 = fxP(66, 0), r4 = fxP(67, 0), r5 = fxP(68, 0);
+        sPitch[k] = powf(2.f, (r0 - 0.5f) * 2.f);
+        float atk = 0.002f + r1 * 0.6f;
+        sAtkC[k] = 1.f / (atk * fs + 1.f);
+        float tc = 0.05f + r2 * r2 * 8.f;
+        sDecC[k] = (r2 >= 0.999f) ? 1.f : 1.f - 1.f / (tc * fs + 1.f);
+        float fc = 300.f * powf(120.f, r3);
+        float fcMax = 0.45f * fs;
+        if (fc > fcMax) fc = fcMax;
+        sToneA[k] = 1.f - expf(-6.2831853f * fc / fs);
+        LoopBank& lb = banks[k];
+        if (lb.samples > 0) {
+            int w0 = (int)(r4 * 0.95f * (float)lb.samples);
+            int w1 = (int)((0.05f + r5 * 0.95f) * (float)lb.samples);
+            if (w0 < 0) w0 = 0;
+            if (w1 > lb.samples) w1 = lb.samples;
+            if (w1 - w0 < 64) w1 = (w0 + 64 <= lb.samples) ? w0 + 64 : lb.samples;
+            if (w1 <= w0) { w0 = 0; w1 = lb.samples; }
+            sW0[k] = w0; sW1[k] = w1;
+        } else { sW0[k] = 0; sW1[k] = 0; }
     }
 
     for (int i = 0; i < numFrames; i++) {
@@ -1409,6 +1443,8 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         float rate = xyT ? powf(2.f, (ay.load() - 0.5f) * 2.f) : 1.f;
         for (int k = 0; k < kNumBanks; k++) {
             LoopBank& lb = banks[k];
+            if (lb.playing && !bankWasOn[k]) bankEnv[k] = 0.f;
+            bankWasOn[k] = lb.playing;
             if (!lb.playing || lb.samples <= 0) continue;
             if (sm != 0 && (sm & (1 << (k / 2))) == 0) continue;
             if (req >= 0) {
@@ -1483,6 +1519,13 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 sL = accL;
                 sR = accR;
             }
+            bankEnv[k] += (1.f - bankEnv[k]) * sAtkC[k];
+            bankEnv[k] *= sDecC[k];
+            if (bankEnv[k] > 1.f) bankEnv[k] = 1.f;
+            bankLpL[k] += (sL - bankLpL[k]) * sToneA[k];
+            bankLpR[k] += (sR - bankLpR[k]) * sToneA[k];
+            sL = bankLpL[k] * bankEnv[k];
+            sR = bankLpR[k] * bankEnv[k];
             if (bankFxSend[k]) {
                 loopL += sL * vel;
                 loopR += sR * vel;
@@ -1496,14 +1539,17 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 lb.pos += (int)xyAcc;
                 xyAcc -= (int)xyAcc;
             } else {
-                lb.acc += prate / dec;
-                lb.pos += (int)lb.acc;
+                lb.acc += prate * sPitch[k] / dec;
+                int adv = (int)lb.acc;
                 lb.acc -= (int)lb.acc;
+                lb.pos += bankRev[k] ? -adv : adv;
             }
             if (xyT) {
                 if (lb.pos >= sEnd) lb.pos = sStart + ((lb.pos - sStart) % (sEnd - sStart));
-            } else if (lb.pos >= lb.samples) {
-                lb.pos %= lb.samples;
+            } else if (bankRev[k]) {
+                if (lb.pos < sW0[k] || lb.pos >= sW1[k]) lb.pos = sW1[k] - 1;
+            } else {
+                if (lb.pos >= sW1[k] || lb.pos < sW0[k]) lb.pos = sW0[k];
             }
         }
 
