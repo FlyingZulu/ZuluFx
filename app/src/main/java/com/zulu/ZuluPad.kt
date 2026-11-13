@@ -177,6 +177,10 @@ class ZuluPad(context: Context) : View(context) {
     private var velBx = 0f
     private var velBy = 0f
 
+    private val verStr = try {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+    } catch (e: Exception) { "?" }
+
     private val yellow = Color.rgb(235, 255, 40)
     private val pink = Color.rgb(255, 70, 205)
     private val offColor = Color.rgb(90, 96, 108)
@@ -226,6 +230,15 @@ class ZuluPad(context: Context) : View(context) {
         paint.strokeWidth = 1f * d
         paint.color = Color.rgb(60, 66, 80)
         drawSketchyRoundRect(canvas, paint, 1f * d, 1f * d, w - 1f * d, h - 1f * d, 6f * d, 99)
+
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(165, 172, 185)
+        paint.alpha = 110
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = marker
+        paint.textSize = 8f * d
+        canvas.drawText("ZULU v$verStr", 6f * d, h - 6f * d, paint)
+        paint.alpha = 255
 
         drawScrews(canvas, paint, 0f, 0f, w, h, d)
 

@@ -606,13 +606,13 @@ class MainActivity : Activity() {
         val zuLuBtns = LinearLayout(this)
         zuLuBtns.orientation = LinearLayout.HORIZONTAL
         val zuParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, (28 * d).toInt()
+            (64 * d).toInt(), (36 * d).toInt()
         )
         zuParams.setMargins((2 * d).toInt(), (6 * d).toInt(), 0, 0)
         zuLuBtns.addView(btnZu, zuParams)
         zuLuBtns.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         val luParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, (28 * d).toInt()
+            (64 * d).toInt(), (36 * d).toInt()
         )
         luParams.setMargins(0, (6 * d).toInt(), (2 * d).toInt(), 0)
         zuLuBtns.addView(btnLu, luParams)
@@ -664,20 +664,20 @@ class MainActivity : Activity() {
         val presetRow = LinearLayout(this)
         presetRow.orientation = LinearLayout.HORIZONTAL
         for (i in 0 until 9) {
-            val b = makeButton((i + 1).toString(), silk)
-            b.textSize = 9f
+            val b = makeButton((i + 1).toString(), cream)
+            b.textSize = 12f
             b.setOnClickListener { presetTap(i) }
             b.setOnLongClickListener { presetLongTap(i); true }
             presetBtns.add(b)
-            val bp = LinearLayout.LayoutParams(0, (22 * d).toInt(), 1f)
+            val bp = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
             bp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
             presetRow.addView(b, bp)
         }
         val ab = makeButton("ARP", pink)
-        ab.textSize = 9f
+        ab.textSize = 11f
         ab.setOnClickListener { arpTap() }
         arpBtn = ab
-        val abp = LinearLayout.LayoutParams(0, (22 * d).toInt(), 1f)
+        val abp = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
         abp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
         presetRow.addView(ab, abp)
 
@@ -962,10 +962,28 @@ class MainActivity : Activity() {
     }
 
     private fun updateAxisButtons() {
-        btnF.setTextColor(if (axisAOn) yellow else silk)
-        btnF.text = if (axisAHold) "F\u00b7H" else "F"
-        btnZ.setTextColor(if (axisBOn) pink else silk)
-        btnZ.text = if (axisBHold) "Z\u00b7H" else "Z"
+        btnF.text = when {
+            !axisAOn -> "F OFF"
+            axisAHold -> "F HOLD"
+            else -> "F MOM"
+        }
+        btnF.textSize = 9f
+        btnF.setTextColor(when {
+            !axisAOn -> silk
+            axisAHold -> amber
+            else -> yellow
+        })
+        btnZ.text = when {
+            !axisBOn -> "Z OFF"
+            axisBHold -> "Z HOLD"
+            else -> "Z MOM"
+        }
+        btnZ.textSize = 9f
+        btnZ.setTextColor(when {
+            !axisBOn -> silk
+            axisBHold -> amber
+            else -> pink
+        })
     }
 
     private fun shiftActive() = shiftHeld || shiftLocked
@@ -2187,7 +2205,7 @@ class MainActivity : Activity() {
         val titleRow = LinearLayout(this)
         titleRow.gravity = Gravity.CENTER_VERTICAL
         val title = TextView(this)
-        title.text = "MENU"
+        title.text = "MENU \u00b7 v${versionLabel()}"
         title.setTextColor(Color.rgb(236, 224, 196))
         title.textSize = 16f
         title.typeface = markerFont(this)
