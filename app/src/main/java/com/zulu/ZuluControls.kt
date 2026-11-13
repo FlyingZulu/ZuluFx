@@ -102,61 +102,97 @@ internal fun drawPunkCat(
 ) {
     val blink = System.currentTimeMillis() % 4200 < 160
     val rnd = java.util.Random(77L)
+    val ink = Color.rgb(40, 38, 32)
+
+    paint.style = Paint.Style.FILL
+    paint.color = Color.rgb(248, 244, 238)
+    paint.alpha = 235
+    canvas.drawOval(cx - r * 1.15f, cy - r * 0.92f, cx + r * 1.15f, cy + r * 1.08f, paint)
+
+    val earPath = android.graphics.Path()
+    for (s in intArrayOf(-1, 1)) {
+        earPath.reset()
+        earPath.moveTo(cx + s * r * 0.30f, cy - r * 0.72f)
+        earPath.lineTo(cx + s * r * 0.62f, cy - r * 1.42f)
+        earPath.lineTo(cx + s * r * 0.95f, cy - r * 0.55f)
+        earPath.close()
+        canvas.drawPath(earPath, paint)
+    }
+
     paint.style = Paint.Style.STROKE
-    paint.strokeWidth = 1.4f * d
-    paint.color = cream
-    paint.alpha = 150
+    paint.strokeWidth = 1.6f * d
+    paint.color = ink
+    paint.alpha = 220
     for (pass in 0..1) {
         val path = android.graphics.Path()
-        val segs = 22
+        val segs = 26
         for (i in 0..segs) {
-            val a = Math.PI * 2.0 * i / segs
-            val jx = (rnd.nextFloat() - 0.5f) * 1.6f * d
-            val jy = (rnd.nextFloat() - 0.5f) * 1.6f * d
-            val x = cx + (Math.cos(a) * r).toFloat() + jx
-            val y = cy + (Math.sin(a) * r).toFloat() + jy
+            val a = Math.PI * 1.05 + Math.PI * 0.9 * i / segs
+            val jx = (rnd.nextFloat() - 0.5f) * 1.4f * d
+            val jy = (rnd.nextFloat() - 0.5f) * 1.4f * d
+            val x = cx + (Math.cos(a) * r * 1.12f).toFloat() + jx
+            val y = cy + (Math.sin(a) * r * 1.0f).toFloat() + jy
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        path.close()
         canvas.drawPath(path, paint)
     }
     for (s in intArrayOf(-1, 1)) {
-        val ex = cx + s * r * 0.85f
-        val ey = cy - r * 0.62f
-        for (pass in 0..1) {
-            val j = (rnd.nextFloat() - 0.5f) * 1.4f * d
-            canvas.drawLine(ex - r * 0.34f + j, ey + r * 0.42f, ex + j, ey - r * 0.42f, paint)
-            canvas.drawLine(ex + j, ey - r * 0.42f, ex + r * 0.34f + j, ey + r * 0.42f, paint)
-        }
+        val j = (rnd.nextFloat() - 0.5f) * 1.4f * d
+        canvas.drawLine(cx + s * r * 0.30f, cy - r * 0.72f, cx + s * r * 0.62f, cy - r * 1.42f + j, paint)
+        canvas.drawLine(cx + s * r * 0.62f, cy - r * 1.42f + j, cx + s * r * 0.95f, cy - r * 0.55f, paint)
     }
-    for (pass in 0..1) {
-        val j = (rnd.nextFloat() - 0.5f) * 1.2f * d
-        canvas.drawLine(cx - r * 0.16f + j, cy - r * 0.92f, cx + j, cy - r * 1.32f, paint)
-        canvas.drawLine(cx + j, cy - r * 1.32f, cx + r * 0.16f + j, cy - r * 0.92f, paint)
-    }
-    if (blink) {
-        canvas.drawLine(cx - r * 0.42f, cy - r * 0.08f, cx - r * 0.14f, cy - r * 0.08f, paint)
-        canvas.drawLine(cx + r * 0.14f, cy - r * 0.08f, cx + r * 0.42f, cy - r * 0.08f, paint)
-    } else {
-        paint.style = Paint.Style.FILL
-        canvas.drawCircle(cx - r * 0.28f, cy - r * 0.08f, r * 0.11f, paint)
-        canvas.drawCircle(cx + r * 0.28f, cy - r * 0.08f, r * 0.11f, paint)
-    }
+
+    val bowPath = android.graphics.Path()
+    val bx = cx + r * 0.78f
+    val by = cy - r * 0.82f
+    bowPath.addCircle(bx - r * 0.22f, by, r * 0.20f, android.graphics.Path.Direction.CW)
+    bowPath.addCircle(bx + r * 0.22f, by, r * 0.20f, android.graphics.Path.Direction.CW)
+    bowPath.addCircle(bx, by, r * 0.11f, android.graphics.Path.Direction.CW)
+    paint.style = Paint.Style.FILL
+    paint.color = needleRed
+    paint.alpha = 235
+    canvas.drawPath(bowPath, paint)
     paint.style = Paint.Style.STROKE
-    canvas.drawLine(cx - r * 0.10f, cy + r * 0.22f, cx + r * 0.10f, cy + r * 0.22f, paint)
-    canvas.drawLine(cx - r * 0.10f, cy + r * 0.22f, cx - r * 0.04f, cy + r * 0.34f, paint)
-    canvas.drawLine(cx + r * 0.10f, cy + r * 0.22f, cx + r * 0.04f, cy + r * 0.34f, paint)
+    paint.strokeWidth = 1.2f * d
+    paint.color = ink
+    canvas.drawPath(bowPath, paint)
+
+    paint.style = Paint.Style.FILL
+    paint.color = ink
+    paint.alpha = 230
+    if (blink) {
+        canvas.drawLine(cx - r * 0.44f, cy - r * 0.06f, cx - r * 0.16f, cy - r * 0.06f, paint)
+        canvas.drawLine(cx + r * 0.16f, cy - r * 0.06f, cx + r * 0.44f, cy - r * 0.06f, paint)
+    } else {
+        canvas.drawCircle(cx - r * 0.30f, cy - r * 0.06f, r * 0.105f, paint)
+        canvas.drawCircle(cx + r * 0.30f, cy - r * 0.06f, r * 0.105f, paint)
+    }
+    paint.color = Color.rgb(255, 150, 170)
+    canvas.drawCircle(cx - r * 0.30f, cy + r * 0.16f, r * 0.10f, paint)
+    canvas.drawCircle(cx + r * 0.30f, cy + r * 0.16f, r * 0.10f, paint)
+
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 1.5f * d
+    paint.color = ink
+    paint.alpha = 230
+    canvas.drawLine(cx - r * 0.07f, cy + r * 0.30f, cx + r * 0.07f, cy + r * 0.34f, paint)
+
     for (s in intArrayOf(-1, 1)) {
         for (k in 0..2) {
             val j = (rnd.nextFloat() - 0.5f) * 1.2f * d
             canvas.drawLine(
-                cx + s * r * 0.30f, cy + r * (0.10f + k * 0.12f),
-                cx + s * r * (0.85f + k * 0.05f), cy + r * (0.02f + k * 0.16f) + j, paint
+                cx + s * r * 0.42f, cy + r * (0.10f + k * 0.13f),
+                cx + s * r * (1.05f + k * 0.06f), cy + r * (0.00f + k * 0.18f) + j, paint
             )
         }
     }
+
+    paint.style = Paint.Style.FILL
     paint.color = needleRed
-    canvas.drawCircle(cx - r * 0.95f, cy + r * 0.30f, r * 0.14f, paint)
+    paint.alpha = 255
+    canvas.drawCircle(cx - r * 1.02f, cy + r * 0.42f, r * 0.09f, paint)
+    canvas.drawCircle(cx + r * 1.02f, cy + r * 0.46f, r * 0.07f, paint)
+
     paint.color = cream
     paint.alpha = 255
     paint.style = Paint.Style.FILL
@@ -464,6 +500,9 @@ class PadGridView(context: Context) : View(context) {
     var recPad = -1
         set(value) { field = value; invalidate() }
 
+    var recArmed = false
+        set(value) { field = value; invalidate() }
+
     var soloMask = 0
         set(value) { field = value; invalidate() }
 
@@ -506,7 +545,7 @@ class PadGridView(context: Context) : View(context) {
             val soloPad = padCount == 12 && i >= 8
             val soloOn = soloPad && (soloMask and (1 shl (i - 8))) != 0
             val lit = (shiftMode && activeBank == i + 1) || flash == i
-            val rec = shiftMode && recPad == i
+            val rec = (shiftMode || recArmed) && recPad == i
             val side = if (i < snapSides.size) snapSides[i] else 0
             val lastRow = row == rows - 1
 
@@ -559,12 +598,12 @@ class PadGridView(context: Context) : View(context) {
         }
 
         val modeCol = when {
-            shiftMode -> Color.rgb(70, 255, 130)
+            padMode == 2 -> Color.rgb(70, 255, 130)
             padMode == 1 -> Color.rgb(0, 240, 255)
             else -> Color.rgb(255, 190, 0)
         }
         val modeName = when {
-            shiftMode -> "SAMPLES"
+            padMode == 2 -> "SAMPLES"
             padMode == 1 -> "MOTION"
             else -> "SC\u00c8NE"
         }
@@ -572,19 +611,6 @@ class PadGridView(context: Context) : View(context) {
         paint.alpha = 150
         canvas.drawRoundRect(1f * d, 1f * d, w - 1f * d, h - 1f * d, 7f * d, 7f * d, paint)
         paint.alpha = 255
-        paint.fill(Color.rgb(16, 18, 23))
-        paint.alpha = 225
-        val bw = 62f * d
-        val bh = 15f * d
-        canvas.drawRoundRect(w - bw - 3f * d, 3f * d, w - 3f * d, 3f * d + bh, 4f * d, 4f * d, paint)
-        paint.alpha = 255
-        paint.stroke(modeCol, 1f * d)
-        canvas.drawRoundRect(w - bw - 3f * d, 3f * d, w - 3f * d, 3f * d + bh, 4f * d, 4f * d, paint)
-        paint.fill(modeCol)
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = marker
-        paint.textSize = 9f * d
-        canvas.drawText(modeName, w - 3f * d - bw / 2f, 3f * d + bh * 0.72f, paint)
 
         drawScrews(canvas, paint, 0f, 0f, w, h, d)
     }
@@ -617,13 +643,12 @@ class PadGridView(context: Context) : View(context) {
 
     private fun padAt(x: Float, y: Float): Int {
         val w = width.toFloat()
-        val h = height.toFloat()
         val gap = 4f * d
         val rowsF = rows.toFloat()
         val padW = (w - 5f * gap) / 4f
-        val padH = (h - (rowsF + 1f) * gap) / rowsF
+        val padH = (height - (rowsF + 1f) * gap) / rowsF
         val col = ((x - gap) / (padW + gap)).toInt()
-        val row = ((y - gap) / (padH + gap)).toInt()
+        val row = ((y - topPad - gap) / (padH + gap)).toInt()
         if (col !in 0..3 || row !in 0 until rows) return -1
         val i = row * 4 + col
         return if (i in 0 until padCount) i else -1
@@ -1353,5 +1378,233 @@ class ParamPageView(context: Context) : View(context) {
             pLabel.textSize = minOf(cw * 0.3f, 13f * d)
             c.drawText(labels[i], cx, h * 0.86f, pLabel)
         }
+    }
+}
+
+class LineInKnob(context: Context) : View(context) {
+
+    val cmdId = "in"
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
+    var value = 1f
+        private set
+    var onValueChange: ((Float) -> Unit)? = null
+
+    private var dragY = 0f
+    private var dragV = 0f
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val cx = w / 2f
+        val cy = h / 2f
+        val r = minOf(w, h) * 0.42f
+
+        paint.fill(Color.rgb(30, 33, 40))
+        canvas.drawCircle(cx, cy, r + 2.5f * d, paint)
+        paint.stroke(Color.rgb(90, 98, 116), 1.2f * d)
+        canvas.drawCircle(cx, cy, r + 2.5f * d, paint)
+
+        val a = (-135f + 270f * (value / 2f)) * Math.PI.toFloat() / 180f
+        paint.stroke(Color.rgb(0, 229, 255), 2f * d)
+        canvas.drawArc(cx - r, cy - r, cx + r, cy + r, -135f, 270f * (value / 2f), false, paint)
+
+        paint.fill(cream)
+        canvas.drawCircle(cx, cy, r * 0.55f, paint)
+        paint.stroke(Color.rgb(255, 190, 0), 1.4f * d)
+        canvas.drawLine(cx, cy, cx + (r * 0.5f) * Math.cos(a.toDouble()).toFloat(),
+            cy + (r * 0.5f) * Math.sin(a.toDouble()).toFloat(), paint)
+
+        paint.fill(silk)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        paint.textSize = 7f * d
+        canvas.drawText("IN", cx, h - 1.5f * d, paint)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                dragY = event.y
+                dragV = value
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dv = (dragY - event.y) / (60f * d)
+                value = (dragV + dv).coerceIn(0f, 2f)
+                onValueChange?.invoke(value)
+                invalidate()
+            }
+        }
+        return true
+    }
+}
+
+class DrumGridView(context: Context) : View(context) {
+
+    val cmdId = "drums"
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
+    var padCount = 12
+        set(value) { field = value; invalidate() }
+    var drumMode = 0
+
+    var onDrum: ((Int) -> Unit)? = null
+    var onExit: (() -> Unit)? = null
+
+    private var flash = -1
+    private var flashAt = 0L
+
+    private val modeNames = listOf("12-LEVELS", "SLICE", "RND")
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val gap = 4f * d
+        val top = 20f * d
+        val cols = 4
+        val rows = (padCount + cols - 1) / cols
+        val rowsF = rows.toFloat()
+        val padW = (w - (cols + 1) * gap) / cols
+        val padH = (h - top - (rowsF + 1) * gap) / rowsF
+        val rad = if (ZuluTheme.retro) 0f else 5f * d
+
+        paint.fill(Color.rgb(20, 22, 28))
+        canvas.drawRect(0f, 0f, w, h, paint)
+        drawZebra(canvas, w, h, d)
+
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        for (i in 0 until padCount) {
+            val col = i % cols
+            val row = i / cols
+            val l = gap + col * (padW + gap)
+            val t = top + gap + row * (padH + gap)
+            val lit = flash == i && System.currentTimeMillis() - flashAt < 120
+            paint.fill(
+                when {
+                    lit -> Color.rgb(255, 244, 130)
+                    row == rows - 1 -> Color.rgb(198, 42, 140)
+                    else -> Color.rgb(196, 108, 20)
+                }
+            )
+            canvas.drawRoundRect(l, t, l + padW, t + padH, rad, rad, paint)
+            paint.stroke(Color.rgb(75, 82, 98), 1f * d)
+            drawSketchyRoundRect(canvas, paint, l, t, l + padW, t + padH, rad, 300 + i)
+            paint.fill(if (lit) Color.rgb(40, 26, 12) else Color.rgb(255, 244, 130))
+            paint.textSize = padH * 0.42f
+            canvas.drawText("${i + 1}", l + padW / 2f, t + padH * 0.7f, paint)
+        }
+
+        paint.fill(Color.rgb(16, 18, 23))
+        paint.alpha = 225
+        canvas.drawRoundRect(3f * d, 2f * d, 3f * d + 240f * d, 17f * d, 4f * d, 4f * d, paint)
+        paint.alpha = 255
+        paint.stroke(Color.rgb(0, 255, 170), 1f * d)
+        canvas.drawRoundRect(3f * d, 2f * d, 3f * d + 240f * d, 17f * d, 4f * d, 4f * d, paint)
+        for ((m, name) in modeNames.withIndex()) {
+            val mw = 80f * d
+            val mx = 3f * d + m * mw
+            paint.fill(if (drumMode == m) Color.rgb(0, 255, 170) else Color.rgb(120, 128, 146))
+            paint.textSize = 9f * d
+            canvas.drawText(name, mx + mw / 2f, 13f * d, paint)
+        }
+        paint.fill(Color.rgb(255, 96, 70))
+        paint.textSize = 12f * d
+        canvas.drawText("\u00d7", w - 10f * d, 14f * d, paint)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val w = width.toFloat()
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val x = event.getX(event.actionIndex)
+                val y = event.getY(event.actionIndex)
+                if (x > w - 24f * d && y < 20f * d) {
+                    onExit?.invoke()
+                    return true
+                }
+                if (y < 20f * d && x < 3f * d + 240f * d) {
+                    val m = ((x - 3f * d) / (80f * d)).toInt().coerceIn(0, 2)
+                    if (m != drumMode) {
+                        drumMode = m
+                        invalidate()
+                    }
+                    return true
+                }
+                val gap = 4f * d
+                val top = 20f * d
+                val cols = 4
+                val rows = (padCount + cols - 1) / cols
+                val padW = (w - (cols + 1) * gap) / cols
+                val padH = (height - top - rows * gap + gap) / rows
+                val col = ((x - gap) / (padW + gap)).toInt()
+                val row = ((y - top - gap) / (padH + gap)).toInt()
+                if (col in 0 until cols && row in 0 until rows) {
+                    val i = row * cols + col
+                    if (i in 0 until padCount) {
+                        flash = i
+                        flashAt = System.currentTimeMillis()
+                        onDrum?.invoke(i)
+                        invalidate()
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                flash = -1
+                invalidate()
+            }
+        }
+        return true
+    }
+}
+
+class ModeBadgeView(context: Context) : View(context) {
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
+    var mode = 0
+        set(value) { field = value; invalidate() }
+
+    var onBadgeTap: (() -> Unit)? = null
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val col = when (mode) {
+            1 -> Color.rgb(0, 240, 255)
+            2 -> Color.rgb(70, 255, 130)
+            else -> Color.rgb(255, 190, 0)
+        }
+        val name = when (mode) {
+            1 -> "MOTION"
+            2 -> "SAMPLES"
+            else -> "SC\u00c8NE"
+        }
+        paint.fill(Color.rgb(16, 18, 23))
+        canvas.drawRoundRect(0f, 0f, w, h, 5f * d, 5f * d, paint)
+        paint.stroke(col, 1.2f * d)
+        canvas.drawRoundRect(0f, 0f, w, h, 5f * d, 5f * d, paint)
+        paint.fill(col)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        paint.textSize = h * 0.34f
+        canvas.drawText(name, w / 2f, h * 0.66f, paint)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            onBadgeTap?.invoke()
+            performClick()
+            return true
+        }
+        return super.onTouchEvent(event)
     }
 }

@@ -1,6 +1,7 @@
 package com.zulu
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Rect
@@ -119,10 +120,14 @@ class MainActivity : Activity() {
         val bx: Float,
         val by: Float,
         val mix: Float,
-        val fly: Float,
         val filter: Int,
         val assignX: Int,
-        val assignY: Int
+        val assignY: Int,
+        val punch: BooleanArray? = null,
+        val punchCol2: Int = 0,
+        val motA: FloatArray? = null,
+        val motB: FloatArray? = null,
+        val motLen: Int = 0
     )
     private val snapPads = arrayOfNulls<Snap>(14)
     private var activeZu = -1
@@ -305,6 +310,45 @@ class MainActivity : Activity() {
     private var sceneMode = 0
     private var bSnapBtn: Button? = null
     private var bMotionBtn: Button? = null
+    private var verticalUi = false
+    private val menuOrientButtons = ArrayList<Button>()
+    private var fRecTap = false
+    private var zRecTap = false
+    private var sceneSide = 0
+    private var toolPage = 0
+    private var playerBank = 0
+    private var recArmed = false
+    private var recArmPad = -1
+    private var recSnapSide = -1
+    private var recActive = false
+    private var recMotion = false
+    private var motionSrcA = false
+    private var motionSrcB = false
+    private var motionPlaying = -1
+    private var motionPhase = 0f
+    private var playAx = 0.5f
+    private var playAy = 0.5f
+    private var playBx = 0.5f
+    private var playBy = 0.5f
+    private val motA = ArrayList<Float>()
+    private val motB = ArrayList<Float>()
+    private val motionHandler = Handler(Looper.getMainLooper())
+    private val seqHandler = Handler(Looper.getMainLooper())
+    private val midiLoops = Array(8) { ArrayList<FloatArray>() }
+    private val midiPlaying = BooleanArray(8)
+    private val midiStartMs = LongArray(8)
+    private val midiLastPos = FloatArray(8) { -1f }
+    private var recMidiEngines = true
+    private var recStartMs = 0L
+    private var recLenMs = 0L
+    private val punchLatched = BooleanArray(9)
+    private var lastEditBank = -1
+    private var lastEditAt = 0L
+    private lateinit var drumGrid: DrumGridView
+    private lateinit var modeBadge: ModeBadgeView
+    private lateinit var inKnob: LineInKnob
+    private val menuDrumButtons = ArrayList<Button>()
+    private val menuMidiButtons = ArrayList<Button>()
     private var resampling = false
     private var muteOn = false
     private val soloGroups = booleanArrayOf(false, false, false, false)
@@ -333,6 +377,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        verticalUi = getSharedPreferences("zulu", MODE_PRIVATE).getBoolean("verticalUi", false)
+        requestedOrientation =
+            if (verticalUi) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (Build.VERSION.SDK_INT >= 28) {
             window.attributes.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -413,7 +461,7 @@ class MainActivity : Activity() {
             engine.nativeUndo()
             Toast.makeText(this, "UNDO REC", Toast.LENGTH_SHORT).show()
         }
-        btnArp = makeRoundButton("ARP", pink, 10f)
+        btnArp = makeRoundButton("OUTILS", pink, 7f)
         btnArp.setOnClickListener { arpTap() }
         btnPlay = makeRoundButton("PLAY", green, 10f)
         btnPlay.setOnClickListener { togglePlay() }
@@ -421,42 +469,44 @@ class MainActivity : Activity() {
         btnZu.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    zuDownAt = System.currentTimeMillis()
                     btnZu.text = "ZU\u00b7CAP"
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    btnZu.text = "ZU"
-                    if (System.currentTimeMillis() - zuDownAt >= 400) {
-                        captureSnap(0)
-                    } else if (e.actionMasked == MotionEvent.ACTION_UP) {
-                        zuLuFader.value = 0f
-                        applyMorph(0f)
+                    if (recArmed) {
+                        recSnapSide = 0
+                        recArmPad = -1
+                        padGrid.recPad = -1
+                        Toast.makeText(this, "SNAPSHOT ZU : CHOISIR PAD", Toast.LENGTH_SHORT).show()
+                    } else {
+                        sceneSide = 0
+                        refreshSceneSide()
                     }
                 }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> btnZu.text = "ZU"
             }
             true
         }
         btnLu.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    luDownAt = System.currentTimeMillis()
                     btnLu.text = "LU\u00b7CAP"
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    btnLu.text = "LU"
-                    if (System.currentTimeMillis() - luDownAt >= 400) {
-                        captureSnap(1)
-                    } else if (e.actionMasked == MotionEvent.ACTION_UP) {
-                        zuLuFader.value = 1f
-                        applyMorph(1f)
+                    if (recArmed) {
+                        recSnapSide = 1
+                        recArmPad = -1
+                        padGrid.recPad = -1
+                        Toast.makeText(this, "SNAPSHOT LU : CHOISIR PAD", Toast.LENGTH_SHORT).show()
+                    } else {
+                        sceneSide = 1
+                        refreshSceneSide()
                     }
                 }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> btnLu.text = "LU"
             }
             true
         }
 
         btnFx.setOnClickListener {
-            if (fxConsumed) {
+            if (paramView?.visibility == View.VISIBLE) {
+                closeParamPage()
+            } else if (fxConsumed) {
                 fxConsumed = false
             } else if (fxOpen) {
                 closeFx()
@@ -546,19 +596,32 @@ class MainActivity : Activity() {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     fHeld = true
-                    if (shiftActive() && sendPadBank >= 0 &&
-                        System.currentTimeMillis() - sendPadAt < 900
-                    ) {
-                        applySendCombo(sendPadBank, 1)
+                    if (recArmed) {
+                        if (padGrid.padMode == 1) {
+                            motionSrcA = !motionSrcA
+                            Toast.makeText(this, "MOTION AXE F " + (if (motionSrcA) "ON" else "OFF"), Toast.LENGTH_SHORT).show()
+                        } else {
+                            loopWetA = !loopWetA
+                            Toast.makeText(this, "REC WET F " + (if (loopWetA) "ON" else "OFF"), Toast.LENGTH_SHORT).show()
+                        }
+                        fRecTap = true
+                        refreshBlink()
+                    } else {
+                        fRecTap = false
+                        if (shiftActive() && sendPadBank >= 0 &&
+                            System.currentTimeMillis() - sendPadAt < 900
+                        ) {
+                            applySendCombo(sendPadBank, 1)
+                        }
+                        fDownAt = System.currentTimeMillis()
+                        if (fxHeld) loopWetA = true
+                        refreshBlink()
                     }
-                    fDownAt = System.currentTimeMillis()
-                    if (fxHeld) loopWetA = true
-                    refreshBlink()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     fHeld = false
                     loopWetA = false
-                    if (!fxHeld) {
+                    if (!fxHeld && !fRecTap) {
                         if (System.currentTimeMillis() - fDownAt >= 400) {
                             axisAHold = !axisAHold
                             if (axisAOn) {
@@ -577,19 +640,32 @@ class MainActivity : Activity() {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     zHeld = true
-                    if (shiftActive() && sendPadBank >= 0 &&
-                        System.currentTimeMillis() - sendPadAt < 900
-                    ) {
-                        applySendCombo(sendPadBank, 2)
+                    if (recArmed) {
+                        if (padGrid.padMode == 1) {
+                            motionSrcB = !motionSrcB
+                            Toast.makeText(this, "MOTION AXE Z " + (if (motionSrcB) "ON" else "OFF"), Toast.LENGTH_SHORT).show()
+                        } else {
+                            loopWetB = !loopWetB
+                            Toast.makeText(this, "REC WET Z " + (if (loopWetB) "ON" else "OFF"), Toast.LENGTH_SHORT).show()
+                        }
+                        zRecTap = true
+                        refreshBlink()
+                    } else {
+                        zRecTap = false
+                        if (shiftActive() && sendPadBank >= 0 &&
+                            System.currentTimeMillis() - sendPadAt < 900
+                        ) {
+                            applySendCombo(sendPadBank, 2)
+                        }
+                        zDownAt = System.currentTimeMillis()
+                        if (fxHeld) loopWetB = true
+                        refreshBlink()
                     }
-                    zDownAt = System.currentTimeMillis()
-                    if (fxHeld) loopWetB = true
-                    refreshBlink()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     zHeld = false
                     loopWetB = false
-                    if (!fxHeld) {
+                    if (!fxHeld && !zRecTap) {
                         if (System.currentTimeMillis() - zDownAt >= 400) {
                             axisBHold = !axisBHold
                             if (axisBOn) {
@@ -607,7 +683,10 @@ class MainActivity : Activity() {
         btnRec.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> recHeld = true
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> recHeld = false
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    recHeld = false
+                    if (e.actionMasked == MotionEvent.ACTION_UP && !shiftActive()) recTap()
+                }
             }
             refreshBlink()
             false
@@ -636,6 +715,9 @@ class MainActivity : Activity() {
                     loopLenSteps = n
                     padGrid.activeBank = n
                 }
+                recActive && recMotion && n == recArmPad -> recStop()
+                recActive && !recMotion && n == recArmPad -> recStop()
+                recArmed && n >= 1 && n <= min(padGrid.padCount, 14) -> armRecDest(n)
                 shiftActive() -> {
                     fxConsumed = true
                     startLoopRecording(n)
@@ -644,13 +726,21 @@ class MainActivity : Activity() {
                     sendPadAt = System.currentTimeMillis()
                 }
                 padGrid.padCount == 12 && n in 9..12 -> toggleSolo(n - 9)
-                n - 1 < 14 && snapPads[n - 1] != null -> recallSnap(n - 1)
+                padGrid.padMode != 2 && n - 1 < 14 && snapPads[n - 1] != null -> recallSnap(n - 1)
                 n <= 8 -> {
+                    playerBank = n - 1
                     if (engine.nativeBankHasLoop(n - 1)) {
                         engine.nativeToggleBank(n - 1)
                         engine.nativeSetPlayerBank(n - 1)
                         bankOn[n - 1] = !bankOn[n - 1]
                         refreshBankFx()
+                    } else if (midiLoops[n - 1].isNotEmpty()) {
+                        midiPlaying[n - 1] = !midiPlaying[n - 1]
+                        bankOn[n - 1] = midiPlaying[n - 1]
+                        if (midiPlaying[n - 1]) {
+                            midiStartMs[n - 1] = System.currentTimeMillis()
+                            midiLastPos[n - 1] = -1f
+                        }
                     } else {
                         startLoopRecording(n)
                         bankOn[n - 1] = true
@@ -689,6 +779,11 @@ class MainActivity : Activity() {
         recParams.setMargins((4 * d).toInt(), 0, 0, 0)
         row1.addView(btnRec, recParams)
         row1.addView(btnUndo, LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt()))
+        inKnob = LineInKnob(this)
+        inKnob.onValueChange = { v -> engine.nativeSetInGain(v) }
+        val knobParams = LinearLayout.LayoutParams((24 * d).toInt(), (30 * d).toInt())
+        knobParams.setMargins((4 * d).toInt(), 0, 0, 0)
+        row1.addView(inKnob, knobParams)
         row1.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         val vuWrap = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -718,7 +813,6 @@ class MainActivity : Activity() {
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
         column.setPadding((6 * d).toInt(), (4 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
-        column.addView(row1)
         gridParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (96 * d).toInt()
         )
@@ -777,7 +871,7 @@ class MainActivity : Activity() {
         }
         val pb = makeButton("PUNCH", yellow)
         pb.textSize = 11f
-        pb.setOnClickListener { setPunchMode(true) }
+        pb.setOnClickListener { setPunchMode(!punchMode) }
         btnPunch = pb
         val pbp = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
         pbp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
@@ -794,7 +888,6 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
         padPaneParams.setMargins(0, (4 * d).toInt(), 0, 0)
-        leftColumn.addView(padPane, padPaneParams)
 
         vuMeter.onLongPress = {
             if (!simulLock) {
@@ -827,6 +920,25 @@ class MainActivity : Activity() {
         edgeColumn.orientation = LinearLayout.VERTICAL
         edgeColumn.setPadding((3 * d).toInt(), (6 * d).toInt(), (3 * d).toInt(), (6 * d).toInt())
         edgeColumn.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
+        modeBadge = ModeBadgeView(this)
+        modeBadge.onBadgeTap = {
+            padGrid.padMode = (padGrid.padMode + 1) % 3
+            sceneMode = if (padGrid.padMode == 1) 1 else 0
+            modeBadge.mode = padGrid.padMode
+            Toast.makeText(
+                this,
+                when (padGrid.padMode) {
+                    1 -> "MODE MOTION"
+                    2 -> "MODE SAMPLES"
+                    else -> "MODE SC\u00c8NE"
+                },
+                Toast.LENGTH_SHORT
+            ).show()
+            refreshMenu()
+        }
+        edgeColumn.addView(modeBadge, LinearLayout.LayoutParams((40 * d).toInt(), (20 * d).toInt()))
+        val badgeGap = View(this)
+        edgeColumn.addView(badgeGap, LinearLayout.LayoutParams(0, (6 * d).toInt()))
         edgeColumn.addView(btnShift, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
         val shiftGap = View(this)
         edgeColumn.addView(
@@ -849,16 +961,22 @@ class MainActivity : Activity() {
 
         val punch = PunchPadView(this)
         punch.visibility = View.GONE
-        punch.onPunchDown = { z -> punchApply(z, true) }
+        punch.onPunchDown = { z ->
+            if (shiftActive()) {
+                val fx = punchFx[punchCol][z]
+                if (fx >= 0) {
+                    openParamPage(fx)
+                } else {
+                    Toast.makeText(this, "PAS D'\u00c9DIT ICI", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                punchApply(z, true)
+            }
+        }
         punch.onPunchUp = { z -> punchApply(z, false) }
         punch.onExit = { setPunchMode(false) }
         punch.shiftCheck = { shiftActive() }
-        punch.onCollectionChange = { c ->
-            punch.releaseAll()
-            punchCol = c
-            punch.setCollectionIndex(c)
-            punch.setLabels(punchLabels[c])
-        }
+        punch.onCollectionChange = { c -> setPunchCollection(c) }
         punchView = punch
         padPane.addView(
             punch,
@@ -889,15 +1007,76 @@ class MainActivity : Activity() {
             )
         )
 
-        content.addView(leftColumn, padParams)
-        content.addView(
-            edgeColumn,
-            LinearLayout.LayoutParams((46 * d).toInt(), LinearLayout.LayoutParams.MATCH_PARENT)
+        drumGrid = DrumGridView(this)
+        drumGrid.visibility = View.GONE
+        drumGrid.onDrum = { n -> drumHit(n) }
+        drumGrid.onExit = {
+            toolPage = 0
+            drumGrid.visibility = View.GONE
+        }
+        padPane.addView(
+            drumGrid,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
         )
-        content.addView(
-            column,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-        )
+
+        if (verticalUi) {
+            content.addView(
+                padPane,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.1f
+                )
+            )
+            content.addView(
+                row1,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+            val lower = LinearLayout(this)
+            lower.orientation = LinearLayout.HORIZONTAL
+            val lowerCol = LinearLayout(this)
+            lowerCol.orientation = LinearLayout.VERTICAL
+            lowerCol.setPadding((6 * d).toInt(), (4 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
+            lowerCol.addView(presetRow, presetRowParams)
+            lowerCol.addView(padGrid, gridParams)
+            lowerCol.addView(zuLuBtns)
+            lowerCol.addView(
+                zuLuFader,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+                )
+            )
+            lowerCol.addView(faderRow, faderRowParams)
+            lower.addView(
+                lowerCol,
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+            )
+            lower.addView(
+                edgeColumn,
+                LinearLayout.LayoutParams((46 * d).toInt(), LinearLayout.LayoutParams.MATCH_PARENT)
+            )
+            content.addView(
+                lower,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.4f
+                )
+            )
+        } else {
+            column.addView(row1)
+            leftColumn.addView(padPane, padPaneParams)
+            content.addView(leftColumn, padParams)
+            content.addView(
+                edgeColumn,
+                LinearLayout.LayoutParams((46 * d).toInt(), LinearLayout.LayoutParams.MATCH_PARENT)
+            )
+            content.addView(
+                column,
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+            )
+        }
 
         buildFxPanel(d)
         buildScalePanel(d)
@@ -906,6 +1085,9 @@ class MainActivity : Activity() {
         buildStepPanel(d)
         buildMenuPanel(d)
         refreshPresetRow()
+        engine.nativeSetInGain(inKnob.value)
+        refreshSceneSide()
+        seqHandler.postDelayed(seqTick, 20)
         padPane.addView(
             arpOverlay,
             FrameLayout.LayoutParams(
@@ -1125,6 +1307,9 @@ class MainActivity : Activity() {
         val bank = (0 until 8).firstOrNull { !engine.nativeBankHasLoop(it) } ?: return
         engine.nativeResample(bank, loopLenSteps)
         resetSteps(bank)
+        recActive = true
+        recMotion = false
+        recArmPad = bank + 1
         padGrid.recPad = bank
         val ms = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
         recEndHandler.removeCallbacksAndMessages(null)
@@ -1669,21 +1854,34 @@ class MainActivity : Activity() {
                 if (s == null) {
                     snaps.put(JSONObject.NULL)
                 } else {
-                    snaps.put(
-                        JSONObject()
-                            .put("ax", s.ax.toDouble())
-                            .put("ay", s.ay.toDouble())
-                            .put("bx", s.bx.toDouble())
-                            .put("by", s.by.toDouble())
-                            .put("mix", s.mix.toDouble())
-                            .put("fly", s.fly.toDouble())
-                            .put("filter", s.filter)
-                            .put("assignX", s.assignX)
-                            .put("assignY", s.assignY)
-                    )
+                    val o = JSONObject()
+                        .put("ax", s.ax.toDouble())
+                        .put("ay", s.ay.toDouble())
+                        .put("bx", s.bx.toDouble())
+                        .put("by", s.by.toDouble())
+                        .put("mix", s.mix.toDouble())
+                        .put("filter", s.filter)
+                        .put("assignX", s.assignX)
+                        .put("assignY", s.assignY)
+                        .put("punchCol", s.punchCol2)
+                    if (s.punch != null) {
+                        o.put("punch", JSONArray(s.punch.map { if (it) 1 else 0 }))
+                    }
+                    if (s.motA != null) o.put("motA", JSONArray(s.motA.map { it.toDouble() }))
+                    if (s.motB != null) o.put("motB", JSONArray(s.motB.map { it.toDouble() }))
+                    if (s.motLen > 0) o.put("motLen", s.motLen)
+                    snaps.put(o)
                 }
             }
             json.put("snaps", snaps)
+            val mloops = JSONArray()
+            for (b in 0 until 8) {
+                val arr = JSONArray()
+                for (e in midiLoops[b]) arr.put(JSONArray(e.toList()))
+                mloops.put(arr)
+            }
+            json.put("midiloops", mloops)
+            json.put("recMidi", recMidiEngines)
             val lfos = JSONArray()
             for (i in 0 until 2) {
                 lfos.put(
@@ -1839,20 +2037,44 @@ class MainActivity : Activity() {
                         snapPads[i] = null
                     } else {
                         val o = snaps.getJSONObject(i)
+                        val pa = o.optJSONArray("punch")
+                        val pArr = if (pa != null) BooleanArray(pa.length()) { k -> pa.optInt(k, 0) == 1 } else null
+                        fun farr(name: String): FloatArray? {
+                            val a2 = o.optJSONArray(name) ?: return null
+                            return FloatArray(a2.length()) { k -> a2.getDouble(k).toFloat() }
+                        }
                         snapPads[i] = Snap(
                             ax = o.getDouble("ax").toFloat(),
                             ay = o.getDouble("ay").toFloat(),
                             bx = o.getDouble("bx").toFloat(),
                             by = o.getDouble("by").toFloat(),
                             mix = o.getDouble("mix").toFloat(),
-                            fly = o.getDouble("fly").toFloat(),
                             filter = o.getInt("filter"),
                             assignX = o.optInt("assignX", 0),
-                            assignY = o.optInt("assignY", 1)
+                            assignY = o.optInt("assignY", 1),
+                            punch = pArr,
+                            punchCol2 = o.optInt("punchCol", 0),
+                            motA = farr("motA"),
+                            motB = farr("motB"),
+                            motLen = o.optInt("motLen", 0)
                         )
                     }
                 }
             }
+            val mloops = json.optJSONArray("midiloops")
+            if (mloops != null) {
+                for (b in 0 until min(8, mloops.length())) {
+                    midiLoops[b].clear()
+                    val arr = mloops.optJSONArray(b) ?: continue
+                    for (k in 0 until arr.length()) {
+                        val e = arr.optJSONArray(k) ?: continue
+                        if (e.length() >= 5) {
+                            midiLoops[b].add(FloatArray(5) { t -> e.getDouble(t).toFloat() })
+                        }
+                    }
+                }
+            }
+            recMidiEngines = json.optBoolean("recMidi", true)
             val lfos = json.optJSONArray("lfos")
             if (lfos != null) {
                 for (i in 0 until min(2, lfos.length())) {
@@ -2280,18 +2502,281 @@ class MainActivity : Activity() {
 
     private fun refreshBlink() {
         padGrid.blinkOn = blinkOn
-        btnRec.setTextColor(if (recHeld && blinkOn) Color.WHITE else red)
+        btnRec.setTextColor(if ((recHeld || recArmed || recActive) && blinkOn) Color.WHITE else red)
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
+    }
+
+    private val recEndRunnable = Runnable {
+        if (recActive) {
+            if (recMotion) finalizeMotionRec() else recActive = false
+            recMotion = false
+            padGrid.recPad = -1
+            refreshBlink()
+        }
     }
 
     private fun startLoopRecording(bank: Int) {
         val wet = loopWetA || loopWetB
         engine.nativeRecordBank(bank - 1, loopLenSteps, wet)
         resetSteps(bank - 1)
+        recActive = true
+        recMotion = false
+        recArmPad = bank
+        recStartMs = System.currentTimeMillis()
+        recLenMs = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
         padGrid.recPad = bank - 1
-        val ms = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
         recEndHandler.removeCallbacksAndMessages(null)
-        recEndHandler.postDelayed({ padGrid.recPad = -1 }, ms + 200)
+        recEndHandler.postDelayed(recEndRunnable, recLenMs + 200)
+        refreshBlink()
+    }
+
+    private fun recTap() {
+        when {
+            recActive -> {
+                if (recMotion) finalizeMotionRec() else stopSampleRec()
+                recArmed = false
+                recSnapSide = -1
+                recArmPad = -1
+                padGrid.recArmed = false
+            }
+            recSnapSide >= 0 && recArmPad > 0 -> {
+                captureSnap(recSnapSide, recArmPad - 1)
+                recArmed = false
+                recSnapSide = -1
+                recArmPad = -1
+                padGrid.recArmed = false
+                padGrid.recPad = -1
+            }
+            recArmPad > 0 -> {
+                recArmed = false
+                padGrid.recArmed = false
+                if (padGrid.padMode == 1) startMotionRec() else startLoopRecording(recArmPad)
+            }
+            else -> {
+                recArmed = !recArmed
+                recArmPad = -1
+                recSnapSide = -1
+                motionSrcA = false
+                motionSrcB = false
+                padGrid.recArmed = recArmed
+                padGrid.recPad = -1
+                Toast.makeText(
+                    this,
+                    if (recArmed) "REC : " + (if (padGrid.padMode == 1) "F/Z + PAD" else "PAD (F/Z = WET)")
+                    else "REC OFF",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        refreshBlink()
+    }
+
+    private fun armRecDest(n: Int) {
+        if (recSnapSide >= 0) {
+            val n2 = min(padGrid.padCount, 14)
+            val zone = if (recSnapSide == 0) 0 until n2 / 2 else n2 / 2 until n2
+            if (n - 1 in zone) {
+                recArmPad = n
+                padGrid.recPad = n - 1
+                Toast.makeText(this, "SNAPSHOT PAD $n \u2014 REC = CAPTURER", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    "C\u00d4T\u00c9 " + (if (recSnapSide == 0) "ZU" else "LU") + " UNIQUEMENT",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } else {
+            recArmPad = n
+            padGrid.recPad = n - 1
+            val src = when {
+                padGrid.padMode == 1 -> "MOTION"
+                loopWetA || loopWetB -> "WET"
+                else -> "DRY"
+            }
+            Toast.makeText(this, "PAD $n ARM\u00c9 ($src) \u2014 REC = LANCER", Toast.LENGTH_SHORT).show()
+        }
+        refreshBlink()
+    }
+
+    private fun stopSampleRec() {
+        engine.nativeStopRec()
+        recActive = false
+        recMotion = false
+        padGrid.recPad = -1
+        recEndHandler.removeCallbacksAndMessages(null)
+        Toast.makeText(this, "REC STOP", Toast.LENGTH_SHORT).show()
+        refreshBlink()
+    }
+
+    private fun recStop() {
+        if (recMotion) finalizeMotionRec() else stopSampleRec()
+        recArmed = false
+        recSnapSide = -1
+        recArmPad = -1
+        padGrid.recArmed = false
+    }
+
+    private fun startMotionRec() {
+        if (!motionSrcA && !motionSrcB) {
+            motionSrcA = true
+            motionSrcB = true
+        }
+        motA.clear()
+        motB.clear()
+        recActive = true
+        recMotion = true
+        recStartMs = System.currentTimeMillis()
+        recLenMs = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
+        padGrid.recPad = recArmPad - 1
+        recEndHandler.removeCallbacksAndMessages(null)
+        recEndHandler.postDelayed(recEndRunnable, recLenMs + 200)
+        motionHandler.postDelayed(motionCaptureTick, 40)
+        refreshBlink()
+    }
+
+    private val motionCaptureTick = object : Runnable {
+        override fun run() {
+            if (!recActive || !recMotion) return
+            if (motionSrcA) {
+                motA.add(pad.ax)
+                motA.add(pad.ay)
+            }
+            if (motionSrcB) {
+                motB.add(pad.bx)
+                motB.add(pad.by)
+            }
+            motionHandler.postDelayed(this, 40)
+        }
+    }
+
+    private fun finalizeMotionRec() {
+        val idx = recArmPad - 1
+        if (idx in snapPads.indices) {
+            val a = if (motionSrcA && motA.size >= 4) motA.toFloatArray() else null
+            val b = if (motionSrcB && motB.size >= 4) motB.toFloatArray() else null
+            snapPads[idx] = liveSnap().copy(motA = a, motB = b, motLen = loopLenSteps)
+            val n = min(padGrid.padCount, 14)
+            if (idx < n / 2) activeZu = idx else activeLu = idx
+            refreshSnapGrid()
+        }
+        recActive = false
+        recMotion = false
+        motionSrcA = false
+        motionSrcB = false
+        motionHandler.removeCallbacks(motionCaptureTick)
+        Toast.makeText(this, "MOTION ENREGISTR\u00c9E", Toast.LENGTH_SHORT).show()
+        refreshBlink()
+    }
+
+    private fun startMotionPlayback(idx: Int) {
+        val s = snapPads[idx] ?: return
+        motionPlaying = idx
+        motionPhase = 0f
+        playAx = s.ax
+        playAy = s.ay
+        playBx = s.bx
+        playBy = s.by
+        motionHandler.removeCallbacks(motionPlayTick)
+        motionHandler.postDelayed(motionPlayTick, 40)
+    }
+
+    private fun stopMotionPlayback() {
+        motionPlaying = -1
+        motionHandler.removeCallbacks(motionPlayTick)
+    }
+
+    private val motionPlayTick = object : Runnable {
+        override fun run() {
+            if (motionPlaying < 0) return
+            val s = snapPads[motionPlaying]
+            if (s == null || ((s.motA == null || s.motA!!.size < 4) && (s.motB == null || s.motB!!.size < 4))) {
+                motionPlaying = -1
+                return
+            }
+            val durMs = s.motLen.coerceAtLeast(1) * 60000f / bpmLcd.bpm.coerceAtLeast(40f)
+            val adv = 40f / durMs
+            motionPhase += adv
+            val a = s.motA
+            if (a != null && a.size >= 4) {
+                val pts = a.size / 2
+                val ph = motionPhase % 1f * pts
+                val i = ph.toInt().coerceAtMost(pts - 1)
+                val j = (i + 1) % pts
+                val f = ph - i
+                playAx = (a[i * 2] + (a[j * 2] - a[i * 2]) * f).coerceIn(0f, 1f)
+                playAy = (a[i * 2 + 1] + (a[j * 2 + 1] - a[i * 2 + 1]) * f).coerceIn(0f, 1f)
+                engine.nativeSetAx(playAx)
+                engine.nativeSetAy(playAy)
+            }
+            val b = s.motB
+            if (b != null && b.size >= 4) {
+                val pts = b.size / 2
+                val ph = motionPhase % 1f * pts
+                val i = ph.toInt().coerceAtMost(pts - 1)
+                val j = (i + 1) % pts
+                val f = ph - i
+                playBx = (b[i * 2] + (b[j * 2] - b[i * 2]) * f).coerceIn(0f, 1f)
+                playBy = (b[i * 2 + 1] + (b[j * 2 + 1] - b[i * 2 + 1]) * f).coerceIn(0f, 1f)
+                engine.nativeSetBx(playBx)
+                engine.nativeSetBy(playBy)
+            }
+            pad.setCursor(playAx, playAy, playBx, playBy)
+            motionHandler.postDelayed(this, 40)
+        }
+    }
+
+    private fun bankLenMs(b: Int): Long {
+        val steps = if (bankSteps[b] > 0) bankSteps[b] else loopLenSteps
+        return (steps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
+    }
+
+    private val seqTick = object : Runnable {
+        override fun run() {
+            val now = System.currentTimeMillis()
+            for (b in 0 until 8) {
+                if (!midiPlaying[b]) continue
+                val loop = midiLoops[b]
+                if (loop.isEmpty()) {
+                    midiPlaying[b] = false
+                    continue
+                }
+                val len = bankLenMs(b).coerceAtLeast(200).toFloat()
+                val pos = ((now - midiStartMs[b]) % len.toLong()).toFloat()
+                val last = midiLastPos[b]
+                for (e in loop) {
+                    val ep = e[0]
+                    val hit = last < 0f || (ep > last && ep <= pos) || (pos < last && (ep > last || ep <= pos))
+                    if (hit) {
+                        when (e[1].toInt()) {
+                            0 -> engine.nativeDrumHit(b, -1, 0, e[3])
+                            1 -> engine.nativeDrumHit(b, e[2].toInt(), e[4].toInt(), 0f)
+                            else -> engine.nativeDrumHit(b, -1, e[4].toInt(), e[3])
+                        }
+                    }
+                }
+                midiLastPos[b] = pos
+            }
+            seqHandler.postDelayed(this, 20)
+        }
+    }
+
+    private fun drumHit(n: Int) {
+        val count = drumGrid.padCount
+        val pitch = n - count / 2f
+        when (drumGrid.drumMode) {
+            0 -> engine.nativeDrumHit(playerBank, -1, 0, pitch)
+            1 -> engine.nativeDrumHit(playerBank, n, count, 0f)
+            else -> engine.nativeDrumHit(playerBank, -1, count, pitch)
+        }
+        if (recActive && !recMotion && recMidiEngines && recArmPad in 1..8 && recLenMs > 0) {
+            val step = recLenMs / loopLenSteps.coerceAtLeast(1) / 4f
+            val pos = (System.currentTimeMillis() - recStartMs) % recLenMs
+            val q = (Math.round(pos / step) * step).toFloat() % recLenMs.toFloat()
+            midiLoops[recArmPad - 1].add(
+                floatArrayOf(q, drumGrid.drumMode.toFloat(), n.toFloat(), pitch, count.toFloat())
+            )
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -2312,6 +2797,8 @@ class MainActivity : Activity() {
         blinkHandler.removeCallbacks(blinkRunnable)
         vuHandler.removeCallbacks(vuRunnable)
         recEndHandler.removeCallbacksAndMessages(null)
+        motionHandler.removeCallbacksAndMessages(null)
+        seqHandler.removeCallbacksAndMessages(null)
         if (playing) {
             engine.nativeStop()
             playing = false
@@ -2337,31 +2824,68 @@ class MainActivity : Activity() {
 
     private fun liveSnap() = Snap(
         ax = pad.ax, ay = pad.ay, bx = pad.bx, by = pad.by,
-        mix = mixFader.value, fly = flyFader.value,
-        filter = activeFilter, assignX = assignXIdx, assignY = assignYIdx
+        mix = mixFader.value,
+        filter = activeFilter, assignX = assignXIdx, assignY = assignYIdx,
+        punch = punchLatched.copyOf(), punchCol2 = punchCol
     )
 
-    private fun captureSnap(side: Int) {
-        if (side == 0 && activeZu < 0 && autoZu == null) autoLu = liveSnap()
-        if (side == 1 && activeLu < 0 && autoLu == null) autoZu = liveSnap()
-        val s = liveSnap()
-        val n = min(padGrid.padCount, 14)
-        val zone = if (side == 0) 0 until n / 2 else n / 2 until n
-        val free = zone.firstOrNull { snapPads[it] == null }
-        val idx = free
-            ?: (if (side == 0) activeZu.takeIf { it >= 0 } ?: zone.last()
-                else activeLu.takeIf { it >= 0 } ?: zone.first())
-        snapPads[idx] = s
+    private fun captureSnap(side: Int, idx: Int) {
+        if (idx !in snapPads.indices) return
+        snapPads[idx] = liveSnap()
         if (side == 0) activeZu = idx else activeLu = idx
         refreshSnapGrid()
         applyMorph(zuLuFader.value)
+        Toast.makeText(
+            this,
+            "SNAPSHOT " + (if (side == 0) "ZU " else "LU ") + (idx + 1) + " CAPTUR\u00c9",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun recallSnap(idx: Int) {
-        val isZu = idx < min(padGrid.padCount, 14) / 2
+        val n = min(padGrid.padCount, 14)
+        val isZu = idx < n / 2
+        if (motionPlaying == idx) {
+            stopMotionPlayback()
+            return
+        }
         if (isZu) activeZu = idx else activeLu = idx
+        val s = snapPads[idx]
         refreshSnapGrid()
         applyMorph(zuLuFader.value)
+        if (s != null) {
+            applyPunch(s)
+            if ((s.motA != null && s.motA!!.size >= 4) || (s.motB != null && s.motB!!.size >= 4)) {
+                startMotionPlayback(idx)
+            }
+        }
+    }
+
+    private fun applyPunch(s: Snap) {
+        val pch = s.punch ?: return
+        val col = s.punchCol2.coerceIn(0, punchLabels.size - 1)
+        for (z in 0 until 9) {
+            if (z < pch.size && punchLatched[z] != pch[z]) {
+                val saved = punchCol
+                punchCol = col
+                punchApply(z, pch[z])
+                punchCol = saved
+            }
+        }
+    }
+
+    private fun refreshSceneSide() {
+        btnZu.setTextColor(if (sceneSide == 0) turquoise else silk)
+        btnLu.setTextColor(if (sceneSide == 1) violet else silk)
+    }
+
+    private fun setVerticalUi(v: Boolean) {
+        verticalUi = v
+        getSharedPreferences("zulu", MODE_PRIVATE).edit().putBoolean("verticalUi", v).apply()
+        requestedOrientation =
+            if (v) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        recreate()
     }
 
     private fun refreshSnapGrid() {
@@ -2395,17 +2919,13 @@ class MainActivity : Activity() {
         val bx = l(zu.bx, lu.bx)
         val by = l(zu.by, lu.by)
         val mx = l(zu.mix, lu.mix)
-        val fy = l(zu.fly, lu.fly)
         engine.nativeSetAx(ax)
         engine.nativeSetAy(ay)
         engine.nativeSetBx(bx)
         engine.nativeSetBy(by)
         engine.nativeSetMix(mx)
-        engine.nativeSetFly(fy)
-        engine.nativeSetStutter(fy >= 0.75f)
         pad.setCursor(ax, ay, bx, by)
         mixFader.value = mx
-        flyFader.setValue(fy)
         val src = if (t >= 0.5f) lu else zu
         activeFilter = src.filter
         engine.nativeSetFilterType(activeFilter)
@@ -2602,6 +3122,42 @@ class MainActivity : Activity() {
         }
         panel.addView(styleRow)
 
+        header("DRUM PADS")
+        val drumRow = LinearLayout(this)
+        for ((i, lbl) in listOf("12", "16").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                drumGrid.padCount = if (i == 0) 12 else 16
+                refreshMenu()
+            }
+            menuDrumButtons.add(b)
+            drumRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(drumRow)
+
+        header("REC ENGINES (DRUMS/SYNTH)")
+        val midiRow = LinearLayout(this)
+        for ((i, lbl) in listOf("MIDI", "AUDIO").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                recMidiEngines = i == 0
+                refreshMenu()
+            }
+            menuMidiButtons.add(b)
+            midiRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(midiRow)
+
+        header("ORIENTATION (REDEMARRE)")
+        val orientRow = LinearLayout(this)
+        for ((i, lbl) in listOf("HORIZ", "VERT").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener { setVerticalUi(i == 1) }
+            menuOrientButtons.add(b)
+            orientRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(orientRow)
+
         header("FINITIONS")
         val curveRow = LinearLayout(this)
         for ((i, lbl) in listOf("LIN", "D\u00c9BUT", "FIN", "S").withIndex()) {
@@ -2686,16 +3242,16 @@ class MainActivity : Activity() {
         intArrayOf(-1, -1, -1, -1, -1, -1, -1, 7, 2)
     )
     private val punchVal = arrayOf(
-        floatArrayOf(0.85f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.5f),
+        floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.75f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0.2f, 1f, 0f, 0f, 0.85f),
+        floatArrayOf(0f, 1f, 0.9f, 0f, 0f, 0f, 0f, 0f, 0f),
         floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.85f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0.12f, 0.85f, 0f, 0f, 0.6f),
-        floatArrayOf(0f, 0.9f, 0.75f, 0f, 0f, 0f, 0f, 0f, 0f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.6f),
-        floatArrayOf(0f, 0.9f, 0f, 0f, 0f, 0f, 0f, 0f, 0.6f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.15f, 0.7f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.45f, 0.5f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0.5f, 0f, 0.6f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.8f, 0.7f)
+        floatArrayOf(0f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0.85f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.3f, 1f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.7f, 0.75f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0.8f, 0f, 0.85f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 1f)
     )
 
     private fun assignBankFx(bank: Int) {
@@ -2745,6 +3301,25 @@ class MainActivity : Activity() {
             assignBankFx(heldBankPad - 1)
             return
         }
+        if (punchMode) {
+            setPunchCollection(i)
+            return
+        }
+        if (paramView?.visibility == View.VISIBLE) {
+            val now = System.currentTimeMillis()
+            val second = lastEditBank == i && now - lastEditAt < 450
+            lastEditBank = i
+            lastEditAt = now
+            val list = userPresets[i]?.fxOn
+                ?.withIndex()?.filter { it.value }?.map { it.index }
+                ?: emptyList()
+            if (list.isEmpty()) {
+                Toast.makeText(this, "BANQUE VIDE", Toast.LENGTH_SHORT).show()
+                return
+            }
+            openParamPage(if (second) list.getOrElse(1) { list[0] } else list[0])
+            return
+        }
         if (fxHeld) {
             fxConsumed = true
             saveUserPreset(i)
@@ -2770,14 +3345,21 @@ class MainActivity : Activity() {
 
     private fun arpTap() {
         if (shiftActive()) {
-            openArpPanel()
-        } else {
             arpOn = !arpOn
             pushArp()
             pad.arpOn = arpOn
             pad.invalidate()
+            Toast.makeText(this, "ARP " + (if (arpOn) "ON" else "OFF"), Toast.LENGTH_SHORT).show()
+        } else {
+            toolPage = (toolPage + 1) % 3
+            showToolPage()
         }
         refreshPresetRow()
+    }
+
+    private fun showToolPage() {
+        arpOverlay.visibility = if (toolPage == 1) View.VISIBLE else View.GONE
+        drumGrid.visibility = if (toolPage == 2) View.VISIBLE else View.GONE
     }
 
     private fun refreshPresetRow() {
@@ -2785,6 +3367,7 @@ class MainActivity : Activity() {
             val b = presetBtns.getOrNull(i) ?: continue
             b.setTextColor(
                 when {
+                    punchMode && punchCol == i -> amber
                     userPresets[i] != null -> cream
                     pad.activePreset == i -> amber
                     else -> silk
@@ -2855,19 +3438,46 @@ class MainActivity : Activity() {
         ).show()
     }
 
+    private val punchCombo = mapOf(0 to intArrayOf(8, 14))
+
     private fun punchApply(zone: Int, on: Boolean) {
         val fx = punchFx[punchCol][zone]
         val pr = punchParam[punchCol][zone]
         if (fx >= 0) engine.nativeSetFx(fx, on)
         else if (pr >= 0) engine.nativeSetParam(pr, punchVal[punchCol][zone], on)
+        val combo = punchCombo[punchCol * 9 + zone]
+        if (combo != null) {
+            for (cfx in combo) engine.nativeSetFx(cfx, on)
+            if (on) {
+                engine.nativeSetFilterType(1)
+                engine.nativeSetParam(0, 0.22f, true)
+            } else {
+                engine.nativeSetFilterType(activeFilter)
+                engine.nativeSetParam(0, 0f, false)
+            }
+        }
+        punchLatched[zone] = on
         punchView?.setActive(zone, on)
+    }
+
+    private fun setPunchCollection(c: Int) {
+        punchView?.releaseAll()
+        punchCol = c
+        punchView?.setCollectionIndex(c)
+        punchView?.setLabels(punchLabels[c])
+        for (z in 0 until 9) if (punchLatched[z]) punchApply(z, true)
+        refreshPresetRow()
     }
 
     private fun setPunchMode(on: Boolean) {
         punchMode = on
-        if (!on) punchView?.releaseAll()
+        if (!on) {
+            punchView?.releaseAll()
+            for (z in 0 until 9) if (punchLatched[z]) punchApply(z, true)
+        }
         punchView?.visibility = if (on) View.VISIBLE else View.GONE
         menuPunchBtn?.setTextColor(if (on) amber else silk)
+        refreshPresetRow()
     }
 
     private fun refreshMenu() {
@@ -2896,6 +3506,15 @@ class MainActivity : Activity() {
         }
         for ((i, b) in menuLofiButtons.withIndex()) {
             b.setTextColor(if (i == recFlavor) amber else silk)
+        }
+        for ((i, b) in menuDrumButtons.withIndex()) {
+            b.setTextColor(if ((i == 0) == (drumGrid.padCount == 12)) amber else silk)
+        }
+        for ((i, b) in menuMidiButtons.withIndex()) {
+            b.setTextColor(if ((i == 0) == recMidiEngines) amber else silk)
+        }
+        for ((i, b) in menuOrientButtons.withIndex()) {
+            b.setTextColor(if ((i == 1) == verticalUi) amber else silk)
         }
         for (s in 1..8) {
             menuProjButtons[s - 1].setTextColor(if (projFile(s).exists()) amber else silk)

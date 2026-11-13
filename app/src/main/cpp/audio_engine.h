@@ -98,6 +98,7 @@ public:
     void setBankFxSend(int bank, bool on);
     void undoBankRec();
     void cancelRec();
+    void stopRec();
     void setRecFlavor(int f) { recFlavor.store(f); }
 
     AudioEngine() {
@@ -119,6 +120,8 @@ public:
 
     void recordBank(int bank, int steps, bool wet);
     void startResample(int bank, int steps);
+    void setInGain(float v) { inGain.store(v); }
+    void drumHit(int bank, int slice, int total, float pitch);
     void setPlayerBank(int b) {
         if (b >= 0 && b < kNumBanks) playerBank.store(b);
     }
@@ -270,6 +273,9 @@ private:
     float jglT = 0.f, jglStart = 0.f, jglRate = 1.f, jglRev = 0.f;
     float rndPhase = 0.f, rndRead = 0.f;
     int rndCur = 0, rndOff = 0, rndLen = 0;
+    std::atomic<float> inGain{1.f};
+    std::atomic<int> drumBank{0};
+    float drumPos = -1.f, drumEnd = 0.f, drumRate = 1.f, drumEnv = 0.f;
     int slcCur = 0;
     float slcPhase = 0.f;
     float cldHead = 0.f;

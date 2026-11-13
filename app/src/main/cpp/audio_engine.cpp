@@ -424,6 +424,30 @@ void AudioEngine::setFx(int fx, bool on) {
     fxWet[fx].store(on ? defWet[fx] : 0.f);
 }
 
+void AudioEngine::drumHit(int bank, int slice, int total, float pitch) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    LoopBank& lb = banks[bank];
+    if (!lb.buf || lb.samples < 8) return;
+    int s0 = 0, s1 = lb.samples;
+    if (total > 0) {
+        int sl = lb.samples / total;
+        if (slice < 0) {
+            noiseState = noiseState * 1103515245u + 12345u;
+            slice = (int)((noiseState >> 16) / 65536.f * total);
+            if (slice >= total) slice = total - 1;
+        }
+        s0 = slice * sl;
+        s1 = (slice == total - 1) ? lb.samples : s0 + sl;
+    }
+    drumBank.store(bank);
+    drumPos = (float)s0;
+    drumEnd = (float)s1;
+    drumRate = powf(2.f, pitch / 12.f);
+    if (drumRate < 0.25f) drumRate = 0.25f;
+    if (drumRate > 4.f) drumRate = 4.f;
+    drumEnv = 1.f;
+}
+
 void AudioEngine::setParam(int p, float v, bool on) {
     if (p < 0 || p > 7) return;
     if (v < 0.f) v = 0.f; if (v > 1.f) v = 1.f;
@@ -530,6 +554,21 @@ void AudioEngine::cancelRec() {
     lb.playing = false;
     lb.samples = 0;
     lb.pos = 0;
+    recBank = -1;
+}
+
+void AudioEngine::stopRec() {
+    if (recBank < 0) return;
+    LoopBank& lb = banks[recBank];
+    if (lb.pos > 0) {
+        lb.samples = lb.pos;
+        lb.playing = true;
+        lb.pos = 0;
+    } else {
+        lb.playing = false;
+        lb.samples = 0;
+        lb.pos = 0;
+    }
     recBank = -1;
 }
 
@@ -709,9 +748,9 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
     for (int i = 0; i < numFrames; i++) {
         float inS;
         if (mic) {
-            inS = src[i];
+            inS = src[i] * inGain.load(std::memory_order_relaxed);
         } else {
-            inS = genSample(fsr, fmaxf(bpm.load(), 40.f));
+            inS = genSample(fsr, fmaxf(bpm.load(), 40.f)) * inGain.load(std::memory_order_relaxed);
         }
 
         if ((coeffClock++ & 31) == 0) {
@@ -2067,6 +2106,23 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 }
             } else {
                 frzT = 0.f;
+            }
+        }
+
+        if (drumPos >= 0.f) {
+            LoopBank& lb = banks[drumBank.load(std::memory_order_relaxed)];
+            if (lb.buf && lb.samples > 4 && drumPos < drumEnd) {
+                int ip = (int)drumPos;
+                float fr = drumPos - (float)ip;
+                int ip2 = (ip + 1) % lb.samples;
+                float sl = lb.buf[2 * ip] * (1.f - fr) + lb.buf[2 * ip2] * fr;
+                float sr = lb.buf[2 * ip + 1] * (1.f - fr) + lb.buf[2 * ip2 + 1] * fr;
+                drumEnv *= 0.9995f;
+                outL += sl * drumEnv * 0.8f;
+                outR += sr * drumEnv * 0.8f;
+                drumPos += drumRate;
+            } else {
+                drumPos = -1.f;
             }
         }
 

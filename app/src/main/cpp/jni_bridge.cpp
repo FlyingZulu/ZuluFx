@@ -125,10 +125,19 @@ Java_com_zulu_AudioEngine_nativeUndo(JNIEnv*, jobject) { if (g) g->undoBankRec()
 
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeCancelRec(JNIEnv*, jobject) { if (g) g->cancelRec(); }
+Java_com_zulu_AudioEngine_nativeStopRec(JNIEnv*, jobject) { if (g) g->stopRec(); }
 
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetPlayerBank(JNIEnv*, jobject, jint b) {
     if (g) g->setPlayerBank(b);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetInGain(JNIEnv*, jobject, jfloat v) { if (g) g->setInGain(v); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeDrumHit(JNIEnv*, jobject, jint bank, jint slice, jint total, jfloat pitch) {
+    if (g) g->drumHit(bank, slice, total, pitch);
 }
 
 JNIEXPORT void JNICALL
