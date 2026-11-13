@@ -139,7 +139,9 @@ internal fun drawPunkCat(
             )
         }
     }
-    canvas.drawCircle(cx - r * 0.95f, cy + r * 0.30f, r * 0.14f, needleRed)
+    paint.color = needleRed
+    canvas.drawCircle(cx - r * 0.95f, cy + r * 0.30f, r * 0.14f, paint)
+    paint.color = cream
     paint.alpha = 255
     paint.style = Paint.Style.FILL
 }
