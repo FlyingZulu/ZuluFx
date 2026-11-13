@@ -125,6 +125,8 @@ Java_com_zulu_AudioEngine_nativeUndo(JNIEnv*, jobject) { if (g) g->undoBankRec()
 
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeCancelRec(JNIEnv*, jobject) { if (g) g->cancelRec(); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeStopRec(JNIEnv*, jobject) { if (g) g->stopRec(); }
 
 JNIEXPORT void JNICALL
