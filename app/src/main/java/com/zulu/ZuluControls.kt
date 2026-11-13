@@ -1540,6 +1540,7 @@ class DrumGridView(context: Context) : View(context) {
     var padCount = 12
         set(value) { field = value; invalidate() }
     var drumMode = 0
+    var octShift = 0
 
     var onDrum: ((Int) -> Unit)? = null
     var onExit: (() -> Unit)? = null
@@ -1553,7 +1554,7 @@ class DrumGridView(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
         val gap = 4f * d
-        val top = 20f * d
+        val top = 34f * d
         val cols = if (padCount > 16) 8 else 4
         val rows = (padCount + cols - 1) / cols
         val rowsF = rows.toFloat()
@@ -1601,6 +1602,20 @@ class DrumGridView(context: Context) : View(context) {
             paint.textSize = 9f * d
             canvas.drawText(name, mx + mw / 2f, 13f * d, paint)
         }
+
+        paint.fill(Color.rgb(16, 18, 23))
+        paint.alpha = 225
+        canvas.drawRoundRect(3f * d, 20f * d, 3f * d + 230f * d, 31f * d, 4f * d, 4f * d, paint)
+        paint.alpha = 255
+        paint.stroke(Color.rgb(255, 190, 0), 1f * d)
+        canvas.drawRoundRect(3f * d, 20f * d, 3f * d + 230f * d, 31f * d, 4f * d, 4f * d, paint)
+        for ((o, lbl) in listOf("-2", "-1", "0", "+1", "+2").withIndex()) {
+            val cw = 46f * d
+            val cx = 3f * d + o * cw
+            paint.fill(if (octShift == o - 2) Color.rgb(255, 190, 0) else Color.rgb(120, 128, 146))
+            paint.textSize = 8f * d
+            canvas.drawText(lbl, cx + cw / 2f, 28f * d, paint)
+        }
         paint.fill(Color.rgb(255, 96, 70))
         paint.textSize = 12f * d
         canvas.drawText("\u00d7", w - 10f * d, 14f * d, paint)
@@ -1624,8 +1639,16 @@ class DrumGridView(context: Context) : View(context) {
                     }
                     return true
                 }
+                if (y >= 20f * d && y < 32f * d && x < 3f * d + 230f * d) {
+                    val o = (((x - 3f * d) / (46f * d)).toInt() - 2).coerceIn(-2, 2)
+                    if (o != octShift) {
+                        octShift = o
+                        invalidate()
+                    }
+                    return true
+                }
                 val gap = 4f * d
-                val top = 20f * d
+                val top = 34f * d
                 val cols = if (padCount > 16) 8 else 4
                 val rows = (padCount + cols - 1) / cols
                 val padW = (w - (cols + 1) * gap) / cols

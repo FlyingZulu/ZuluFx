@@ -564,8 +564,8 @@ void AudioEngine::drumHit(int bank, int slice, int total, float pitch) {
     drumPos = (float)s0;
     drumEnd = (float)s1;
     drumRate = powf(2.f, pitch / 12.f);
-    if (drumRate < 0.25f) drumRate = 0.25f;
-    if (drumRate > 4.f) drumRate = 4.f;
+    if (drumRate < 0.12f) drumRate = 0.12f;
+    if (drumRate > 8.f) drumRate = 8.f;
     drumEnv = 1.f;
 }
 

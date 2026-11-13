@@ -3291,7 +3291,7 @@ class MainActivity : Activity() {
 
     private fun drumHit(n: Int) {
         val count = drumGrid.padCount
-        val pitch = n - count / 2f
+        val pitch = n - count / 2f + drumGrid.octShift * 12f
         when (drumGrid.drumMode) {
             0 -> engine.nativeDrumHit(playerBank, -1, 0, pitch)
             1 -> engine.nativeDrumHit(playerBank, n, count, 0f)

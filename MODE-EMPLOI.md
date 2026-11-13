@@ -286,6 +286,9 @@ pages.
   chromatiques (grave en bas à gauche → aigu en haut à droite).
   **MENU · DRUM PADS** : 8 / 12 / 16 / **32** cubes — moins de cubes = cubes
   plus gros. SLICE = tranches du sample, RND = tranches aléatoires avec pitch.
+- **Sélecteur d'octave** sous la barre de modes : **-2 / -1 / 0 / +1 / +2** —
+  décale toute la grille d'octaves supplémentaires (jusqu'à 4 octaves au
+  total), sans glide, just un sélecteur.
 
 ## Tirettes EDIT universelles (v0.33)
 
