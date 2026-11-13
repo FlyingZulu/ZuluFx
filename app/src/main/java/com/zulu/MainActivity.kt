@@ -469,7 +469,7 @@ class MainActivity : Activity() {
         val titleRow = LinearLayout(this)
         titleRow.gravity = Gravity.CENTER_VERTICAL
         val title = TextView(this)
-        title.text = "FX SELECT"
+        title.text = "FX SELECT \u00b7 v${versionLabel()}"
         title.setTextColor(Color.rgb(236, 224, 196))
         title.textSize = 16f
         title.typeface = markerFont(this)
@@ -543,6 +543,12 @@ class MainActivity : Activity() {
     private fun closeFx() {
         fxOpen = false
         fxOverlay.visibility = View.GONE
+    }
+
+    private fun versionLabel(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+    } catch (e: Exception) {
+        "?"
     }
 
     private fun placeholderWaveform(n: Int = 256): FloatArray {
