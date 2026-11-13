@@ -499,8 +499,6 @@ class MainActivity : Activity() {
     private var fRecTap = false
     private var zRecTap = false
     private var sceneSide = 0
-    private var zuDownAt = 0L
-    private var luDownAt = 0L
     private var toolPage = 0
     private var playerBank = 0
     private var recArmed = false
