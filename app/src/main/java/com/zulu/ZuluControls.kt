@@ -1,10 +1,14 @@
 package com.zulu
 
 import android.content.Context
+import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorFilter
 import android.graphics.Paint
+import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.cos
@@ -14,8 +18,159 @@ import kotlin.math.sin
 private val cream = Color.rgb(236, 224, 196)
 private val ink = Color.rgb(40, 38, 32)
 private val needleRed = Color.rgb(200, 60, 40)
-private val amber = Color.rgb(255, 176, 0)
+private val amber = Color.rgb(255, 190, 0)
 private val silk = Color.rgb(165, 172, 185)
+
+internal fun drawSketchyLine(
+    canvas: Canvas,
+    paint: Paint,
+    x0: Float,
+    y0: Float,
+    x1: Float,
+    y1: Float,
+    seed: Int
+) {
+    val rnd = java.util.Random(seed.toLong())
+    for (pass in 0..1) {
+        val j0 = (rnd.nextFloat() - 0.5f) * 2.2f
+        val j1 = (rnd.nextFloat() - 0.5f) * 2.2f
+        val j2 = (rnd.nextFloat() - 0.5f) * 2.2f
+        val j3 = (rnd.nextFloat() - 0.5f) * 2.2f
+        canvas.drawLine(x0 + j0, y0 + j1, x1 + j2, y1 + j3, paint)
+    }
+}
+
+internal fun drawRelief(c: Canvas, l: Float, t: Float, r: Float, b: Float, d: Float) {
+    val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    p.style = Paint.Style.STROKE
+    p.strokeWidth = 1.2f * d
+    p.color = Color.WHITE
+    p.alpha = 16
+    c.drawLine(l + 6f * d, t + 1.2f * d, r - 6f * d, t + 1.2f * d, p)
+    p.color = Color.BLACK
+    p.alpha = 42
+    c.drawLine(l + 6f * d, b - 1.2f * d, r - 6f * d, b - 1.2f * d, p)
+    p.color = Color.WHITE
+    p.alpha = 8
+    c.drawLine(l + 1.2f * d, t + 6f * d, l + 1.2f * d, b - 6f * d, p)
+    p.color = Color.BLACK
+    p.alpha = 26
+    c.drawLine(r - 1.2f * d, t + 6f * d, r - 1.2f * d, b - 6f * d, p)
+    p.alpha = 255
+    p.style = Paint.Style.FILL
+}
+
+internal fun drawZebra(c: Canvas, w: Float, h: Float, d: Float) {
+    val p = Paint()
+    p.style = Paint.Style.STROKE
+    p.strokeWidth = 3.5f * d
+    p.color = Color.WHITE
+    p.alpha = 6
+    var x = -h
+    var n = 0
+    while (x < w + h) {
+        drawSketchyLine(c, p, x, 0f, x + h, h, 9000 + n)
+        x += 16f * d
+        n++
+    }
+    p.alpha = 255
+}
+
+internal fun drawPunkCat(
+    canvas: Canvas,
+    paint: Paint,
+    cx: Float,
+    cy: Float,
+    r: Float,
+    d: Float
+) {
+    val blink = System.currentTimeMillis() % 4200 < 160
+    val rnd = java.util.Random(77L)
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 1.4f * d
+    paint.color = cream
+    paint.alpha = 150
+    for (pass in 0..1) {
+        val path = android.graphics.Path()
+        val segs = 22
+        for (i in 0..segs) {
+            val a = Math.PI * 2.0 * i / segs
+            val jx = (rnd.nextFloat() - 0.5f) * 1.6f * d
+            val jy = (rnd.nextFloat() - 0.5f) * 1.6f * d
+            val x = cx + (Math.cos(a) * r).toFloat() + jx
+            val y = cy + (Math.sin(a) * r).toFloat() + jy
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        path.close()
+        canvas.drawPath(path, paint)
+    }
+    for (s in intArrayOf(-1, 1)) {
+        val ex = cx + s * r * 0.85f
+        val ey = cy - r * 0.62f
+        for (pass in 0..1) {
+            val j = (rnd.nextFloat() - 0.5f) * 1.4f * d
+            canvas.drawLine(ex - r * 0.34f + j, ey + r * 0.42f, ex + j, ey - r * 0.42f, paint)
+            canvas.drawLine(ex + j, ey - r * 0.42f, ex + r * 0.34f + j, ey + r * 0.42f, paint)
+        }
+    }
+    for (pass in 0..1) {
+        val j = (rnd.nextFloat() - 0.5f) * 1.2f * d
+        canvas.drawLine(cx - r * 0.16f + j, cy - r * 0.92f, cx + j, cy - r * 1.32f, paint)
+        canvas.drawLine(cx + j, cy - r * 1.32f, cx + r * 0.16f + j, cy - r * 0.92f, paint)
+    }
+    if (blink) {
+        canvas.drawLine(cx - r * 0.42f, cy - r * 0.08f, cx - r * 0.14f, cy - r * 0.08f, paint)
+        canvas.drawLine(cx + r * 0.14f, cy - r * 0.08f, cx + r * 0.42f, cy - r * 0.08f, paint)
+    } else {
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(cx - r * 0.28f, cy - r * 0.08f, r * 0.11f, paint)
+        canvas.drawCircle(cx + r * 0.28f, cy - r * 0.08f, r * 0.11f, paint)
+    }
+    paint.style = Paint.Style.STROKE
+    canvas.drawLine(cx - r * 0.10f, cy + r * 0.22f, cx + r * 0.10f, cy + r * 0.22f, paint)
+    canvas.drawLine(cx - r * 0.10f, cy + r * 0.22f, cx - r * 0.04f, cy + r * 0.34f, paint)
+    canvas.drawLine(cx + r * 0.10f, cy + r * 0.22f, cx + r * 0.04f, cy + r * 0.34f, paint)
+    for (s in intArrayOf(-1, 1)) {
+        for (k in 0..2) {
+            val j = (rnd.nextFloat() - 0.5f) * 1.2f * d
+            canvas.drawLine(
+                cx + s * r * 0.30f, cy + r * (0.10f + k * 0.12f),
+                cx + s * r * (0.85f + k * 0.05f), cy + r * (0.02f + k * 0.16f) + j, paint
+            )
+        }
+    }
+    canvas.drawCircle(cx - r * 0.95f, cy + r * 0.30f, r * 0.14f, needleRed)
+    paint.alpha = 255
+    paint.style = Paint.Style.FILL
+}
+
+class PunkCatView(context: Context) : View(context) {
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        drawPunkCat(c, paint, w / 2f, h / 2f, min(w, h) * 0.34f, d)
+        if (System.currentTimeMillis() % 4200 < 200) postInvalidateOnAnimation()
+    }
+}
+
+class ZebraBgDrawable : Drawable() {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        canvas.drawColor(Color.rgb(16, 18, 23))
+        val d = Resources.getSystem().displayMetrics.density
+        drawZebra(canvas, b.width().toFloat(), b.height().toFloat(), d)
+    }
+
+    override fun setAlpha(alpha: Int) {}
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
 
 internal fun drawScrews(
     canvas: Canvas,
@@ -446,6 +601,7 @@ class FlyFaderView(context: Context) : View(context) {
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+        drawRelief(canvas, 0f, 0f, w, h, d)
         paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 71)
 
@@ -465,20 +621,20 @@ class FlyFaderView(context: Context) : View(context) {
 
         val kx = m + value * (w - 2f * m)
         paint.fill(amber)
-        canvas.drawRoundRect(kx - 8f * d, cy - 13f * d, kx + 8f * d, cy + 13f * d, 4f * d, 4f * d, paint)
+        canvas.drawRoundRect(kx - 11f * d, cy - 17f * d, kx + 11f * d, cy + 17f * d, 5f * d, 5f * d, paint)
         paint.fill(Color.WHITE)
-        paint.alpha = 40
-        canvas.drawRect(kx - 7f * d, cy - 12f * d, kx + 7f * d, cy, paint)
+        paint.alpha = 55
+        canvas.drawRect(kx - 10f * d, cy - 16f * d, kx + 10f * d, cy, paint)
         paint.fill(Color.BLACK)
-        paint.alpha = 45
-        canvas.drawRect(kx - 7f * d, cy, kx + 7f * d, cy + 12f * d, paint)
+        paint.alpha = 60
+        canvas.drawRect(kx - 10f * d, cy, kx + 10f * d, cy + 16f * d, paint)
         paint.alpha = 255
         paint.stroke(if (stutter) Color.WHITE else silk, 1.2f * d)
         paint.alpha = if (stutter) 220 else 90
-        canvas.drawRoundRect(kx - 8f * d, cy - 13f * d, kx + 8f * d, cy + 13f * d, 4f * d, 4f * d, paint)
+        canvas.drawRoundRect(kx - 11f * d, cy - 17f * d, kx + 11f * d, cy + 17f * d, 5f * d, 5f * d, paint)
         paint.alpha = 255
         paint.stroke(Color.rgb(40, 26, 8), 1.5f * d)
-        canvas.drawLine(kx, cy - 9f * d, kx, cy + 9f * d, paint)
+        canvas.drawLine(kx, cy - 12f * d, kx, cy + 12f * d, paint)
 
         paint.fill(amber)
         paint.textAlign = Paint.Align.LEFT
@@ -564,8 +720,8 @@ class VFaderView(
     private val blendMorph: Boolean = false
 ) : View(context) {
 
-    private val turquoise = Color.rgb(60, 220, 200)
-    private val violet = Color.rgb(190, 120, 255)
+    private val turquoise = Color.rgb(0, 240, 215)
+    private val violet = Color.rgb(200, 90, 255)
 
     private fun currentThumbColor(): Int {
         if (!blendMorph) return thumbColor
@@ -599,6 +755,7 @@ class VFaderView(
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+        drawRelief(canvas, 0f, 0f, w, h, d)
         paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 73)
 
@@ -620,20 +777,20 @@ class VFaderView(
         }
 
         val kx = m + value * (w - 2f * m)
-        val th = min(h * 0.7f, 44f * d)
+        val th = min(h * 0.85f, 56f * d)
         val tc = currentThumbColor()
         paint.fill(tc)
-        canvas.drawRoundRect(kx - 8f * d, cy - th / 2f, kx + 8f * d, cy + th / 2f, 4f * d, 4f * d, paint)
+        canvas.drawRoundRect(kx - 11f * d, cy - th / 2f, kx + 11f * d, cy + th / 2f, 5f * d, 5f * d, paint)
         paint.fill(Color.WHITE)
-        paint.alpha = 40
-        canvas.drawRect(kx - 7f * d, cy - th / 2f + 1f, kx + 7f * d, cy, paint)
+        paint.alpha = 55
+        canvas.drawRect(kx - 10f * d, cy - th / 2f + 1f, kx + 10f * d, cy, paint)
         paint.fill(Color.BLACK)
-        paint.alpha = 45
-        canvas.drawRect(kx - 7f * d, cy, kx + 7f * d, cy + th / 2f - 1f, paint)
+        paint.alpha = 60
+        canvas.drawRect(kx - 10f * d, cy, kx + 10f * d, cy + th / 2f - 1f, paint)
         paint.alpha = 255
         paint.stroke(Color.WHITE, 1.2f * d)
-        paint.alpha = 90
-        canvas.drawRoundRect(kx - 8f * d, cy - th / 2f, kx + 8f * d, cy + th / 2f, 4f * d, 4f * d, paint)
+        paint.alpha = 110
+        canvas.drawRoundRect(kx - 11f * d, cy - th / 2f, kx + 11f * d, cy + th / 2f, 5f * d, 5f * d, paint)
         paint.alpha = 255
         paint.stroke(Color.rgb(20, 22, 28), 1.5f * d)
         canvas.drawLine(kx, cy - th / 2f + 4f * d, kx, cy + th / 2f - 4f * d, paint)
@@ -1042,9 +1199,9 @@ class ParamPageView(context: Context) : View(context) {
         typeface = marker
     }
     private val ledCols = intArrayOf(
-        Color.rgb(0, 229, 255),
-        Color.rgb(140, 255, 150),
-        Color.rgb(255, 125, 205),
+        Color.rgb(0, 240, 255),
+        Color.rgb(70, 255, 130),
+        Color.rgb(255, 70, 205),
         amber
     )
 
@@ -1100,6 +1257,7 @@ class ParamPageView(context: Context) : View(context) {
         val h = height.toFloat()
         val d = context.resources.displayMetrics.density
         c.drawRect(0f, 0f, w, h, pBg)
+        drawRelief(c, 0f, 0f, w, h, d)
         drawScrews(c, pScrew, 0f, 0f, w, h, d)
         val n = labels.size
         if (n == 0) return

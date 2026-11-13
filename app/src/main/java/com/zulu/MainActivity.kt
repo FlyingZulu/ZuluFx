@@ -239,15 +239,15 @@ class MainActivity : Activity() {
     private val paramDefaults = floatArrayOf(0f, 0f, 0.35f, 0.3f, 0f, 0f, 0f, 0.4f)
     private var genIdx = 0
 
-    private val yellow = Color.rgb(245, 255, 90)
-    private val pink = Color.rgb(255, 125, 205)
-    private val green = Color.rgb(140, 255, 150)
+    private val yellow = Color.rgb(235, 255, 40)
+    private val pink = Color.rgb(255, 70, 205)
+    private val green = Color.rgb(70, 255, 130)
     private val cream = Color.rgb(236, 224, 196)
     private val silk = Color.rgb(165, 172, 185)
-    private val amber = Color.rgb(255, 176, 0)
-    private val turquoise = Color.rgb(0, 229, 255)
-    private val violet = Color.rgb(170, 140, 255)
-    private val red = Color.rgb(255, 90, 70)
+    private val amber = Color.rgb(255, 190, 0)
+    private val turquoise = Color.rgb(0, 240, 255)
+    private val violet = Color.rgb(185, 110, 255)
+    private val red = Color.rgb(255, 70, 55)
 
     private var playing = false
     private var simulLock = false
@@ -295,7 +295,7 @@ class MainActivity : Activity() {
         padGrid.padCount = 12
         zuLuFader = VFaderView(this, "ZU/LU", blendMorph = true)
         flyFader = FlyFaderView(this)
-        mixFader = VFaderView(this, "MIX", thumbColor = Color.rgb(90, 200, 90))
+        mixFader = VFaderView(this, "MIX", thumbColor = Color.rgb(70, 255, 130))
         mixFader.value = 1f
         glitchScope = GlitchScopeView(this)
         glitchScope.visibility = View.GONE
@@ -644,6 +644,10 @@ class MainActivity : Activity() {
         val mixParams = LinearLayout.LayoutParams(0, (40 * d).toInt(), 2f)
         mixParams.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
         faderRow.addView(mixFader, mixParams)
+        val catView = PunkCatView(this)
+        val catParams = LinearLayout.LayoutParams((26 * d).toInt(), (26 * d).toInt())
+        catParams.setMargins((4 * d).toInt(), 0, (2 * d).toInt(), 0)
+        faderRow.addView(catView, catParams)
         val faderRowParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (40 * d).toInt()
         )
@@ -652,7 +656,7 @@ class MainActivity : Activity() {
 
         content = LinearLayout(this)
         content.orientation = LinearLayout.HORIZONTAL
-        content.setBackgroundColor(Color.rgb(18, 20, 25))
+        content.background = ZebraBgDrawable()
         val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
 
         padPane = FrameLayout(this)

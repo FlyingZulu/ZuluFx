@@ -1715,7 +1715,8 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 warpBuf[2 * warpWrite + 1] = outR;
                 warpWrite = (warpWrite + 1) % kWarpMax;
                 float b = fmaxf(bpm.load(), 40.f);
-                int per = (int)((60.f / b) * fs * 0.5f);
+                int div = 1 + (int)(fxP(30, 1) * 7.f);
+                int per = (int)((60.f / b) * fs * 0.5f / (float)div);
                 if (per < 64) per = 64;
                 warpClock = (warpClock + 1) % per;
                 if (warpClock == 0) {
@@ -1723,9 +1724,6 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                     int r = (int)((noiseState >> 16) % 7u) - 3;
                     warpTarget = powf(2.f, (float)r / 12.f * (fxP(30, 0) * 6.f));
                 }
-                int div = 1 + (int)(fxP(30, 1) * 7.f);
-                int per = (int)((60.f / b) * fs / (float)div);
-                if (per < 64) per = 64;
                 warpRate += (0.0005f + fxP(30, 2) * 0.0095f) * (warpTarget - warpRate);
                 warpRead += warpRate;
                 while (warpRead >= (float)kWarpMax) warpRead -= (float)kWarpMax;

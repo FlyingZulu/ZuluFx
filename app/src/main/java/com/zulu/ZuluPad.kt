@@ -66,8 +66,8 @@ class ZuluPad(context: Context) : View(context) {
     var ghostLu: FloatArray? = null
         set(value) { field = value; invalidate() }
 
-    private val turquoiseC = Color.rgb(0, 229, 255)
-    private val luC = Color.rgb(190, 120, 255)
+    private val turquoiseC = Color.rgb(0, 240, 255)
+    private val luC = Color.rgb(200, 90, 255)
 
     private fun drawGhost(canvas: Canvas, gx: Float, gy: Float, color: Int) {
         val x = gx * width
@@ -177,10 +177,10 @@ class ZuluPad(context: Context) : View(context) {
     private var velBx = 0f
     private var velBy = 0f
 
-    private val yellow = Color.rgb(245, 255, 90)
-    private val pink = Color.rgb(255, 125, 205)
+    private val yellow = Color.rgb(235, 255, 40)
+    private val pink = Color.rgb(255, 70, 205)
     private val offColor = Color.rgb(90, 96, 108)
-    private val amber = Color.rgb(255, 176, 0)
+    private val amber = Color.rgb(255, 190, 0)
     private val marker = markerFont(context)
 
     override fun onDraw(canvas: Canvas) {
@@ -190,6 +190,8 @@ class ZuluPad(context: Context) : View(context) {
         paint.style = Paint.Style.FILL
         paint.color = Color.rgb(20, 22, 28)
         canvas.drawRect(0f, 0f, w, h, paint)
+        drawZebra(canvas, w, h, d)
+        drawRelief(canvas, 0f, 0f, w, h, d)
 
         drawMandala(canvas, w, h)
 
