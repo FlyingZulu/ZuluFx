@@ -14,36 +14,41 @@ class ZuluPad(context: Context) : View(context) {
     private val d = resources.displayMetrics.density
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    var stateA = AxisState.MOM
+    var stateF = AxisState.MOM
         set(value) {
             field = value
-            if (value == AxisState.OFF && fingerA != -1) {
-                fingerA = -1
-            }
+            if (value == AxisState.MOM) fOrder = nextOrder()
             invalidate()
         }
 
-    var stateB = AxisState.MOM
+    var stateZ = AxisState.MOM
         set(value) {
             field = value
-            if (value == AxisState.OFF && fingerB != -1) {
-                fingerB = -1
-            }
+            if (value == AxisState.MOM) zOrder = nextOrder()
             invalidate()
         }
 
-    private var ax = 0.35f
-    private var ay = 0.50f
-    private var bx = 0.65f
-    private var by = 0.50f
+    private var fOrder = 1L
+    private var zOrder = 2L
+    private var orderCounter = 2L
 
-    private var targetAx = ax
-    private var targetAy = ay
-    private var targetBx = bx
-    private var targetBy = by
+    private fun nextOrder(): Long {
+        orderCounter += 1L
+        return orderCounter
+    }
 
-    private var fingerA = -1
-    private var fingerB = -1
+    private var fx = 0.35f
+    private var fy = 0.50f
+    private var zx = 0.65f
+    private var zy = 0.50f
+
+    private var targetFx = fx
+    private var targetFy = fy
+    private var targetZx = zx
+    private var targetZy = zy
+
+    private var fingerF = -1
+    private var fingerZ = -1
 
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
@@ -66,20 +71,13 @@ class ZuluPad(context: Context) : View(context) {
             canvas.drawLine(0f, h * i / 4f, w, h * i / 4f, paint)
         }
 
-        ax += (targetAx - ax) * 0.18f
-        ay += (targetAy - ay) * 0.18f
-        bx += (targetBx - bx) * 0.18f
-        by += (targetBy - by) * 0.18f
+        fx += (targetFx - fx) * 0.18f
+        fy += (targetFy - fy) * 0.18f
+        zx += (targetZx - zx) * 0.18f
+        zy += (targetZy - zy) * 0.18f
 
-        drawCursor(
-            canvas, ax * w, (1f - ay) * h,
-            yellow, "A", stateA == AxisState.MOM
-        )
-
-        drawCursor(
-            canvas, bx * w, (1f - by) * h,
-            pink, "B", stateB == AxisState.MOM
-        )
+        drawCursor(canvas, fx * w, (1f - fy) * h, yellow, "F", stateF)
+        drawCursor(canvas, zx * w, (1f - zy) * h, pink, "Z", stateZ)
 
         postInvalidateOnAnimation()
     }
@@ -90,8 +88,10 @@ class ZuluPad(context: Context) : View(context) {
         y: Float,
         color: Int,
         letter: String,
-        active: Boolean
+        state: AxisState
     ) {
+        val active = state == AxisState.MOM
+
         paint.color = if (active) color else offColor
 
         if (active) {
@@ -118,43 +118,93 @@ class ZuluPad(context: Context) : View(context) {
         canvas.drawText(letter, x, y + 5f * d, paint)
     }
 
+    private fun hitF(x: Float, y: Float): Boolean {
+        val dx = x - fx * width
+        val dy = y - (1f - fy) * height
+        val r = 54f * d
+        return dx * dx + dy * dy <= r * r
+    }
+
+    private fun hitZ(x: Float, y: Float): Boolean {
+        val dx = x - zx * width
+        val dy = y - (1f - zy) * height
+        val r = 54f * d
+        return dx * dx + dy * dy <= r * r
+    }
+
+    private fun assignFinger(id: Int, x: Float, y: Float) {
+        val fFree = fingerF == -1
+        val zFree = fingerZ == -1
+
+        // Un toucher direct prend l'axe même s'il est OFF.
+        if (fFree && hitF(x, y)) {
+            fingerF = id
+            return
+        }
+
+        if (zFree && hitZ(x, y)) {
+            fingerZ = id
+            return
+        }
+
+        val fActive = stateF == AxisState.MOM
+        val zActive = stateZ == AxisState.MOM
+
+        // Dans une zone vide, priorité au MOM engagé le plus anciennement.
+        if (fFree && zFree) {
+            when {
+                fActive && zActive -> {
+                    if (fOrder <= zOrder) fingerF = id else fingerZ = id
+                }
+                fActive -> fingerF = id
+                zActive -> fingerZ = id
+            }
+            return
+        }
+
+        if (fFree && stateF == AxisState.MOM) {
+            fingerF = id
+        } else if (zFree && stateZ == AxisState.MOM) {
+            fingerZ = id
+        }
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN,
             MotionEvent.ACTION_POINTER_DOWN -> {
-                val id = event.getPointerId(event.actionIndex)
-
-                if (stateA == AxisState.MOM && fingerA == -1) {
-                    fingerA = id
-                } else if (stateB == AxisState.MOM && fingerB == -1) {
-                    fingerB = id
-                }
+                val index = event.actionIndex
+                assignFinger(
+                    event.getPointerId(index),
+                    event.getX(index),
+                    event.getY(index)
+                )
             }
 
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_POINTER_UP -> {
                 val id = event.getPointerId(event.actionIndex)
-                if (id == fingerA) fingerA = -1
-                if (id == fingerB) fingerB = -1
+                if (id == fingerF) fingerF = -1
+                if (id == fingerZ) fingerZ = -1
             }
 
             MotionEvent.ACTION_CANCEL -> {
-                fingerA = -1
-                fingerB = -1
+                fingerF = -1
+                fingerZ = -1
             }
         }
 
-        val indexA = event.findPointerIndex(fingerA)
-        val indexB = event.findPointerIndex(fingerB)
+        val idxF = event.findPointerIndex(fingerF)
+        val idxZ = event.findPointerIndex(fingerZ)
 
-        if (stateA == AxisState.MOM && indexA >= 0) {
-            targetAx = (event.getX(indexA) / width).coerceIn(0f, 1f)
-            targetAy = (1f - event.getY(indexA) / height).coerceIn(0f, 1f)
+        if (idxF >= 0) {
+            targetFx = (event.getX(idxF) / width).coerceIn(0f, 1f)
+            targetFy = (1f - event.getY(idxF) / height).coerceIn(0f, 1f)
         }
 
-        if (stateB == AxisState.MOM && indexB >= 0) {
-            targetBx = (event.getX(indexB) / width).coerceIn(0f, 1f)
-            targetBy = (1f - event.getY(indexB) / height).coerceIn(0f, 1f)
+        if (idxZ >= 0) {
+            targetZx = (event.getX(idxZ) / width).coerceIn(0f, 1f)
+            targetZy = (1f - event.getY(idxZ) / height).coerceIn(0f, 1f)
         }
 
         invalidate()
