@@ -1,10 +1,13 @@
 package com.zulu
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -91,43 +94,151 @@ class ZuluPad(context: Context) : View(context) {
     private var mandalaPh = 0f
     private var mandalaLvl = 0f
     private var mandalaAggr = 0f
+    private var mandalaMot = 0f
     private val mandalaPath = Path()
+
+    var bgArt = 1
+        set(value) {
+            field = value
+            kaleidoBmp?.eraseColor(Color.TRANSPARENT)
+        }
+
+    private var kaleidoBmp: Bitmap? = null
+    private var kaleidoCv: Canvas? = null
 
     fun setAudio(lvl: Float, aggr: Float) {
         mandalaLvl += 0.10f * (lvl.coerceIn(0f, 1f) - mandalaLvl)
         mandalaAggr += 0.06f * (aggr.coerceIn(0f, 1f) - mandalaAggr)
-        mandalaPh += 0.0012f + mandalaLvl * 0.003f
+        mandalaMot *= 0.94f
+        mandalaPh += 0.0012f + mandalaLvl * 0.003f + mandalaMot * 0.006f
         if (mandalaPh >= 1f) mandalaPh -= 1f
-        if (mandalaLvl > 0.004f || mandalaAggr > 0.004f) postInvalidateOnAnimation()
+        if (bgArt != 0 && (mandalaLvl > 0.004f || mandalaAggr > 0.004f || mandalaMot > 0.004f))
+            postInvalidateOnAnimation()
+    }
+
+    fun feedMotion(dx: Float, dy: Float) {
+        val m = Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+        mandalaMot = (mandalaMot + m * 1.5f).coerceIn(0f, 1f)
+        if (bgArt != 0) postInvalidateOnAnimation()
+    }
+
+    private fun acidCol(ag: Float): Int {
+        val stops = arrayOf(
+            intArrayOf(0, 229, 255), intArrayOf(255, 60, 220),
+            intArrayOf(180, 255, 40), intArrayOf(255, 190, 40)
+        )
+        val p = mandalaPh * 4f
+        val i = p.toInt() % 4
+        val j = (i + 1) % 4
+        val f = p - p.toInt().toFloat()
+        var r = (stops[i][0] + (stops[j][0] - stops[i][0]) * f).toInt()
+        var g = (stops[i][1] + (stops[j][1] - stops[i][1]) * f).toInt()
+        val b = (stops[i][2] + (stops[j][2] - stops[i][2]) * f).toInt()
+        r += ((255 - r) * ag).toInt()
+        g = (g * (1f - ag * 0.55f)).toInt()
+        return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
+    }
+
+    private fun kaleidoSeg(x0: Float, y0: Float, x1: Float, y1: Float) {
+        if (bgArt !in 1..3) return
+        val w = width
+        val h = height
+        if (w < 2 || h < 2) return
+        if (kaleidoBmp == null || kaleidoBmp!!.width != w || kaleidoBmp!!.height != h) {
+            kaleidoBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            kaleidoCv = Canvas(kaleidoBmp!!)
+        }
+        val kc = kaleidoCv ?: return
+        val cx = w / 2f
+        val cy = h / 2f
+        val col = acidCol(mandalaAggr.coerceIn(0f, 1f))
+        val sp = Math.sqrt(((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).toDouble()).toFloat()
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * d
+        paint.color = col
+        paint.alpha = (50 + sp * 3f).toInt().coerceIn(50, 190)
+        val dist2 = (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)
+        for (s in 0 until 8) {
+            val ang = s * 0.7853982f
+            val ca = Math.cos(ang.toDouble()).toFloat()
+            val sa = Math.sin(ang.toDouble()).toFloat()
+            for (mir in 0 until 2) {
+                val ax0 = x0 - cx
+                val ay0 = if (mir == 0) y0 - cy else cy - y0
+                val ax1 = x1 - cx
+                val ay1 = if (mir == 0) y1 - cy else cy - y1
+                val rx0 = ax0 * ca - ay0 * sa + cx
+                val ry0 = ax0 * sa + ay0 * ca + cy
+                val rx1 = ax1 * ca - ay1 * sa + cx
+                val ry1 = ax1 * sa + ay1 * ca + cy
+                if (dist2 < 4f) kc.drawCircle(rx1, ry1, 1.6f * d, paint)
+                else kc.drawLine(rx0, ry0, rx1, ry1, paint)
+            }
+        }
+        paint.alpha = 255
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawKaleido(canvas: Canvas) {
+        if (bgArt !in 1..3) return
+        val w = width
+        val h = height
+        if (w < 2 || h < 2) return
+        if (kaleidoBmp == null || kaleidoBmp!!.width != w || kaleidoBmp!!.height != h) {
+            kaleidoBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            kaleidoCv = Canvas(kaleidoBmp!!)
+        }
+        val bmp = kaleidoBmp ?: return
+        val fade = intArrayOf(0, 1, 4, 12)[bgArt]
+        if (fade > 0) {
+            val kc = kaleidoCv ?: return
+            paint.style = Paint.Style.FILL
+            paint.color = Color.BLACK
+            paint.alpha = fade
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+            kc.drawPaint(paint)
+            paint.xfermode = null
+            paint.alpha = 255
+        }
+        paint.style = Paint.Style.FILL
+        paint.alpha = 210
+        canvas.drawBitmap(bmp, 0f, 0f, paint)
+        paint.alpha = 255
     }
 
     private fun drawMandala(c: Canvas, w: Float, h: Float) {
+        if (bgArt != 4) return
+        mandalaMot *= 0.97f
         val cx = w / 2f
         val cy = h / 2f
         val baseR = minOf(w, h) * 0.46f
-        val amp = 0.05f + mandalaLvl * 0.22f
-        val ag = mandalaAggr.coerceIn(0f, 1f)
-        val col = Color.rgb(
-            (0 + (255 - 0) * ag).toInt(),
-            (229 - (229 - 96) * ag).toInt(),
-            (255 - (255 - 46) * ag).toInt()
-        )
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1f * d
+        val amp = 0.06f + mandalaLvl * 0.24f + mandalaMot * 0.18f
+        val ag = (mandalaAggr + mandalaMot * 0.4f).coerceIn(0f, 1f)
+        val col = acidCol(ag)
         paint.color = col
-        val petals = 12
-        for (layer in 0 until 3) {
+        paint.style = Paint.Style.FILL
+        paint.alpha = (10 + ((mandalaLvl + mandalaMot * 0.5f) * 26f).toInt()).coerceIn(0, 44)
+        c.drawCircle(cx, cy, baseR * 1.08f, paint)
+        paint.alpha = (14 + ((mandalaLvl + mandalaMot * 0.5f) * 30f).toInt()).coerceIn(0, 52)
+        c.drawCircle(cx, cy, baseR * 0.64f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.2f * d
+        val petalSets = intArrayOf(12, 9, 16, 6)
+        for (layer in 0 until 4) {
             val dir = if (layer % 2 == 0) 1f else -1f
+            val petals = petalSets[layer]
             val rot = mandalaPh * dir * 6.28318f + layer * 0.41f
-            val rr = baseR * (0.40f + layer * 0.21f) * (1f + mandalaLvl * 0.10f * (layer + 1))
-            paint.alpha = (12 + layer * 4 + (mandalaLvl * 30f).toInt()).coerceIn(0, 62)
+            val rr = baseR * (0.34f + layer * 0.17f) * (1f + mandalaLvl * 0.10f * (layer + 1))
+            paint.alpha = (26 + layer * 8 + (mandalaLvl * 46f).toInt()).coerceIn(0, 110)
             mandalaPath.reset()
             val segs = petals * 10
             for (i in 0..segs) {
                 val t = i / segs.toFloat()
                 val a = rot + t * 6.28318f
                 val wob = Math.sin((t * petals + layer * 1.7f + mandalaPh * 5f * dir) * 6.28318).toFloat()
-                val rad = rr * (1f + amp * wob)
+                val wob2 = Math.sin((t * (petals / 2 + 2) + layer * 2.3f + mandalaPh * 3f * dir) * 6.28318).toFloat()
+                var rad = rr * (1f + amp * (0.7f + 0.3f * ag) * wob + amp * 0.4f * wob2)
+                rad *= 1f + ag * 0.07f * Math.abs(Math.sin(t * petals * 3.14159)).toFloat()
                 val x = cx + rad * Math.cos(a.toDouble()).toFloat()
                 val y = cy + rad * Math.sin(a.toDouble()).toFloat()
                 if (i == 0) mandalaPath.moveTo(x, y) else mandalaPath.lineTo(x, y)
@@ -202,7 +313,7 @@ class ZuluPad(context: Context) : View(context) {
         drawZebra(canvas, w, h, d)
         drawRelief(canvas, 0f, 0f, w, h, d)
 
-        drawMandala(canvas, w, h)
+        if (bgArt == 4) drawMandala(canvas, w, h) else drawKaleido(canvas)
 
         val wf = waveform
         if (wf != null && wf.size > 1) {
@@ -283,8 +394,14 @@ class ZuluPad(context: Context) : View(context) {
 
         if (billardTicks != 0) {
             if (billardTicks > 0) billardTicks--
+            val pax = targetAx * width
+            val pay = (1f - targetAy) * height
+            val pbx = targetBx * width
+            val pby = (1f - targetBy) * height
             targetAx += velAx; targetAy += velAy
             targetBx += velBx; targetBy += velBy
+            kaleidoSeg(pax, pay, targetAx * width, (1f - targetAy) * height)
+            kaleidoSeg(pbx, pby, targetBx * width, (1f - targetBy) * height)
             if (targetAx < 0f) { targetAx = 0f; velAx = -velAx }
             if (targetAx > 1f) { targetAx = 1f; velAx = -velAx }
             if (targetAy < 0f) { targetAy = 0f; velAy = -velAy }
@@ -481,6 +598,8 @@ class ZuluPad(context: Context) : View(context) {
             val ny = (1f - event.getY(idxA) / height).coerceIn(0f, 1f)
             dAx = nx - targetAx
             dAy = ny - targetAy
+            feedMotion(dAx, dAy)
+            kaleidoSeg(targetAx * width, (1f - targetAy) * height, nx * width, (1f - ny) * height)
             targetAx = nx
             targetAy = ny
         }
@@ -489,6 +608,8 @@ class ZuluPad(context: Context) : View(context) {
             val ny = (1f - event.getY(idxB) / height).coerceIn(0f, 1f)
             dBx = nx - targetBx
             dBy = ny - targetBy
+            feedMotion(dBx, dBy)
+            kaleidoSeg(targetBx * width, (1f - targetBy) * height, nx * width, (1f - ny) * height)
             targetBx = nx
             targetBy = ny
         }

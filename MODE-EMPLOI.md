@@ -1,4 +1,4 @@
-# ZULU — MODE D'EMPLOI (mémo v0.29)
+# ZULU — MODE D'EMPLOI (mémo v0.30)
 
 Aide-mémoire des gestes et fonctions principales. Tout se joue au doigt, pensé pour le LIVE.
 
@@ -11,7 +11,10 @@ relance le moteur (un message MOTEUR ON/OFF s'affiche).
 ## L'écran
 
 - **Pad XY (gauche)** : pièce maîtresse. Curseur jaune = axe **F**, curseur rose = axe **Z**.
-  Fond : mandala discret qui respire avec le son (turquoise = doux, chaud/rouge = agressif).
+  Fond vivant (MENU) : **KALÉIDOSCOPE** — tes doigts dessinent dans le sable, dupliqués
+  en 8 miroirs, et ça s'efface lentement/normalement/rapidement (vagues) ; ou **MANDALA**
+  qui respire avec le son et les mouvements (turquoise = doux, chaud/rouge = agressif) ;
+  ou **AUCUN** (économie batterie).
 - **Rangée du haut du pad** : 9 boutons banques FX/synth user presets + **PUNCH**
   (ouvre la grille punch-in FX).
 - **Bord du pad** : **MUTE** (en bas) et **SHIFT** juste au-dessus.

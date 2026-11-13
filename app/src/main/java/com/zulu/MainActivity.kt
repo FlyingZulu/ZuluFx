@@ -143,6 +143,8 @@ class MainActivity : Activity() {
     private var menuMirrorBtn: Button? = null
     private val menuCurveButtons = ArrayList<Button>()
     private val menuFingerButtons = ArrayList<Button>()
+    private val menuArtButtons = ArrayList<Button>()
+    private var bgArtOpt = 1
     private var menuFreezeBtn: Button? = null
     private val menuBillardButtons = ArrayList<Button>()
     private val menuLofiButtons = ArrayList<Button>()
@@ -2570,6 +2572,21 @@ class MainActivity : Activity() {
         }
         panel.addView(billardRow)
 
+        header("FOND VIVANT (BATTERIE)")
+        val artRow = LinearLayout(this)
+        for ((i, lbl) in listOf("AUCUN", "LENT", "NORM", "RAPIDE", "MANDALA").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                bgArtOpt = i
+                pad.bgArt = i
+                pad.invalidate()
+                refreshMenu()
+            }
+            menuArtButtons.add(b)
+            artRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(artRow)
+
         header("FINITIONS")
         val curveRow = LinearLayout(this)
         for ((i, lbl) in listOf("LIN", "D\u00c9BUT", "FIN", "S").withIndex()) {
@@ -2855,6 +2872,9 @@ class MainActivity : Activity() {
         bMotionBtn?.setTextColor(if (sceneMode == 1) turquoise else silk)
         for ((i, b) in menuBillardButtons.withIndex()) {
             b.setTextColor(if (i == pad.billardFriction) amber else silk)
+        }
+        for ((i, b) in menuArtButtons.withIndex()) {
+            b.setTextColor(if (i == bgArtOpt) amber else silk)
         }
         for ((i, b) in menuLofiButtons.withIndex()) {
             b.setTextColor(if (i == recFlavor) amber else silk)
