@@ -119,6 +119,9 @@ public:
 
     void recordBank(int bank, int steps, bool wet);
     void startResample(int bank, int steps);
+    void setPlayerBank(int b) {
+        if (b >= 0 && b < kNumBanks) playerBank.store(b);
+    }
     void setStep(int bank, int step, float pitch, float vel);
     void setStepCount(int bank, int n);
     void toggleBank(int bank);
@@ -217,7 +220,7 @@ private:
     float qSmoothed = 0.7f;
     float lfoRateSmoothed = 2.0f;
     float lfoDepthSmoothed = 0.2f;
-    std::atomic<float> fxWet[37] = {};
+    std::atomic<float> fxWet[40] = {};
     std::atomic<float> paramManual[8] = {};
     std::atomic<unsigned int> paramManualMask{0};
     static constexpr int kDelayMax = 144000;
@@ -256,7 +259,7 @@ private:
     bool freezeFull = false;
     bool prevFreeze = false;
     float compEnv = 0.f;
-    static constexpr int kNumFx = 37;
+    static constexpr int kNumFx = 40;
     std::atomic<float> fxParam[kNumFx][8] = {};
     float fxMod[kNumFx][8] = {};
     float fxAxisVal[kNumFx][8] = {};
@@ -267,10 +270,12 @@ private:
     float jglT = 0.f, jglStart = 0.f, jglRate = 1.f, jglRev = 0.f;
     float rndPhase = 0.f, rndRead = 0.f;
     int rndCur = 0, rndOff = 0, rndLen = 0;
+    int slcCur = 0;
+    float slcPhase = 0.f;
+    float cldHead = 0.f;
+    float cldPos[8] = {0.f}, cldT[8] = {0.f}, cldSz[8] = {0.f}, cldRate[8] = {0.f};
+    float frzT = 0.f;
 
-    void setPlayerBank(int b) {
-        if (b >= 0 && b < kNumBanks) playerBank.store(b);
-    }
     static constexpr int kTurnMax = 24000;
     float turnBuf[kTurnMax * 2] = {0.f};
     int turnWrite = 0;

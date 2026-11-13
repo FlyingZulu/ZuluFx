@@ -33,8 +33,9 @@ Le bouton **FX** ouvre une fenêtre avec **toutes les catégories en grille de p
 colorés** : FILTRE (turquoise), MODULATION (violet), TEMPS (vert), TEXTURE (ambre),
 RESONANCE (rose), GRANULAIRE (cream), TRANSITIONS (jaune), SYNTH (orange),
 **LECTURE SAMPLE** (menthe) : SPLY (lecteur), GRAN (granulaire), JGL (jungle rétro),
-RND (slices aléatoires BPM) — ces moteurs jouent la banque sélectionnée
-(tap sur un pad banque = banque du player).
+RND (slices aléatoires BPM), SLICR (hachage SamplR : gate + ordre des slices),
+CLOUD (nuage granulaire), FRZ (freeze granulaire) — ces moteurs jouent la banque
+sélectionnée (tap sur un pad banque = banque du player).
 - **Tap** = ON/OFF (le bouton passe ambre quand il est actif) ; pour un SYNTH, tap =
   le charger, puis **jouer sur le pad XY**.
 - **SHIFT + tap** ou **EDIT** (bouton dans la fenêtre, puis tap sur l'effet) = page de
@@ -52,6 +53,9 @@ RND (slices aléatoires BPM) — ces moteurs jouent la banque sélectionnée
 | SHIFT + appui long VU | miroir du layout (gaucher/droitier) |
 | Tap tempo | tapoter le cadran BPM |
 | SHIFT + pad banque | REC banque (longueur = réglage en cours) |
+| Slot FX (1-9) maintenu + pad banque (ou l'inverse) | assigner les effets actifs à cette
+  banque de samples ; refaire la manip = retirer les FX (banque DRY). Quand la banque
+  joue, ses effets se chargent tout seuls (façon SP-404) |
 | FX maintenu + pad banque | régler la longueur de boucle (1-14 temps) |
 | FX maintenu (ou tapé) + banque 1-9 | sauvegarder le duo d'effets dans la banque
   (effets actifs + réglages + assignations d'axes) ; message PRESET X SAUVÉ |

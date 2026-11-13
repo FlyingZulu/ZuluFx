@@ -461,6 +461,8 @@ class PadGridView(context: Context) : View(context) {
         set(value) { field = value; invalidate() }
 
     var onPadTouch: ((Int) -> Unit)? = null
+    var onPadDown: ((Int) -> Unit)? = null
+    var onPadUp: (() -> Unit)? = null
     var onPadLongTouch: ((Int) -> Unit)? = null
 
     private var flash = -1
@@ -576,6 +578,7 @@ class PadGridView(context: Context) : View(context) {
                 val i = padAt(event.getX(event.actionIndex), event.getY(event.actionIndex))
                 if (i >= 0) {
                     flash = i
+                    onPadDown?.invoke(i + 1)
                     onPadTouch?.invoke(i + 1)
                     longPad = i
                     longRunnable = Runnable {
@@ -585,6 +588,7 @@ class PadGridView(context: Context) : View(context) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 flash = -1
+                onPadUp?.invoke()
                 longRunnable?.let { removeCallbacks(it) }
                 longRunnable = null
                 longPad = -1
