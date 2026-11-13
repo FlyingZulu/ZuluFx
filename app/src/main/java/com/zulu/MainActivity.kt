@@ -176,19 +176,25 @@ class MainActivity : Activity() {
     private val fxSections = listOf(
         "FILTRE" to listOf("LPF", "HPF", "BPF", "NOTCH", "PHASER"),
         "MODULATION" to listOf("TREMOLO", "AUTOPAN", "FLANGER", "CHORUS", "RING"),
-        "TEMPS" to listOf("DELAY", "ECHO", "REVERB", "FREEZE", "STOP"),
-        "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "GATER"),
+        "TEMPS" to listOf("DELAY", "ECHO", "REVERB", "FREEZE", "STOP", "REPEAT", "REVERSE", "SCRATCH"),
+        "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "GATER", "FOLD"),
+        "RESONANCE" to listOf("RESO", "SPRING"),
+        "GRANULAIRE" to listOf("GRAIN", "JUNGLE"),
+        "TRANSITIONS" to listOf("TRANSIT", "COMBUSTOR", "TURNADO", "FALL", "SWELL", "PUMP"),
         "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE")
     )
 
     private val fxCodes = listOf(
         "F0", "F1", "F2", "F3", "X2",
         "X3", "X4", "X5", "X6", "X7",
-        "X0", "X1", "P2", "X10", "X12",
-        "P3", "P7", "X8", "X9",
+        "X0", "X1", "P2", "X10", "X12", "X13", "X14", "X18",
+        "P3", "P7", "X8", "X9", "X17",
+        "X15", "X16",
+        "X19", "X20",
+        "X21", "X22", "X23", "X24", "X25", "X26",
         "G0", "G13", "G14", "G12"
     )
-    private val fxActive = BooleanArray(13)
+    private val fxActive = BooleanArray(27)
     private val paramActive = BooleanArray(8)
     private val paramDefaults = floatArrayOf(0f, 0f, 0.35f, 0.3f, 0f, 0f, 0f, 0.4f)
     private var genIdx = 0
