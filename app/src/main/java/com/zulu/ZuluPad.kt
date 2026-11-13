@@ -125,49 +125,11 @@ class ZuluPad(context: Context) : View(context) {
         return dx * dx + dy * dy <= r * r
     }
 
-    private fun hitZ(x:```kotlin
-    y: Float): Boolean {
+    private fun hitZ(x: Float, y: Float): Boolean {
         val dx = x - zx * width
         val dy = y - (1f - zy) * height
         val r = 54f * d
         return dx * dx + dy * dy <= r * r
-    }
-
-    private fun assignFinger(id: Int, x: Float, y: Float) {
-        val fFree = fingerF == -1
-        val zFree = fingerZ == -1
-
-        // Un toucher direct prend l'axe même s'il est OFF.
-        if (fFree && hitF(x, y)) {
-            fingerF = id
-            return
-        }
-
-        if (zFree && hitZ(x, y)) {
-            fingerZ = id
-            return
-        }
-
-        val fActive = stateF == AxisState.MOM
-        val zActive = stateZ == AxisState.MOM
-
-        // Dans une zone vide, priorité au MOM engagé le plus anciennement.
-        if (fFree && zFree) {
-            when {
-                fActive && zActive -> {
-                    if (fOrder <= zOrder) fingerF = id else fingerZ = id
-                }
-                fActive -> fingerF = id
-                zActive -> fingerZ = id
-            }
-            return
-        }
-
-        if (fFree && stateF == AxisState.MOM) {
-            fingerF = id
-        } else if (zFree && stateZ == AxisState.MOM) {
-            fingerZ = id
-        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -175,11 +137,35 @@ class ZuluPad(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN,
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val index = event.actionIndex
-                assignFinger(
-                    event.getPointerId(index),
-                    event.getX(index),
-                    event.getY(index)
-                )
+                val id = event.getPointerId(index)
+                val x = event.getX(index)
+                val y = event.getY(index)
+
+                // Priorité absolue au toucher direct du curseur
+                if (fingerF == -1 && hitF(x, y)) {
+                    fingerF = id
+                } else if (fingerZ == -1 && hitZ(x, y)) {
+                    fingerZ = id
+                } 
+                // Sinon, attribution aux axes libres selon priorité
+                else {
+                    val fFree = fingerF == -1
+                    val zFree = fingerZ == -1
+                    
+                    if (fFree && zFree) {
+                        if (stateF == AxisState.MOM && stateZ == AxisState.MOM) {
+                            if (fOrder <= zOrder) fingerF = id else fingerZ = id
+                        } else if (stateF == AxisState.MOM) {
+                            fingerF = id
+                        } else if (stateZ == AxisState.MOM) {
+                            fingerZ = id
+                        }
+                    } else if (fFree && stateF == AxisState.MOM) {
+                        fingerF = id
+                    } else if (zFree && stateZ == AxisState.MOM) {
+                        fingerZ = id
+                    }
+                }
             }
 
             MotionEvent.ACTION_UP,
@@ -195,6 +181,7 @@ class ZuluPad(context: Context) : View(context) {
             }
         }
 
+        // Mise à jour des positions cibles pour tous les doigts actifs
         val idxF = event.findPointerIndex(fingerF)
         val idxZ = event.findPointerIndex(fingerZ)
 
