@@ -27,10 +27,45 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "ZULU\n\nA + B\n4 doigts : billard"
+            text = "ZULU"
             setTextColor(Color.WHITE)
-            textSize = 16f
+            textSize = 20f
             gravity = Gravity.CENTER
+        }
+
+        val buttonA = Button(this)
+        val buttonB = Button(this)
+
+        fun updateButtons() {
+            buttonA.text = if (pad.stateA == ZuluPad.AxisState.MOM) {
+                "A MOM"
+            } else {
+                "A OFF"
+            }
+
+            buttonB.text = if (pad.stateB == ZuluPad.AxisState.MOM) {
+                "B MOM"
+            } else {
+                "B OFF"
+            }
+        }
+
+        buttonA.setOnClickListener {
+            pad.stateA = if (pad.stateA == ZuluPad.AxisState.MOM) {
+                ZuluPad.AxisState.OFF
+            } else {
+                ZuluPad.AxisState.MOM
+            }
+            updateButtons()
+        }
+
+        buttonB.setOnClickListener {
+            pad.stateB = if (pad.stateB == ZuluPad.AxisState.MOM) {
+                ZuluPad.AxisState.OFF
+            } else {
+                ZuluPad.AxisState.MOM
+            }
+            updateButtons()
         }
 
         val start = Button(this).apply {
@@ -41,7 +76,11 @@ class MainActivity : Activity() {
             text = "MUTE"
         }
 
+        updateButtons()
+
         side.addView(title)
+        side.addView(buttonA)
+        side.addView(buttonB)
         side.addView(start)
         side.addView(mute)
 
