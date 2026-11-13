@@ -25,4 +25,47 @@ class MainActivity : Activity() {
     private lateinit var startButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstance
+        super.onCreate(savedInstanceState)
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.rgb(11, 12, 16))
+        }
+
+        startButton = Button(this).apply {
+            text = "START"
+            textSize = 24f
+
+            setOnClickListener {
+                if (playing) {
+                    engine.nativeStop()
+                    playing = false
+                    text = "START"
+                } else {
+                    playing = engine.nativeStart()
+                    text = if (playing) "STOP" else "ERREUR AUDIO"
+                }
+            }
+        }
+
+        val buttonLayout = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+
+        layout.addView(startButton, buttonLayout)
+
+        setContentView(layout)
+    }
+
+    override fun onPause() {
+        super.onPause()
+
+        if (playing) {
+            engine.nativeStop()
+            playing = false
+            startButton.text = "START"
+        }
+    }
+}
