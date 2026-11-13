@@ -428,6 +428,18 @@ L'app démarre **sans aucun son** : arpégiateur, générateur et boucles sont
 coupés à l'allumage, même si le template de base en contenait. C'est toi qui
 lances le son quand tu veux.
 
+## Enregistrer une scene : maintenir ZU / LU (v0.38)
+
+1. **Tap sur ZU** (ou LU) → tu choisis le côté ; **tap sur une banque** → tu
+   joues cette scène.
+2. Pour enregistrer : **maintiens ZU (ou LU) appuyé** (le bouton affiche
+   « ZU·CAP »), **fais ton réglage** pendant ce temps, **relâche** → le
+   snapshot est capturé **sur la banque active** de ce côté. Refais la même
+   chose sur le même pad pour le refaire.
+- Un tap court ne capture pas (il ne fait que changer de côté).
+- Le protocole **REC → ZU/LU → pad → REC** reste disponible pour choisir
+  librement le pad de destination.
+
 ## Anti-Larsen (v0.36)
 
 - **MIC ON / MIC OFF** dans le **MENU · MICRO / ANTI-LARSEN** : active la vraie

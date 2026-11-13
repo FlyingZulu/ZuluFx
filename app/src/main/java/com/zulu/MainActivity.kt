@@ -499,6 +499,8 @@ class MainActivity : Activity() {
     private var fRecTap = false
     private var zRecTap = false
     private var sceneSide = 0
+    private var zuDownAt = 0L
+    private var luDownAt = 0L
     private var toolPage = 0
     private var playerBank = 0
     private var recArmed = false
@@ -678,6 +680,7 @@ class MainActivity : Activity() {
         btnZu.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    zuDownAt = System.currentTimeMillis()
                     btnZu.text = "ZU\u00b7CAP"
                     if (recArmed) {
                         recSnapSide = 0
@@ -689,13 +692,25 @@ class MainActivity : Activity() {
                         refreshSceneSide()
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> btnZu.text = "ZU"
+                MotionEvent.ACTION_UP -> {
+                    btnZu.text = "ZU"
+                    if (!recArmed && System.currentTimeMillis() - zuDownAt > 500) {
+                        val idx = activeZu
+                        if (idx >= 0) {
+                            captureSnap(0, idx)
+                        } else {
+                            Toast.makeText(this, "ZU : TAP UNE BANQUE D'ABORD", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                MotionEvent.ACTION_CANCEL -> btnZu.text = "ZU"
             }
             true
         }
         btnLu.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    luDownAt = System.currentTimeMillis()
                     btnLu.text = "LU\u00b7CAP"
                     if (recArmed) {
                         recSnapSide = 1
@@ -707,7 +722,18 @@ class MainActivity : Activity() {
                         refreshSceneSide()
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> btnLu.text = "LU"
+                MotionEvent.ACTION_UP -> {
+                    btnLu.text = "LU"
+                    if (!recArmed && System.currentTimeMillis() - luDownAt > 500) {
+                        val idx = activeLu
+                        if (idx >= 0) {
+                            captureSnap(1, idx)
+                        } else {
+                            Toast.makeText(this, "LU : TAP UNE BANQUE D'ABORD", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                MotionEvent.ACTION_CANCEL -> btnLu.text = "LU"
             }
             true
         }
