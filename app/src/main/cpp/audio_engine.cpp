@@ -117,6 +117,101 @@ float AudioEngine::genSample(float fsr, float bpm) {
         return s * lvl;
     }
 
+    if (t == 17 || t == 18 || t == 19) {
+        int gslot = (t == 17) ? 69 : (t == 18) ? 70 : 71;
+        if (arpOn.load()) {
+            if (envAtkRate > 0.f) {
+                env += envAtkRate * fsr;
+                if (env >= 1.f) { env = 1.f; envAtkRate = 0.f; }
+            } else if (env > 0.f) {
+                env -= envRate * fsr;
+                if (env < 0.f) env = 0.f;
+            }
+        } else if (genTouch.load()) {
+            env += fsr / (0.01f + 0.3f * fxP(gslot, 1));
+            if (env > 1.f) env = 1.f;
+        } else {
+            env -= envRate * fsr;
+            if (env < 0.f) env = 0.f;
+        }
+        if (env < 0.0005f) { plukPrev = 0.f; return 0.f; }
+        float s = 0.f;
+        if (t == 17) {
+            if (!arpOn.load()) {
+                int deg = (int)(ax.load(std::memory_order_relaxed) * 24.99f);
+                baseF = 55.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor() *
+                    powf(2.f, (fxP(69, 0) - 0.5f));
+            }
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            float saw = (oscPhase * 2.f - 1.f) * 0.6f;
+            float f1 = 220.f * powf(9.f, fxP(69, 1));
+            float c1 = 1.f - expf(-6.2832f * f1 * fsr);
+            vox1 += c1 * (saw - vox1);
+            vox1b += c1 * (vox1 - vox1b);
+            float f2 = f1 * (2.2f + 1.2f * fxP(69, 2));
+            float c2 = 1.f - expf(-6.2832f * f2 * fsr);
+            vox2 += c2 * (saw - vox2);
+            vox2b += c2 * (vox2 - vox2b);
+            noiseState = noiseState * 1103515245u + 12345u;
+            float air = ((float)(noiseState >> 16) / 32768.f - 1.f) * fxP(69, 2) * 0.2f;
+            s = ((vox1 - vox1b) * 2.4f + (vox2 - vox2b) * 1.7f + air) * env;
+        } else if (t == 18) {
+            if (!arpOn.load()) {
+                int deg = (int)(ax.load(std::memory_order_relaxed) * 24.99f);
+                baseF = 55.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor() *
+                    powf(2.f, (fxP(70, 0) - 0.5f));
+            }
+            bool re = plukTrig || (env > 0.6f && plukPrev <= 0.6f);
+            int n = (int)(fs / (baseF < 20.f ? 20.f : baseF));
+            if (n < 8) n = 8;
+            if ((int)plukBuf.size() != n) { plukBuf.assign(n, 0.f); plukPos = 0; re = true; }
+            if (re) {
+                for (int i2 = 0; i2 < n; i2++) {
+                    noiseState = noiseState * 1103515245u + 12345u;
+                    plukBuf[i2] = ((float)(noiseState >> 16) / 32768.f - 1.f) *
+                        (0.4f + 0.6f * fxP(70, 2));
+                }
+                plukPos = 0;
+                plukTrig = false;
+            }
+            float damp = 0.995f - 0.05f * fxP(70, 1);
+            if (damp < 0.9f) damp = 0.9f;
+            float y = plukBuf[plukPos];
+            float lp = 0.5f * (y + plukLast);
+            plukBuf[plukPos] = damp * lp;
+            plukLast = y;
+            plukPos = (plukPos + 1) % n;
+            s = y * env * 0.9f;
+        } else {
+            if (!arpOn.load()) {
+                int deg = (int)(ax.load(std::memory_order_relaxed) * 24.99f);
+                baseF = 55.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor() *
+                    powf(2.f, (fxP(71, 0) - 0.5f));
+            }
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            float ph = oscPhase;
+            float sn = sinf(6.2832f * ph);
+            float tri = 1.f - 4.f * fabsf(ph - 0.5f);
+            float sw = 2.f * ph - 1.f;
+            float m = fxP(71, 1);
+            float s2 = (m < 0.5f) ? (sn + (tri - sn) * (m * 2.f))
+                                  : (tri + (sw - tri) * ((m - 0.5f) * 2.f));
+            float x = s2 * (1.f + fxP(71, 2) * 5.f);
+            for (int f2 = 0; f2 < 3; f2++) {
+                if (x > 1.f) x = 2.f - x;
+                else if (x < -1.f) x = -2.f - x;
+                else break;
+            }
+            s = x * env * 0.8f;
+        }
+        plukPrev = env;
+        float lvl = 0.4f + 1.2f * fxP(gslot, 3);
+        genNoteLp += 0.4f * (s * lvl - genNoteLp);
+        return genNoteLp;
+    }
+
     bool melodic = (t == 0 || t == 12 || t == 13 || t == 14);
     if (melodic) {
         int gslot = 46 + t;
@@ -419,7 +514,8 @@ void AudioEngine::arpFire() {
     }
 
     int t = genType.load();
-    if ((t >= 1 && t <= 4) || t == 0 || t == 12 || t == 13 || t == 14 || t == 15) {
+    if ((t >= 1 && t <= 4) || t == 0 || t == 12 || t == 13 || t == 14 || t == 15 ||
+        t == 17 || t == 18 || t == 19) {
         int deg = arpIdx;
         if (arpOctJump.load()) {
             noiseState = noiseState * 1103515245u + 12345u;
@@ -447,6 +543,9 @@ void AudioEngine::arpFire() {
             envAtkRate = 0.f;
         }
     }
+
+    static const float arpPatV[4] = {0.2f, 0.75f, 0.45f, 0.95f};
+    arpModV = arpPatV[arpIdx & 3];
 
     if (mode == 4) return;
 
@@ -638,6 +737,14 @@ void AudioEngine::genHit(int type, float x, float y) {
         fmPhase = 0.f;
         genMetLp = 0.f;
         prevNoise = 0.f;
+    }
+    if (type == 17) {
+        envRate = 1.f / ((0.3f + 0.9f * fxP(69, 1)) * fs);
+    } else if (type == 18) {
+        envRate = 1.f / ((0.3f + 1.2f * fxP(70, 1)) * fs);
+        plukTrig = true;
+    } else if (type == 19) {
+        envRate = 1.f / ((0.4f + 1.0f * fxP(71, 1)) * fs);
     }
 }
 
@@ -1279,6 +1386,19 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 if (tg < 0) continue;
                 applyAssign(tg, clamp01(baseNorm[tg] + dep * amt * clfoVal(L)),
                             fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+            }
+
+            int atg = arpTarget.load(std::memory_order_relaxed);
+            if (atg >= 0 && arpOn.load(std::memory_order_relaxed)) {
+                float aamt = arpAmt.load(std::memory_order_relaxed);
+                float av = (arpModV * 2.f - 1.f) * aamt;
+                if (atg >= 8) {
+                    int i4 = atg - 8;
+                    fxMod[i4 / 8][i4 % 8] += av;
+                } else {
+                    applyAssign(atg, clamp01(baseNorm[atg] + av),
+                                fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+                }
             }
 
             if (bend.load()) {

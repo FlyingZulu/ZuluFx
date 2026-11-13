@@ -85,6 +85,10 @@ public:
         arpOct.store(oct); arpGate.store(gate); arpOctJump.store(octJump);
     }
     void setArpSlices(int n) { arpSlices.store(n); }
+    void setArpTarget(int tg, float amt) {
+        arpTarget.store(tg, std::memory_order_relaxed);
+        arpAmt.store(amt, std::memory_order_relaxed);
+    }
     void setArpXy(float x, bool t) { arpXy.store(x); arpXyTouch.store(t); }
     void setAssign(int axis, int p) { if (axis == 0) assignX.store(p); else assignY.store(p); }
     void setAxisTargets(int axis, const float* idxs, const float* modes, int n);
@@ -282,7 +286,7 @@ private:
     int freezeLen = kFreezeMax;
     float compEnv = 0.f;
     static constexpr int kNumFx = 46;
-    static constexpr int kNumSlots = 69;
+    static constexpr int kNumSlots = 75;
     std::atomic<float> fxParam[kNumSlots][8] = {};
     float fxMod[kNumSlots][8] = {};
     float fxAxisVal[kNumSlots][8] = {};
@@ -295,6 +299,11 @@ private:
     float genNoiseLp = 0.f, genMetLp = 0.f;
     float hatPh[6] = {0.f};
     float genNoteF = 110.f, genNoteLp = 0.f;
+    float vox1 = 0.f, vox1b = 0.f, vox2 = 0.f, vox2b = 0.f;
+    std::vector<float> plukBuf;
+    int plukPos = 0;
+    float plukF = 0.f, plukLast = 0.f, plukPrev = 0.f;
+    bool plukTrig = false;
     float gen303Lp = 0.f, gen303Lp2 = 0.f, gen303Res = 0.f;
     float stutMix = 0.f, freezePosF = 0.f, bouncePosF = 0.f, sprLfoPh = 0.f;
     std::atomic<bool> ecoMode{false};
@@ -460,6 +469,9 @@ private:
     std::atomic<int> clfoWave[2] = {};
     float clfoPhase[2] = {0.f, 0.f};
     float clfoVal(int idx);
+    std::atomic<int> arpTarget{-1};
+    std::atomic<float> arpAmt{0.5f};
+    float arpModV = 0.5f;
     float fxP(int fx, int k);
     std::atomic<int> axisTg[2][8];
     unsigned char axisMode[2][8] = {};

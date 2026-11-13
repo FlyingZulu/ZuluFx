@@ -65,6 +65,11 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetArpSlices(JNIEnv*, jobject, jint n) { if (g) g->setArpSlices(n); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetArpTarget(JNIEnv*, jobject, jint tg, jfloat amt) {
+    if (g) g->setArpTarget(tg, amt);
+}
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetCustomLfo(JNIEnv* env, jobject, jint idx, jfloatArray arr,
                                              jboolean on, jint rateIdx, jfloat depth,
                                              jfloat amount, jint target, jint wave) {

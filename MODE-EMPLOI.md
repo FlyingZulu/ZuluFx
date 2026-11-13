@@ -452,6 +452,48 @@ lances le son quand tu veux. Les **LFO** aussi sont coupés à l'allumage
 - **Mute manuel** : **2 swipes horizontaux rapides sur le VU mètre** = line-in
   muet ; **2 swipes again** = le son revient au niveau d'avant.
 
+## Destinations LFO / ARP visibles et routables (v0.40)
+
+Dans la page ARP/LFO (bouton outils), une section **DESTINATION** montre où
+va chaque modulateur : **A -> ...**, **B -> ...**, **ARP -> ...** (nom lisible
+de la cible : effet + tirette, moteur, paramètre global ou tirette sample).
+
+- **Tap sur A / B / ARP** (ou sur le bouton de destination) : un mini
+  navigateur s'ouvre : **RIEN (DÉPATCHER)**, puis les **sections d'effets**
+  (grille), puis les **tirettes** de la section choisie. Tap sur une tirette =
+  le modulateur est **repatché** dessus, tout simplement.
+- **MONTANT ARP** : profondeur de la modulation arp (25/50/75/100 %). L'arp
+  module sa cible en escalier, un motif différent à chaque pas.
+- Le routage depuis les tirettes (voyant vert LFO / rose ARP) marche toujours,
+  la destination se met à jour toute seule dans la page.
+
+## Nouveaux moteurs (v0.40)
+
+Trois moteurs inspirés des modules Mutable Instruments, dans la section SYNTHÉ
+du navigateur d'effets (SHIFT+tap = tirettes) :
+
+- **VOX** : synthé formant (TUNE / FORMANT / AIR / NIVEAU) — voix, nappes.
+- **PLUK** : corde pincée Karplus-Strong (TUNE / AMORTI / RICHE / NIVEAU).
+- **TIDE** : oscillateur morphologique (TUNE / FORME / PLI / NIVEAU) — du
+  sinus aux dents de scie, avec pliage d'onde.
+
+## Punch-in retravaillés (v0.40)
+
+Les 10 collections de punch-in sont **dé-doublonnées** et chaque case a
+maintenant sa **personnalité** (un réglage de son effet est appliqué à
+l'activation) : APHEX (acide clinique), SKREAM (dub profond), SKRILLEX
+(brutal), DOOM (poussiéreux), WAITS (cabaret), GLITCH (haché), DOUCE (subtil
+studio), MAGNETO (k7), CLUB, SABLIER (vinyl/stops). Certains sont discrets,
+d'autres très corsés.
+
+## Panique et démarrage : état neutre complet (v0.40)
+
+- **PANIQUE** coupe maintenant **tout** : tous les effets (même ceux collés
+  par les punch-in), le générateur (remis sur SAW, muet), arp, LFO, boucles,
+  motion, punch, solo, mute. Plus de son qui traîne.
+- **Chaque démarrage** est neutre : remise à zéro aussi des axes
+  multi-assign, reverse de boucles, snapshots actifs et latches de punch.
+
 ## À venir (v0.34+)
 
 - Vendoring réel de Plaits (Mutable Instruments, MIT) — cette passe utilise

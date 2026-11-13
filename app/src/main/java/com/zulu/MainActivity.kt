@@ -214,9 +214,9 @@ class MainActivity : Activity() {
     private var punchCol = 0
     private var paramView: ParamPageView? = null
     private var paramFx = -1
-    private val fxParamInit = BooleanArray(62)
-    private val fxParamVals = Array(62) { FloatArray(8) }
-    private val fxParamAssign = Array(62) { IntArray(8) }
+    private val fxParamInit = BooleanArray(72)
+    private val fxParamVals = Array(72) { FloatArray(8) }
+    private val fxParamAssign = Array(72) { IntArray(8) }
     private val fxParamDefs = mapOf(
         27 to listOf("TEMPS", "FB", "TONAL", "SAT"),
         28 to listOf("GRAVE", "AIGU", "DRIVE", "HUM"),
@@ -272,7 +272,10 @@ class MainActivity : Activity() {
         59 to listOf("TUNE", "ATTAQUE", "RELEASE", "NIVEAU"),
         60 to listOf("TUNE", "ATTAQUE", "RELEASE", "NIVEAU"),
         61 to listOf("CUT", "GLIDE", "RESO", "NIVEAU"),
-        62 to listOf("TON", "DECAY", "MORDANT", "NIVEAU")
+        62 to listOf("TON", "DECAY", "MORDANT", "NIVEAU"),
+        69 to listOf("TUNE", "FORMANT", "AIR", "NIVEAU"),
+        70 to listOf("TUNE", "AMORTI", "RICHE", "NIVEAU"),
+        71 to listOf("TUNE", "FORME", "PLI", "NIVEAU")
     )
     private val fxParamDefaults = mapOf(
         27 to floatArrayOf(0.45f, 0.8f, 0.22f, 0.2f),
@@ -329,7 +332,10 @@ class MainActivity : Activity() {
         59 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
         60 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
         61 to floatArrayOf(0.5f, 0.35f, 0.5f, 0.5f),
-        62 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f)
+        62 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        69 to floatArrayOf(0.5f, 0.35f, 0.3f, 0.6f),
+        70 to floatArrayOf(0.5f, 0.4f, 0.7f, 0.6f),
+        71 to floatArrayOf(0.5f, 0.35f, 0.25f, 0.6f)
     )
     private var sendPadBank = -1
     private var sendPadAt = 0L
@@ -368,6 +374,11 @@ class MainActivity : Activity() {
     private val lfoWaves = IntArray(2) { 0 }
     private var lfoSel = 0
     private var lfoDraw: LfoDrawView? = null
+    private var arpTargetTg = -1
+    private var arpAmountIdx = 1
+    private var lfoBrowserFor = 0
+    private var lfoBrowserSec = -1
+    private var lfoBrowserBox: LinearLayout? = null
     private var importTargetBank = -1
     private val reqImport = 4242
 
@@ -413,7 +424,7 @@ class MainActivity : Activity() {
         "RESONANCE" to listOf("RESO", "SPRING", "RINGS"),
         "GRANULAIRE" to listOf("GRAIN", "JUNGLE"),
         "TRANSITIONS" to listOf("TRANSIT", "COMBUSTOR", "TURNADO", "FALL", "SWELL", "PUMP"),
-        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "303", "KICK", "SNARE", "HAT", "PERC"),
+        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "303", "KICK", "SNARE", "HAT", "PERC", "VOX", "PLUK", "TIDE"),
         "LECTURE SAMPLE" to listOf("SPLY", "GRAN", "JGL", "RND", "SLICR", "CLOUD", "FRZ"),
         "STUDIO" to listOf("EQ3", "COMP", "WARM", "CLEAN")
     )
@@ -426,7 +437,7 @@ class MainActivity : Activity() {
         "X15", "X16", "X32",
         "X19", "X20",
         "X21", "X22", "X23", "X24", "X25", "X26",
-        "G0", "G13", "G14", "G12", "G15", "G5", "G6", "G7", "G16",
+        "G0", "G13", "G14", "G12", "G15", "G5", "G6", "G7", "G16", "G17", "G18", "G19",
         "X33", "X34", "X35", "X36", "X37", "X38", "X39",
         "X40", "X41", "X42", "X43"
     )
@@ -1536,7 +1547,7 @@ class MainActivity : Activity() {
         if (!playing) {
             Toast.makeText(this, "AUDIO : demarrage impossible", Toast.LENGTH_LONG).show()
         }
-        for (f in 0 until 62) {
+        for (f in 0 until 72) {
             val d = fxParamDefaults[f] ?: continue
             for (k in d.indices) engine.nativeSetFxParam(f, k, d[k])
         }
@@ -1549,9 +1560,25 @@ class MainActivity : Activity() {
     }
 
     private fun silenceAtStartup() {
+        recEndHandler.removeCallbacksAndMessages(null)
+        motionHandler.removeCallbacksAndMessages(null)
+        if (recActive) engine.nativeStopRec()
+        recActive = false
+        recMotion = false
+        recArmed = false
+        recSnapSide = -1
+        recArmPad = -1
+        fRecTap = false
+        zRecTap = false
+        padGrid.recArmed = false
+        padGrid.recPad = -1
+        stopMotionPlayback()
+        motionPlaying = -1
         arpOn = false
         pad.arpOn = false
         pushArp()
+        genIdx = 0
+        engine.nativeSetGen(0)
         engine.nativeSetGenTouch(false)
         for (i in 0 until 2) {
             lfoOn[i] = false
@@ -1561,15 +1588,39 @@ class MainActivity : Activity() {
                 lfoTargets[i], lfoWaves[i]
             )
         }
-        stopMotionPlayback()
-        motionPlaying = -1
         for (b in 0 until 8) {
             midiPlaying[b] = false
             if (bankOn[b]) {
                 if (engine.nativeBankHasLoop(b)) engine.nativeToggleBank(b)
                 bankOn[b] = false
             }
+            if (bankRev[b]) {
+                bankRev[b] = false
+                engine.nativeSetBankRev(b, false)
+            }
         }
+        punchLatched.fill(false)
+        punchView?.releaseAll()
+        for (g in 0 until 4) soloGroups[g] = false
+        engine.nativeSetSoloMask(0)
+        padGrid.soloMask = 0
+        if (muteOn) {
+            muteOn = false
+            btnMute.text = "MUTE"
+        }
+        engine.nativeSetMute(false)
+        axisMulti[0].clear()
+        axisMulti[1].clear()
+        pushAxisMulti(0)
+        pushAxisMulti(1)
+        exitAssignMode()
+        snapHold = false
+        snapHoldOld.clear()
+        snapHoldFx.clear()
+        snapFxOverride.clear()
+        activeZu = -1
+        activeLu = -1
+        refreshSnapGrid()
         refreshBlink()
     }
 
@@ -1736,13 +1787,16 @@ class MainActivity : Activity() {
             midiPlaying[b] = false
         }
         for (f in 0 until 46) {
-            if (fxActive[f]) {
-                fxActive[f] = false
-                engine.nativeSetFx(f, false)
-            }
+            fxActive[f] = false
+            engine.nativeSetFx(f, false)
         }
-        for (f in 0 until 62) fxParamInit[f] = false
-        for (f in 0 until 62) {
+        genIdx = 0
+        engine.nativeSetGen(0)
+        engine.nativeSetGenTouch(false)
+        punchLatched.fill(false)
+        punchView?.releaseAll()
+        for (f in 0 until 72) fxParamInit[f] = false
+        for (f in 0 until 72) {
             val df = fxParamDefaults[f]
             for (k in 0 until 8) engine.nativeSetFxParam(f, k, if (df != null && k < df.size) df[k] else 0f)
         }
@@ -1770,7 +1824,7 @@ class MainActivity : Activity() {
         }
         engine.nativeSetMute(false)
         arpOn = false
-        engine.nativeSetArp(false, arpMode, arpRateIdx, arpOctIdx, arpGateIdx, arpOctJump)
+        pushArp()
         for (i in 0 until 2) {
             lfoOn[i] = false
             engine.nativeSetCustomLfo(
@@ -2525,6 +2579,8 @@ class MainActivity : Activity() {
                 )
             }
             json.put("lfos", lfos)
+            json.put("arpTarget", arpTargetTg)
+            json.put("arpAmount", arpAmountIdx)
             json.put("activeZu", activeZu)
             json.put("activeLu", activeLu)
             json.put("recFlavor", recFlavor)
@@ -2631,7 +2687,7 @@ class MainActivity : Activity() {
                             val a = o.optJSONArray("fxOn")
                             a != null && f < a.length() && a.optInt(f, 0) == 1
                         },
-                        fxParams = Array(62) { f ->
+                        fxParams = Array(72) { f ->
                             val a = o.optJSONArray("fxP")
                             FloatArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -2639,7 +2695,7 @@ class MainActivity : Activity() {
                                 else 0f
                             }
                         },
-                        fxAssign = Array(62) { f ->
+                        fxAssign = Array(72) { f ->
                             val a = o.optJSONArray("fxA")
                             IntArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -2753,6 +2809,8 @@ class MainActivity : Activity() {
                 pushLfo(1)
                 lfoDraw?.setShape(lfoShapes[lfoSel])
             }
+            arpTargetTg = json.optInt("arpTarget", -1)
+            arpAmountIdx = json.optInt("arpAmount", 1).coerceIn(0, 3)
             activeZu = json.optInt("activeZu", -1)
             activeLu = json.optInt("activeLu", -1)
             refreshSnapGrid()
@@ -2871,6 +2929,49 @@ class MainActivity : Activity() {
         header("BONUS")
         row(listOf("OCT JUMP"), "jump") { _ ->
             arpOctJump = !arpOctJump
+            pushArp()
+        }
+        header("DESTINATION (TAPER POUR ROUTER)")
+        for (l in 0..2) {
+            val who = if (l < 2) "LFO " + ('A' + l) else "ARP"
+            val r = LinearLayout(this)
+            val lab = makeButton(who, silk)
+            lab.setOnClickListener {
+                if (l < 2) {
+                    lfoSel = l
+                    lfoDraw?.setShape(lfoShapes[l])
+                }
+                lfoBrowserFor = l
+                lfoBrowserSec = -1
+                showLfoBrowser()
+                refreshArpHighlight()
+            }
+            if (l < 2) arpButtons.add(lab)
+            r.addView(lab, wrapParams((4 * d).toInt()))
+            val dest = makeButton("RIEN", green)
+            dest.tag = "ldest" to l
+            dest.setOnClickListener {
+                if (l < 2) {
+                    lfoSel = l
+                    lfoDraw?.setShape(lfoShapes[l])
+                }
+                lfoBrowserFor = l
+                lfoBrowserSec = -1
+                showLfoBrowser()
+                refreshArpHighlight()
+            }
+            arpButtons.add(dest)
+            r.addView(dest, wrapParams((4 * d).toInt()))
+            list.addView(r)
+        }
+        val lfoBox = LinearLayout(this)
+        lfoBox.orientation = LinearLayout.VERTICAL
+        lfoBox.visibility = View.GONE
+        lfoBrowserBox = lfoBox
+        list.addView(lfoBox)
+        header("MONTANT ARP")
+        row(listOf("25%", "50%", "75%", "100%"), "aramt") { i ->
+            arpAmountIdx = i
             pushArp()
         }
         header("SYNTH\u00c9 \u00b7 TONE")
@@ -2995,6 +3096,37 @@ class MainActivity : Activity() {
         arpOverlay.addView(panel, panelParams)
     }
 
+    private val globalParamNames = listOf("CUT", "RES", "REV", "BIT", "VIT", "L-V", "L-P", "DRI")
+
+    private val sampleParamNames = listOf("PITCH", "ATTAQUE", "DECAY", "TONE", "D\u00c9BUT", "FIN")
+
+    private val fxNameBySlot: Map<Int, String> by lazy {
+        val m = HashMap<Int, String>()
+        var gi = 0
+        for ((_, effects) in fxSections) {
+            for (fx in effects) {
+                val code = fxCodes.getOrNull(gi) ?: ""
+                gi++
+                if (code.length < 2) continue
+                val num = code.substring(1).toIntOrNull() ?: -1
+                when (code[0]) {
+                    'X' -> if (num in 0..45) m[num] = fx
+                    'G' -> if (num >= 0) m[46 + num] = fx
+                }
+            }
+        }
+        m
+    }
+
+    private fun targetName(tg: Int): String {
+        if (tg < 0) return "RIEN"
+        if (tg < 8) return globalParamNames[tg.coerceIn(0, 7)]
+        val slot = tg - 8
+        if (slot in 63..68) return "SAMPLE \u00b7 " + sampleParamNames[slot - 63]
+        fxNameBySlot[slot]?.let { return it }
+        return "SLOT $slot"
+    }
+
     private fun pushLfo(idx: Int) {
         engine.nativeSetCustomLfo(
             idx, lfoShapes[idx], lfoOn[idx], lfoRateIdxArr[idx],
@@ -3008,6 +3140,7 @@ class MainActivity : Activity() {
     private fun pushArp() {
         engine.nativeSetArp(arpOn, arpMode, arpRateIdx, arpOctIdx + 1, arpGateIdx, arpOctJump)
         engine.nativeSetArpSlices(intArrayOf(2, 4, 8, 12, 16)[arpSlicesIdx])
+        engine.nativeSetArpTarget(arpTargetTg, floatArrayOf(0.25f, 0.5f, 0.75f, 1f)[arpAmountIdx])
         refreshArpHighlight()
     }
 
@@ -3047,6 +3180,12 @@ class MainActivity : Activity() {
                 "lfov" -> idx == lfoRateIdxArr[lfoSel]
                 "lfod" -> idx == lfoDepthIdxArr[lfoSel]
                 "lfoa" -> idx == lfoAmountIdxArr[lfoSel]
+                "ldest" -> {
+                    val tg = if (idx < 2) lfoTargets[idx] else arpTargetTg
+                    b.text = (if (idx == 0) "A \u2192 " else if (idx == 1) "B \u2192 " else "ARP \u2192 ") + targetName(tg)
+                    tg >= 0
+                }
+                "aramt" -> idx == arpAmountIdx
                 "lfot" -> idx == lfoTargets[lfoSel]
                 "lfoon" -> lfoOn[lfoSel]
                 "lfooff" -> !lfoOn[lfoSel]
@@ -3063,6 +3202,112 @@ class MainActivity : Activity() {
 
     private fun closeArpPanel() {
         arpOverlay.visibility = View.GONE
+        lfoBrowserBox?.visibility = View.GONE
+    }
+
+    private fun showLfoBrowser() {
+        val box = lfoBrowserBox ?: return
+        val dd = resources.displayMetrics.density
+        box.removeAllViews()
+        box.visibility = View.VISIBLE
+        if (lfoBrowserSec < 0) {
+            val r0 = LinearLayout(this)
+            val bNone = makeButton("RIEN (D\u00c9PATCHER)", silk)
+            bNone.setOnClickListener {
+                if (lfoBrowserFor < 2) {
+                    lfoTargets[lfoBrowserFor] = -1
+                    pushLfo(lfoBrowserFor)
+                } else {
+                    arpTargetTg = -1
+                    pushArp()
+                }
+                box.visibility = View.GONE
+                refreshArpHighlight()
+            }
+            r0.addView(bNone)
+            box.addView(r0)
+            var secIdx = 0
+            var rowL: LinearLayout? = null
+            for ((sec, _) in fxSections) {
+                if (rowL == null || rowL.childCount == 3) {
+                    rowL = LinearLayout(this)
+                    box.addView(rowL)
+                }
+                val b = makeButton(sec, fxCatCols[secIdx % fxCatCols.size])
+                val si = secIdx
+                b.setOnClickListener {
+                    lfoBrowserSec = si
+                    showLfoBrowser()
+                }
+                rowL.addView(b, wrapParams((4 * dd).toInt()))
+                secIdx++
+            }
+            if (rowL == null || rowL.childCount == 3) {
+                rowL = LinearLayout(this)
+                box.addView(rowL)
+            }
+            val bS = makeButton("SAMPLE", pink)
+            bS.setOnClickListener {
+                lfoBrowserSec = fxSections.size
+                showLfoBrowser()
+            }
+            rowL.addView(bS, wrapParams((4 * dd).toInt()))
+        } else {
+            val back = makeButton("\u2190 RETOUR", silk)
+            back.setOnClickListener {
+                lfoBrowserSec = -1
+                showLfoBrowser()
+            }
+            box.addView(back)
+            val entries = ArrayList<Pair<String, Int>>()
+            if (lfoBrowserSec == fxSections.size) {
+                for (k in 0 until 6) entries.add("SAMPLE \u00b7 " + sampleParamNames[k] to 71 + k)
+            } else {
+                var gi = 0
+                for ((si, entry) in fxSections.withIndex()) {
+                    val effects = entry.second
+                    for (fx in effects) {
+                        val code = fxCodes.getOrNull(gi) ?: ""
+                        gi++
+                        if (si != lfoBrowserSec || code.length < 2) continue
+                        val num = code.substring(1).toIntOrNull() ?: -1
+                        val slot = when (code[0]) {
+                            'X' -> num
+                            'G' -> 46 + num
+                            'P' -> -2
+                            else -> -1
+                        }
+                        if (slot == -2) {
+                            if (num in 0..7) entries.add(fx to num)
+                            continue
+                        }
+                        if (slot < 0) continue
+                        val defs = fxParamDefs[slot] ?: continue
+                        for (k in defs.indices) entries.add(fx + " \u00b7 " + defs[k] to 8 + slot * 8 + k)
+                    }
+                }
+            }
+            var rowL: LinearLayout? = null
+            for ((label, tg) in entries) {
+                if (rowL == null || rowL.childCount == 2) {
+                    rowL = LinearLayout(this)
+                    box.addView(rowL)
+                }
+                val b = makeButton(label, green)
+                b.setOnClickListener {
+                    if (lfoBrowserFor < 2) {
+                        lfoTargets[lfoBrowserFor] = tg
+                        pushLfo(lfoBrowserFor)
+                    } else {
+                        arpTargetTg = tg
+                        pushArp()
+                    }
+                    box.visibility = View.GONE
+                    refreshArpHighlight()
+                }
+                rowL.addView(b, wrapParams((4 * dd).toInt()))
+            }
+        }
     }
 
     private fun saveUserPreset(slot: Int) {
@@ -3081,8 +3326,8 @@ class MainActivity : Activity() {
             assignX = assignXIdx,
             assignY = assignYIdx,
             fxOn = fxActive.copyOf(),
-            fxParams = Array(62) { fxParamVals[it].copyOf() },
-            fxAssign = Array(62) { fxParamAssign[it].copyOf() },
+            fxParams = Array(72) { fxParamVals[it].copyOf() },
+            fxAssign = Array(72) { fxParamAssign[it].copyOf() },
             lfoTg = lfoTargets.copyOf()
         )
         pad.userPresets[slot] = true
@@ -3107,7 +3352,8 @@ class MainActivity : Activity() {
         assignYIdx = p.assignY
         engine.nativeSetAssign(0, p.assignX)
         engine.nativeSetAssign(1, p.assignY)
-        for (f in 0 until 62) {
+        for (f in 0 until 72) {
+            if (f in 63..68) continue
             if (f < 46 && fxActive[f] != p.fxOn[f]) {
                 fxActive[f] = p.fxOn[f]
                 engine.nativeSetFx(f, fxActive[f])
@@ -3117,10 +3363,11 @@ class MainActivity : Activity() {
                 engine.nativeSetFxParam(f, k, fxParamVals[f][k])
             }
         }
-        for (f in 0 until 62) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
+        for (f in 0 until 72) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
         var xT = -1
         val lT = intArrayOf(-1, -1)
-        for (f in 0 until 62) for (k in 0 until 8) {
+        for (f in 0 until 72) for (k in 0 until 8) {
+            if (f in 63..68) continue
             when (p.fxAssign[f][k]) {
                 1 -> if (xT < 0) xT = 8 + f * 8 + k
                 2 -> if (lT[0] < 0) lT[0] = 8 + f * 8 + k
@@ -4237,52 +4484,52 @@ class MainActivity : Activity() {
     }
 
     private val punchLabels = listOf(
-        listOf("REV", "DLY", "ECH", "RPT", "STP", "FRZ", "SCR", "TDO", "CRS"),
-        listOf("RES", "RNG", "GRN", "JGL", "WRP", "FLD", "GAT", "TDO", "WOB"),
-        listOf("ECH", "DUB", "SPG", "STP", "LPF", "WOB", "TRM", "PAN", "DRV"),
-        listOf("CMB", "DRV", "BIT", "FLD", "GAT", "PMP", "RNG", "TDO", "JGL"),
-        listOf("LOF", "CMP", "REV", "SCR", "STP", "GRN", "CHO", "GAT", "WET"),
-        listOf("MEG", "DRV", "SPG", "K7", "CRK", "GRN", "STP", "TRM", "BIT"),
-        listOf("FRZ", "GRN", "REV", "SWL", "TRS", "CHO", "FLG", "LPF", "WET"),
-        listOf("K7", "CMP", "CHO", "TRM", "REV", "STP", "GAT", "BIT", "WET"),
-        listOf("PHS", "FLG", "PMP", "GAT", "PAN", "TLK", "DRV", "DLY", "LPF"),
-        listOf("MEG", "K7", "SPG", "FRZ", "GRN", "CRK", "TRS", "DRV", "WET")
+        listOf("WRP", "RNG", "PHZ", "JGL", "CUT", "BIT", "FLD", "PNG", "CHO"),
+        listOf("DUB", "ECH", "FLG", "RSO", "GAT", "SWL", "TRM", "LPF", "WET"),
+        listOf("DIS", "FUZ", "CRS", "STP", "RPT", "PMP", "TLK", "DRI", "TDO"),
+        listOf("LOF", "K7", "CMP", "WRM", "LPF", "SPR", "SCR", "FRZ", "DRI"),
+        listOf("K7", "MEG", "RNG", "TLK", "AUT", "PHS", "CMB", "GRN", "WET"),
+        listOf("RPT", "GAT", "SPL", "REV", "FLD", "BIT", "SLC", "PMP", "JGL"),
+        listOf("CHO", "FLG", "SPR", "EQ3", "CMP", "CLN", "SWL", "AUT", "LPF"),
+        listOf("LOF", "ECH", "DRI", "GAT", "TRM", "WRM", "RSO", "MEG", "WET"),
+        listOf("DIS", "EQ3", "FUZ", "STP", "SPL", "RNG", "REV", "WRP", "RES"),
+        listOf("SCR", "FRZ", "GRN", "CMB", "RNG", "DLY", "TDO", "TRS", "FAL")
     )
     private val punchFx = arrayOf(
-        intArrayOf(-1, 0, 1, 13, 12, 10, 18, 23, -1),
-        intArrayOf(15, 7, 19, 20, 30, 17, 9, 23, -1),
-        intArrayOf(1, 27, 16, 12, -1, -1, 3, 4, -1),
-        intArrayOf(22, -1, -1, 17, 9, 26, 7, 23, 20),
-        intArrayOf(8, 11, 14, 18, 12, 19, 6, 9, -1),
-        intArrayOf(28, -1, 16, 29, 17, 19, 12, 3, -1),
-        intArrayOf(10, 19, 14, 25, 21, 6, 5, -1, -1),
-        intArrayOf(29, 11, 6, 3, 14, 12, 9, -1, -1),
-        intArrayOf(2, 5, 26, 9, 4, 31, -1, 0, -1),
-        intArrayOf(28, 29, 16, 10, 19, 17, 21, -1, -1)
+        intArrayOf(30, 7, 2, 20, -1, -1, 17, 0, 6),
+        intArrayOf(27, 1, 5, 15, 9, 25, 3, -1, -1),
+        intArrayOf(45, 44, -1, 12, 13, 26, 31, -1, 23),
+        intArrayOf(8, 29, 41, 42, -1, 16, 18, 10, -1),
+        intArrayOf(29, 28, 32, 31, 4, 2, 22, 19, -1),
+        intArrayOf(13, 9, 33, 14, 17, -1, 37, 26, 20),
+        intArrayOf(6, 5, 16, 40, 41, 43, 25, 4, -1),
+        intArrayOf(8, 1, -1, 9, 3, 42, 15, 28, -1),
+        intArrayOf(45, 40, 44, 12, 33, 7, 14, 30, -1),
+        intArrayOf(18, 10, 19, 22, 32, 0, 23, 21, 24)
     )
     private val punchParam = arrayOf(
-        intArrayOf(2, -1, -1, -1, -1, -1, -1, -1, 3),
-        intArrayOf(-1, -1, -1, -1, -1, -1, -1, -1, 1),
-        intArrayOf(-1, -1, -1, -1, 0, 1, -1, -1, 7),
-        intArrayOf(-1, 7, 3, -1, -1, -1, -1, -1, -1),
-        intArrayOf(-1, -1, -1, -1, -1, -1, -1, -1, 2),
-        intArrayOf(-1, 7, -1, -1, -1, -1, -1, -1, 3),
-        intArrayOf(-1, -1, -1, -1, -1, -1, -1, 0, 2),
-        intArrayOf(-1, -1, -1, -1, -1, -1, -1, 3, 2),
-        intArrayOf(-1, -1, -1, -1, -1, -1, 7, -1, 0),
-        intArrayOf(-1, -1, -1, -1, -1, -1, -1, 7, 2)
+        intArrayOf(0, 0, 0, 1, 0, 3, 0, 0, 0),
+        intArrayOf(1, 0, 0, -1, 1, -1, 0, 0, 2),
+        intArrayOf(0, 0, 3, -1, 0, 0, 0, 7, 0),
+        intArrayOf(0, 0, -1, -1, 0, -1, 0, -1, 7),
+        intArrayOf(1, 2, -1, 1, 0, 0, 1, 0, 2),
+        intArrayOf(2, 2, -1, 0, 2, 3, -1, 1, 3),
+        intArrayOf(1, 2, -1, 0, 1, -1, -1, 1, 0),
+        intArrayOf(1, 1, 7, 0, 1, -1, 1, 1, 2),
+        intArrayOf(1, 2, 0, 1, 2, 0, 1, 1, 1),
+        intArrayOf(1, 1, 1, 0, 1, 1, 1, 0, 0)
     )
     private val punchVal = arrayOf(
-        floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.75f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0.2f, 1f, 0f, 0f, 0.85f),
-        floatArrayOf(0f, 1f, 0.9f, 0f, 0f, 0f, 0f, 0f, 0f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.85f),
-        floatArrayOf(0f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0.85f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.3f, 1f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.7f, 0.75f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0.8f, 0f, 0.85f),
-        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 1f)
+        floatArrayOf(0.7f, 0.8f, 0.85f, 0.9f, 0.12f, 0.85f, 0.8f, 0.2f, 0.25f),
+        floatArrayOf(0.78f, 0.45f, 0.3f, 0f, 0.35f, 0f, 0.35f, 0.3f, 0.7f),
+        floatArrayOf(0.9f, 0.85f, 1f, 0f, 0.15f, 1f, 0.8f, 0.9f, 0.9f),
+        floatArrayOf(0.7f, 0.75f, 0f, 0f, 0.38f, 0f, 0.3f, 0f, 0.3f),
+        floatArrayOf(0.8f, 0.8f, 0f, 0.5f, 0.3f, 0.25f, 0.7f, 0.5f, 0.85f),
+        floatArrayOf(0.6f, 0.9f, 0f, 0.6f, 0.8f, 0.95f, 0f, 0.8f, 0.85f),
+        floatArrayOf(0.4f, 0.35f, 0f, 0.3f, 0.5f, 0f, 0f, 0.4f, 0.5f),
+        floatArrayOf(0.75f, 0.5f, 0.5f, 0.5f, 0.5f, 0f, 0.7f, 0.6f, 0.5f),
+        floatArrayOf(0.7f, 0.6f, 0.6f, 0.6f, 0.6f, 0.6f, 0.7f, 0.6f, 0.8f),
+        floatArrayOf(0.7f, 0.7f, 0.7f, 0.5f, 0.7f, 0.5f, 0.7f, 0.5f, 0.6f)
     )
 
     private fun assignBankFx(bank: Int) {
@@ -4706,7 +4953,11 @@ class MainActivity : Activity() {
         val fx = punchFx[punchCol][zone]
         val pr = punchParam[punchCol][zone]
         if (!(snapHold && snapTransp)) {
-            if (fx >= 0) engine.nativeSetFx(fx, on)
+            if (fx >= 0) {
+                engine.nativeSetFx(fx, on)
+                val pk = punchParam[punchCol][zone]
+                if (pk >= 0) engine.nativeSetFxParam(fx, pk, punchVal[punchCol][zone])
+            }
             else if (pr >= 0) engine.nativeSetParam(pr, punchVal[punchCol][zone], on)
             val combo = punchCombo[punchCol * 9 + zone]
             if (combo != null) {
