@@ -128,6 +128,12 @@ class ZuluPad(context: Context) : View(context) {
     private var lastMergeTap = 0L
     private var lastTouched = false
 
+    private var billardTicks = 0
+    private var velAx = 0f
+    private var velAy = 0f
+    private var velBx = 0f
+    private var velBy = 0f
+
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
     private val offColor = Color.rgb(90, 96, 108)
@@ -241,6 +247,26 @@ class ZuluPad(context: Context) : View(context) {
             targetBy = targetAy
         }
 
+        if (billardTicks > 0) {
+            billardTicks--
+            targetAx += velAx; targetAy += velAy
+            targetBx += velBx; targetBy += velBy
+            if (targetAx < 0f) { targetAx = 0f; velAx = -velAx }
+            if (targetAx > 1f) { targetAx = 1f; velAx = -velAx }
+            if (targetAy < 0f) { targetAy = 0f; velAy = -velAy }
+            if (targetAy > 1f) { targetAy = 1f; velAy = -velAy }
+            if (targetBx < 0f) { targetBx = 0f; velBx = -velBx }
+            if (targetBx > 1f) { targetBx = 1f; velBx = -velBx }
+            if (targetBy < 0f) { targetBy = 0f; velBy = -velBy }
+            if (targetBy > 1f) { targetBy = 1f; velBy = -velBy }
+            velAx *= 0.99f; velAy *= 0.99f
+            velBx *= 0.99f; velBy *= 0.99f
+            onAxisChange?.invoke(targetAx, targetAy, targetBx, targetBy)
+            if (billardTicks == 0) {
+                velAx = 0f; velAy = 0f; velBx = 0f; velBy = 0f
+            }
+        }
+
         drawCursor(canvas, ax * w + jax, (1f - ay) * h + jay, yellow, "A", stateA != AxisState.OFF,
             "${(ax * 100).toInt()} \u00b7 ${(ay * 100).toInt()}")
         drawCursor(canvas, bx * w + jbx, (1f - by) * h + jby, pink, "B", stateB != AxisState.OFF,
@@ -322,6 +348,7 @@ class ZuluPad(context: Context) : View(context) {
                     return true
                 }
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    billardTicks = 0
                     val now = System.currentTimeMillis()
                     val tx = event.x
                     val ty = event.y
@@ -474,5 +501,11 @@ class ZuluPad(context: Context) : View(context) {
         targetAy = (ay + sa * dist).coerceIn(0f, 1f)
         targetBx = (ax - ca * dist).coerceIn(0f, 1f)
         targetBy = (ay - sa * dist).coerceIn(0f, 1f)
+        val speed = 0.012f + rnd.nextFloat() * 0.02f
+        velAx = ca * speed * (0.7f + rnd.nextFloat() * 0.6f)
+        velAy = sa * speed * (0.7f + rnd.nextFloat() * 0.6f)
+        velBx = -ca * speed * (0.7f + rnd.nextFloat() * 0.6f)
+        velBy = -sa * speed * (0.7f + rnd.nextFloat() * 0.6f)
+        billardTicks = 70 + rnd.nextInt(50)
     }
 }
