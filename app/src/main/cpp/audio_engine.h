@@ -88,6 +88,10 @@ public:
         bend.store(b); bendX.store(x); bendLevel.store(level);
     }
     void setSoloMask(int m) { soloMask.store(m); }
+    void setSynth(int wave, float atk, float decay, int oct, float pitch, float tune) {
+        synWave.store(wave); synAtk.store(atk); synDecay.store(decay);
+        synOct.store(oct); synPitch.store(pitch); synTune.store(tune);
+    }
 
     void recordBank(int bank, int steps, bool wet);
     void startResample(int bank, int steps);
@@ -130,6 +134,12 @@ private:
     std::atomic<int> arpGate{1};
     std::atomic<bool> arpOctJump{false};
     std::atomic<int> soloMask{0};
+    std::atomic<int> synWave{-1};
+    std::atomic<float> synAtk{0.f};
+    std::atomic<float> synDecay{1.f};
+    std::atomic<int> synOct{0};
+    std::atomic<float> synPitch{0.f};
+    std::atomic<float> synTune{0.f};
     std::atomic<float> arpXy{0.5f};
     std::atomic<bool> arpXyTouch{false};
     std::atomic<int> assignX{0};
@@ -146,6 +156,7 @@ private:
     float stepClock = 0.f;
     float oscPhase = 0.f, fmPhase = 0.f, sirenPhase = 0.f;
     float env = 0.f, envRate = 0.f;
+    float envAtkRate = 0.f;
     float baseF = 55.f;
     float kickF = 0.f, zapF = 0.f;
     float prevNoise = 0.f;
@@ -169,6 +180,7 @@ private:
 
     float genSample(float fsr, float bpm);
     float degreeToSemi(int deg) const;
+    float pitchFactor() const;
     float synthSample(int t, float fsr);
     void arpFire();
     int arpIdx = 0;

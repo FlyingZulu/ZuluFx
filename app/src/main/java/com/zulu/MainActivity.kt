@@ -116,6 +116,15 @@ class MainActivity : Activity() {
     private lateinit var stepOverlay: FrameLayout
     private var zuDownAt = 0L
     private var luDownAt = 0L
+    private lateinit var menuOverlay: FrameLayout
+    private val menuPadButtons = ArrayList<Button>()
+    private var menuMirrorBtn: Button? = null
+    private var synWaveIdx = 0
+    private var synAtkIdx = 0
+    private var synDecIdx = 1
+    private var synOctIdx = 2
+    private var synPitIdx = 2
+    private var synTunIdx = 1
 
     private data class UserPreset(
         val filter: Int,
@@ -563,7 +572,7 @@ class MainActivity : Activity() {
                     content.layoutDirection =
                         if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
                 } else {
-                    openProjPanel()
+                    openMenuPanel()
                 }
             }
         }
@@ -625,6 +634,7 @@ class MainActivity : Activity() {
         buildArpPanel(d)
         buildProjPanel(d)
         buildStepPanel(d)
+        buildMenuPanel(d)
         padPane.addView(
             arpOverlay,
             FrameLayout.LayoutParams(
@@ -664,6 +674,13 @@ class MainActivity : Activity() {
         )
         root.addView(
             projOverlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        root.addView(
+            menuOverlay,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -1510,6 +1527,36 @@ class MainActivity : Activity() {
             arpOctJump = !arpOctJump
             pushArp()
         }
+        header("SYNTH\u00c9 \u00b7 TONE")
+        row(listOf("SUIT", "SAW", "SQR", "SIN", "TRI"), "swave") { i ->
+            synWaveIdx = i
+            pushSynth()
+        }
+        header("SYNTH\u00c9 \u00b7 ATTAQUE (MS)")
+        row(listOf("0", "25", "50", "100", "250"), "satk") { i ->
+            synAtkIdx = i
+            pushSynth()
+        }
+        header("SYNTH\u00c9 \u00b7 D\u00c9CLIN")
+        row(listOf("x0.5", "x1", "x2", "x4"), "sdec") { i ->
+            synDecIdx = i
+            pushSynth()
+        }
+        header("SYNTH\u00c9 \u00b7 OCTAVE")
+        row(listOf("-2", "-1", "0", "+1", "+2"), "soct") { i ->
+            synOctIdx = i
+            pushSynth()
+        }
+        header("SYNTH\u00c9 \u00b7 PITCH (DEMIS-TONS)")
+        row(listOf("-12", "-5", "0", "+5", "+12"), "spit") { i ->
+            synPitIdx = i
+            pushSynth()
+        }
+        header("SYNTH\u00c9 \u00b7 TUNE (CENTS)")
+        row(listOf("-50", "0", "+50"), "stun") { i ->
+            synTunIdx = i
+            pushSynth()
+        }
 
         val panelParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
@@ -1521,6 +1568,18 @@ class MainActivity : Activity() {
     private fun pushArp() {
         engine.nativeSetArp(arpOn, arpMode, arpRateIdx, arpOctIdx + 1, arpGateIdx, arpOctJump)
         engine.nativeSetArpSlices(intArrayOf(2, 4, 8, 12, 16)[arpSlicesIdx])
+        refreshArpHighlight()
+    }
+
+    private fun pushSynth() {
+        engine.nativeSetSynth(
+            synWaveIdx - 1,
+            floatArrayOf(0f, 0.05f, 0.1f, 0.2f, 0.5f)[synAtkIdx],
+            floatArrayOf(0.5f, 1f, 2f, 4f)[synDecIdx],
+            synOctIdx - 2,
+            floatArrayOf(-12f, -5f, 0f, 5f, 12f)[synPitIdx],
+            floatArrayOf(-0.5f, 0f, 0.5f)[synTunIdx]
+        )
         refreshArpHighlight()
     }
 
@@ -1537,6 +1596,12 @@ class MainActivity : Activity() {
                 "gate" -> idx == arpGateIdx
                 "slices" -> idx == arpSlicesIdx
                 "jump" -> arpOctJump
+                "swave" -> idx == synWaveIdx
+                "satk" -> idx == synAtkIdx
+                "sdec" -> idx == synDecIdx
+                "soct" -> idx == synOctIdx
+                "spit" -> idx == synPitIdx
+                "stun" -> idx == synTunIdx
                 else -> false
             }
             b.setTextColor(if (lit) amber else silk)
@@ -1707,6 +1772,11 @@ class MainActivity : Activity() {
         }
         padGrid.snapSides = sides
         padGrid.activeSnap = intArrayOf(activeZu, activeLu)
+        pad.ghostZu = activeZu.takeIf { it >= 0 }?.let { snapPads[it] }
+            ?.let { floatArrayOf(it.ax, it.ay) }
+        pad.ghostLu = activeLu.takeIf { it >= 0 }?.let { snapPads[it] }
+            ?.let { floatArrayOf(it.bx, it.by) }
+        pad.invalidate()
     }
 
     private fun applyMorph(tIn: Float) {
@@ -1739,6 +1809,113 @@ class MainActivity : Activity() {
         engine.nativeSetAssign(1, assignYIdx)
         refreshAssignLabels()
         refreshFxHighlight()
+    }
+
+    private fun buildMenuPanel(d: Float) {
+        menuOverlay = FrameLayout(this)
+        menuOverlay.setBackgroundColor(Color.argb(190, 8, 9, 12))
+        menuOverlay.visibility = View.GONE
+        menuOverlay.setOnClickListener { menuOverlay.visibility = View.GONE }
+
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        val panelBg = GradientDrawable()
+        panelBg.setColor(Color.rgb(24, 26, 32))
+        panelBg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
+        panelBg.cornerRadius = 8 * d
+        panel.background = panelBg
+        panel.setPadding((14 * d).toInt(), (10 * d).toInt(), (14 * d).toInt(), (12 * d).toInt())
+
+        val titleRow = LinearLayout(this)
+        titleRow.gravity = Gravity.CENTER_VERTICAL
+        val title = TextView(this)
+        title.text = "MENU"
+        title.setTextColor(Color.rgb(236, 224, 196))
+        title.textSize = 16f
+        title.typeface = markerFont(this)
+        titleRow.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val close = Button(this)
+        close.text = "\u00d7"
+        close.setTextColor(silk)
+        close.textSize = 16f
+        close.minHeight = 0
+        close.minimumHeight = 0
+        close.minimumWidth = 0
+        close.setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        close.typeface = markerFont(this)
+        close.background = buttonBackground(false)
+        close.setOnClickListener { menuOverlay.visibility = View.GONE }
+        titleRow.addView(close)
+        panel.addView(titleRow)
+
+        fun header(t: String) {
+            val h = TextView(this)
+            h.text = t
+            h.setTextColor(amber)
+            h.textSize = 11f
+            h.typeface = markerFont(this)
+            h.setPadding(0, (10 * d).toInt(), 0, (4 * d).toInt())
+            panel.addView(h)
+        }
+
+        header("PADS")
+        val padsRow = LinearLayout(this)
+        for (n in listOf(8, 10, 12, 14)) {
+            val b = makeButton("$n", silk)
+            b.setOnClickListener { applyPadCount(n); refreshMenu() }
+            menuPadButtons.add(b)
+            padsRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(padsRow)
+
+        header("SC\u00c8NES")
+        val scRow = LinearLayout(this)
+        val bSnap = makeButton("SNAPSHOT", amber)
+        val bMotion = makeButton("MOTION (BIENT\u00d4T)", Color.rgb(90, 96, 108))
+        scRow.addView(bSnap, wrapParams((4 * d).toInt()))
+        scRow.addView(bMotion, wrapParams((4 * d).toInt()))
+        panel.addView(scRow)
+
+        header("PAGES")
+        val pagesRow = LinearLayout(this)
+        val bProj = makeButton("PROJET", silk)
+        bProj.setOnClickListener { menuOverlay.visibility = View.GONE; openProjPanel() }
+        val bScale = makeButton("GAMME", silk)
+        bScale.setOnClickListener { menuOverlay.visibility = View.GONE; openScalePanel() }
+        val bMirror = makeButton("MIROIR", silk)
+        bMirror.setOnClickListener {
+            mirrored = !mirrored
+            content.layoutDirection =
+                if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            refreshMenu()
+        }
+        menuMirrorBtn = bMirror
+        pagesRow.addView(bProj, wrapParams((4 * d).toInt()))
+        pagesRow.addView(bScale, wrapParams((4 * d).toInt()))
+        pagesRow.addView(bMirror, wrapParams((4 * d).toInt()))
+        panel.addView(pagesRow)
+
+        menuOverlay.addView(
+            panel,
+            FrameLayout.LayoutParams(
+                (340 * d).toInt(),
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
+        )
+    }
+
+    private fun refreshMenu() {
+        val counts = listOf(8, 10, 12, 14)
+        for ((i, b) in menuPadButtons.withIndex()) {
+            b.setTextColor(if (counts[i] == padGrid.padCount) amber else silk)
+        }
+        menuMirrorBtn?.setTextColor(if (mirrored) amber else silk)
+    }
+
+    private fun openMenuPanel() {
+        refreshMenu()
+        menuOverlay.visibility = View.VISIBLE
     }
 
     private fun buildStepPanel(d: Float) {

@@ -60,6 +60,29 @@ class ZuluPad(context: Context) : View(context) {
 
     var userPresets = BooleanArray(9)
 
+    var ghostZu: FloatArray? = null
+        set(value) { field = value; invalidate() }
+    var ghostLu: FloatArray? = null
+        set(value) { field = value; invalidate() }
+
+    private val turquoiseC = Color.rgb(0, 229, 255)
+    private val luC = Color.rgb(190, 120, 255)
+
+    private fun drawGhost(canvas: Canvas, gx: Float, gy: Float, color: Int) {
+        val x = gx * width
+        val y = (1f - gy) * height
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f * d
+        paint.color = color
+        paint.alpha = 110
+        canvas.drawCircle(x, y, 11f * d, paint)
+        paint.alpha = 70
+        canvas.drawLine(x - 16f * d, y, x + 16f * d, y, paint)
+        canvas.drawLine(x, y - 16f * d, x, y + 16f * d, paint)
+        paint.alpha = 255
+        paint.style = Paint.Style.FILL
+    }
+
     var onPresetTouch: ((Int) -> Unit)? = null
     var onPresetLongTouch: ((Int) -> Unit)? = null
     var onArpTouch: (() -> Unit)? = null
@@ -180,6 +203,11 @@ class ZuluPad(context: Context) : View(context) {
         paint.strokeWidth = 1f * d
         paint.color = Color.rgb(60, 66, 80)
         drawSketchyRoundRect(canvas, paint, 1f * d, 1f * d, w - 1f * d, h - 1f * d, 6f * d, 99)
+
+        drawScrews(canvas, paint, 0f, 0f, w, h, d)
+
+        ghostZu?.let { drawGhost(canvas, it[0], it[1], turquoiseC) }
+        ghostLu?.let { drawGhost(canvas, it[0], it[1], luC) }
 
         ax += (targetAx - ax) * 0.18f
         ay += (targetAy - ay) * 0.18f

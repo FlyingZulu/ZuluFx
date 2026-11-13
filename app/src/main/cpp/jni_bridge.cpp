@@ -74,6 +74,12 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetSoloMask(JNIEnv*, jobject, jint m) { if (g) g->setSoloMask(m); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetSynth(JNIEnv*, jobject, jint wave, jfloat atk, jfloat dec,
+        jint oct, jfloat pitch, jfloat tune) {
+    if (g) g->setSynth(wave, atk, dec, oct, pitch, tune);
+}
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeRecordBank(JNIEnv*, jobject, jint bank, jint steps, jboolean wet) { if (g) g->recordBank(bank, steps, wet); }
 
 JNIEXPORT void JNICALL

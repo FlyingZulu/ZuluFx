@@ -21,6 +21,7 @@ class AudioEngine {
     external fun nativeSetAssign(axis: Int, p: Int)
     external fun nativeSetBend(b: Boolean, x: Float, level: Float)
     external fun nativeSetSoloMask(m: Int)
+    external fun nativeSetSynth(wave: Int, atk: Float, dec: Float, oct: Int, pitch: Float, tune: Float)
     external fun nativeBankFrames(bank: Int): Int
     external fun nativeCopyBank(bank: Int, dst: FloatArray): Int
     external fun nativeLoadBank(bank: Int, src: FloatArray, frames: Int)

@@ -95,10 +95,28 @@ float AudioEngine::genSample(float fsr, float bpm) {
                 default: envRate = 1.f / (0.28f * fs); break;
             }
             baseF = 55.f * powf(2.f, degreeToSemi(p[seqStep]) / 12.f);
+            if (t <= 4) {
+                baseF *= pitchFactor();
+                float dec = synDecay.load();
+                if (dec < 0.25f) dec = 0.25f;
+                if (dec > 4.f) dec = 4.f;
+                envRate /= dec;
+                float atk = synAtk.load();
+                if (atk > 0.002f) {
+                    env = 0.f;
+                    envAtkRate = 1.f / (atk * 0.5f * fs);
+                } else {
+                    env = 1.f;
+                    envAtkRate = 0.f;
+                }
+            }
         }
     }
 
-    if (env > 0.f) env -= envRate * fsr;
+    if (envAtkRate > 0.f) {
+        env += envAtkRate * fsr;
+        if (env >= 1.f) { env = 1.f; envAtkRate = 0.f; }
+    } else if (env > 0.f) env -= envRate * fsr;
     if (env < 0.f) env = 0.f;
 
     switch (t) {
@@ -160,9 +178,36 @@ float AudioEngine::genSample(float fsr, float bpm) {
     return 0.f;
 }
 
+float AudioEngine::pitchFactor() const {
+    float f = powf(2.f, (float)synOct.load());
+    f *= powf(2.f, synPitch.load() / 12.f);
+    f *= powf(2.f, synTune.load() * 100.f / 1200.f);
+    return f;
+}
+
 float AudioEngine::synthSample(int t, float fsr) {
-    if (env > 0.f) env -= envRate * fsr;
-    if (env < 0.f) env = 0.f;
+    if (envAtkRate > 0.f) {
+        env += envAtkRate * fsr;
+        if (env >= 1.f) { env = 1.f; envAtkRate = 0.f; }
+    } else if (env > 0.f) {
+        env -= envRate * fsr;
+        if (env < 0.f) env = 0.f;
+    }
+
+    int w = synWave.load();
+    if (w >= 0) {
+        oscPhase += baseF * fsr;
+        if (oscPhase >= 1.f) oscPhase -= 1.f;
+        float a = 0.f;
+        switch (w) {
+            case 1: a = (oscPhase < 0.5f ? 1.f : -1.f) * 0.32f; break;
+            case 2: a = sinf(2.f * 3.14159265f * oscPhase) * 0.55f; break;
+            case 3: a = (oscPhase < 0.5f ? oscPhase * 4.f - 1.f : 3.f - 4.f * oscPhase) * 0.45f; break;
+            default: a = (oscPhase * 2.f - 1.f) * 0.45f; break;
+        }
+        return a * env;
+    }
+
     switch (t) {
         case 1: {
             oscPhase += baseF * fsr;
@@ -226,8 +271,7 @@ void AudioEngine::arpFire() {
             noiseState = noiseState * 1103515245u + 12345u;
             if ((noiseState >> 16) % 4u == 0u) deg += len;
         }
-        baseF = 55.f * powf(2.f, degreeToSemi(deg) / 12.f);
-        env = 1.f;
+        baseF = 55.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor();
         fmPhase = 0.f;
         static const float gates[4] = {0.25f, 0.5f, 0.75f, 1.f};
         int gi = arpGate.load();
@@ -236,7 +280,18 @@ void AudioEngine::arpFire() {
         int ri = arpRate.load();
         if (ri < 0 || ri > 3) ri = 1;
         float stepDur = (60.f / fmaxf(bpm.load(), 40.f)) / divs[ri];
-        envRate = 1.f / (gates[gi] * stepDur * fs);
+        float dec = synDecay.load();
+        if (dec < 0.25f) dec = 0.25f;
+        if (dec > 4.f) dec = 4.f;
+        envRate = 1.f / (gates[gi] * stepDur * fs) / dec;
+        float atk = synAtk.load();
+        if (atk > 0.002f) {
+            env = 0.f;
+            envAtkRate = 1.f / (atk * 0.5f * fs);
+        } else {
+            env = 1.f;
+            envAtkRate = 0.f;
+        }
     }
 
     if (mode == 4) return;

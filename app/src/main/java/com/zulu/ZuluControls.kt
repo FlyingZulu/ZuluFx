@@ -17,6 +17,34 @@ private val needleRed = Color.rgb(200, 60, 40)
 private val amber = Color.rgb(255, 176, 0)
 private val silk = Color.rgb(165, 172, 185)
 
+internal fun drawScrews(
+    canvas: Canvas,
+    paint: Paint,
+    l: Float,
+    t: Float,
+    r: Float,
+    b: Float,
+    d: Float
+) {
+    val inset = 7f * d
+    val rad = 2.2f * d
+    val pts = listOf(
+        l + inset to t + inset, r - inset to t + inset,
+        l + inset to b - inset, r - inset to b - inset
+    )
+    for ((x, y) in pts) {
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(55, 60, 72)
+        canvas.drawCircle(x, y, rad, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 0.8f * d
+        paint.color = Color.rgb(110, 118, 134)
+        canvas.drawCircle(x, y, rad, paint)
+        canvas.drawLine(x - rad * 0.7f, y - rad * 0.7f, x + rad * 0.7f, y + rad * 0.7f, paint)
+        paint.style = Paint.Style.FILL
+    }
+}
+
 internal fun drawSketchyRoundRect(
     canvas: Canvas,
     paint: Paint,
@@ -348,6 +376,7 @@ class PadGridView(context: Context) : View(context) {
                 canvas.drawCircle(l + padW / 2f, t + padH / 2f, 2.5f * d, paint)
             }
         }
+        drawScrews(canvas, paint, 0f, 0f, w, h, d)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -437,6 +466,13 @@ class FlyFaderView(context: Context) : View(context) {
         val kx = m + value * (w - 2f * m)
         paint.fill(amber)
         canvas.drawRoundRect(kx - 8f * d, cy - 13f * d, kx + 8f * d, cy + 13f * d, 4f * d, 4f * d, paint)
+        paint.fill(Color.WHITE)
+        paint.alpha = 40
+        canvas.drawRect(kx - 7f * d, cy - 12f * d, kx + 7f * d, cy, paint)
+        paint.fill(Color.BLACK)
+        paint.alpha = 45
+        canvas.drawRect(kx - 7f * d, cy, kx + 7f * d, cy + 12f * d, paint)
+        paint.alpha = 255
         paint.stroke(if (stutter) Color.WHITE else silk, 1.2f * d)
         paint.alpha = if (stutter) 220 else 90
         canvas.drawRoundRect(kx - 8f * d, cy - 13f * d, kx + 8f * d, cy + 13f * d, 4f * d, 4f * d, paint)
@@ -588,6 +624,13 @@ class VFaderView(
         val tc = currentThumbColor()
         paint.fill(tc)
         canvas.drawRoundRect(kx - 8f * d, cy - th / 2f, kx + 8f * d, cy + th / 2f, 4f * d, 4f * d, paint)
+        paint.fill(Color.WHITE)
+        paint.alpha = 40
+        canvas.drawRect(kx - 7f * d, cy - th / 2f + 1f, kx + 7f * d, cy, paint)
+        paint.fill(Color.BLACK)
+        paint.alpha = 45
+        canvas.drawRect(kx - 7f * d, cy, kx + 7f * d, cy + th / 2f - 1f, paint)
+        paint.alpha = 255
         paint.stroke(Color.WHITE, 1.2f * d)
         paint.alpha = 90
         canvas.drawRoundRect(kx - 8f * d, cy - th / 2f, kx + 8f * d, cy + th / 2f, 4f * d, 4f * d, paint)
