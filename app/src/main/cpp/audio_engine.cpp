@@ -419,7 +419,9 @@ void AudioEngine::setFx(int fx, bool on) {
         0.7f, 0.8f, 0.7f, 0.7f, 0.65f, 0.6f,
         0.6f,
         0.8f, 0.8f, 0.8f,
-        0.8f, 0.8f, 0.8f
+        0.8f, 0.8f, 0.8f,
+        1.0f, 1.0f, 1.0f, 1.0f,
+        1.0f, 1.0f
     };
     fxWet[fx].store(on ? defWet[fx] : 0.f);
 }
@@ -570,6 +572,126 @@ void AudioEngine::stopRec() {
         lb.pos = 0;
     }
     recBank = -1;
+}
+
+float AudioEngine::inputChain(float x, float fsr) {
+    int prof = inProfile.load(std::memory_order_relaxed);
+    if (prof < 0 || prof > 3) prof = 0;
+    if (inCoefProf != prof || inCoefFs != fsr) {
+        inCoefProf = prof;
+        inCoefFs = fsr;
+        float hp = (prof == 1) ? 60.f : (prof == 2) ? 95.f : (prof == 3) ? 70.f : 20.f;
+        inA = expf(-6.2831853f * hp * fsr);
+        float atk = (prof == 3) ? 5.f : (prof == 2) ? 15.f : (prof == 1) ? 25.f : 2.f;
+        float rel = (prof == 3) ? 120.f : (prof == 2) ? 180.f : (prof == 1) ? 300.f : 60.f;
+        inCa = expf(-1000.f * fsr / atk);
+        inCr = expf(-1000.f * fsr / rel);
+        inHpfX = 0.f; inHpfY = 0.f; inEnv = 0.f; inGr = 1.f;
+    }
+    float y = inA * (inHpfY + x - inHpfX);
+    inHpfX = x;
+    inHpfY = y;
+    x = y;
+    if (prof == 0) {
+        if (x > 0.85f) x = 0.85f + tanhf((x - 0.85f) * 4.f) * 0.12f;
+        else if (x < -0.85f) x = -0.85f + tanhf((x + 0.85f) * 4.f) * 0.12f;
+        return x;
+    }
+    float th = (prof == 3) ? 0.07f : (prof == 2) ? 0.08f : 0.12f;
+    float rate = (prof == 3) ? 6.f : (prof == 2) ? 4.f : 3.f;
+    float makeup = (prof == 3) ? 1.5f : (prof == 2) ? 1.4f : 1.25f;
+    float ax = fabsf(x);
+    inEnv = (ax > inEnv) ? inCa * inEnv + (1.f - inCa) * ax
+                         : inCr * inEnv + (1.f - inCr) * ax;
+    float gr = 1.f;
+    if (inEnv > th) gr = (th + (inEnv - th) / rate) / inEnv;
+    inGr += (gr - inGr) * 0.004f;
+    x *= inGr * makeup;
+    if (prof == 3) {
+        x = tanhf(x * 1.2f) * 0.85f;
+    } else if (x > 0.95f) x = 0.95f; else if (x < -0.95f) x = -0.95f;
+    return x;
+}
+
+void AudioEngine::eqSetCoefs(float fs) {
+    const float dbL = 2.5f, dbM = -1.f, dbH = 2.f;
+    const float fc[3] = {120.f, 1000.f, 7000.f};
+    EqBiquad* ch[3] = {eqXL, 0, eqXR};
+    (void)ch;
+    struct Cfg { float db; float q; int type; };
+    const Cfg cfg[3] = {{dbL, 0.7f, 0}, {dbM, 0.8f, 1}, {dbH, 0.7f, 2}};
+    for (int b = 0; b < 3; b++) {
+        float A = powf(10.f, cfg[b].db / 40.f);
+        float w0 = 6.2831853f * fc[b] / fs;
+        float cw = cosf(w0), sw = sinf(w0);
+        float al, b0, b1, b2, a0, a1, a2;
+        if (cfg[b].type == 1) {
+            al = sw / (2.f * cfg[b].q);
+            b0 = 1.f + al * A; b1 = -2.f * cw; b2 = 1.f - al * A;
+            a0 = 1.f + al / A; a1 = -2.f * cw; a2 = 1.f - al / A;
+        } else {
+            al = sw / 2.f * sqrtf((A + 1.f / A) * (1.f / 0.7f - 1.f) + 2.f);
+            b0 = A * ((A + 1.f) - (A - 1.f) * cw + 2.f * sqrtf(A) * al);
+            b1 = 2.f * A * ((A - 1.f) - (A + 1.f) * cw);
+            b2 = A * ((A + 1.f) - (A - 1.f) * cw - 2.f * sqrtf(A) * al);
+            a0 = (A + 1.f) + (A - 1.f) * cw + 2.f * sqrtf(A) * al;
+            a1 = -2.f * ((A - 1.f) + (A + 1.f) * cw);
+            a2 = (A + 1.f) + (A - 1.f) * cw - 2.f * sqrtf(A) * al;
+        }
+        EqBiquad* targets[3] = {&eqIn[b], &eqXL[b], &eqXR[b]};
+        for (int t = 0; t < 3; t++) {
+            EqBiquad* q = targets[t];
+            q->b0 = b0 / a0; q->b1 = b1 / a0; q->b2 = b2 / a0;
+            q->a1 = a1 / a0; q->a2 = a2 / a0;
+        }
+    }
+    eqFs = fs;
+    eqCoefOk = true;
+}
+
+float AudioEngine::eqProc(EqBiquad* ch, float x) {
+    for (int b = 0; b < 3; b++) x = ch[b].proc(x);
+    return x;
+}
+
+void AudioEngine::setAxisTargets(int axis, const float* idxs, const float* modes, int n) {
+    if (axis < 0 || axis > 1) return;
+    for (int i = 0; i < 8; i++) {
+        int t = (i < n) ? (int)idxs[i] : -1;
+        axisTg[axis][i].store(t, std::memory_order_relaxed);
+        axisMode[axis][i] = (i < n) ? (unsigned char)((int)modes[i] & 3) : 0;
+        axisHold[axis][i] = 0.f;
+    }
+}
+
+void AudioEngine::eq3SetCoefs(float fs, float gl, float gm, float gh) {
+    float g[3] = {gl * 24.f - 12.f, gm * 24.f - 12.f, gh * 24.f - 12.f};
+    float fc[3] = {150.f, 900.f, 6000.f};
+    for (int b = 0; b < 3; b++) {
+        float A = powf(10.f, g[b] / 40.f);
+        float w0 = 6.2831853f * fc[b] / fs;
+        float cw = cosf(w0), sw = sinf(w0);
+        float al, b0, b1, b2, a0, a1, a2;
+        if (b == 1) {
+            al = sw / 1.8f;
+            b0 = 1.f + al * A; b1 = -2.f * cw; b2 = 1.f - al * A;
+            a0 = 1.f + al / A; a1 = -2.f * cw; a2 = 1.f - al / A;
+        } else {
+            al = sw / 2.f * sqrtf((A + 1.f / A) * (1.f / 0.7f - 1.f) + 2.f);
+            b0 = A * ((A + 1.f) - (A - 1.f) * cw + 2.f * sqrtf(A) * al);
+            b1 = 2.f * A * ((A - 1.f) - (A + 1.f) * cw);
+            b2 = A * ((A + 1.f) - (A - 1.f) * cw - 2.f * sqrtf(A) * al);
+            a0 = (A + 1.f) + (A - 1.f) * cw + 2.f * sqrtf(A) * al;
+            a1 = -2.f * ((A - 1.f) + (A + 1.f) * cw);
+            a2 = (A + 1.f) + (A - 1.f) * cw - 2.f * sqrtf(A) * al;
+        }
+        EqBiquad* ts[2] = {&eq3L[b], &eq3R[b]};
+        for (int t = 0; t < 2; t++) {
+            ts[t]->b0 = b0 / a0; ts[t]->b1 = b1 / a0; ts[t]->b2 = b2 / a0;
+            ts[t]->a1 = a1 / a0; ts[t]->a2 = a2 / a0;
+        }
+    }
+    eq3Fs = fs;
 }
 
 void AudioEngine::undoBankRec() {
@@ -748,7 +870,11 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
     for (int i = 0; i < numFrames; i++) {
         float inS;
         if (mic) {
-            inS = src[i] * inGain.load(std::memory_order_relaxed);
+            inS = inputChain(src[i] * inGain.load(std::memory_order_relaxed) * inBoost.load(std::memory_order_relaxed), fsr);
+            if (masterEq.load(std::memory_order_relaxed)) {
+                if (!eqCoefOk || eqFs != 1.f / fsr) eqSetCoefs(1.f / fsr);
+                inS = eqProc(eqIn, inS);
+            }
         } else {
             inS = genSample(fsr, fmaxf(bpm.load(), 40.f)) * inGain.load(std::memory_order_relaxed);
         }
@@ -795,6 +921,101 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 fxAxisMask[i2 / 8] |= (unsigned char)(1u << (i2 % 8));
                 fxAxisVal[i2 / 8][i2 % 8] = clamp01(ay.load());
             }
+            for (int a2 = 0; a2 < 2; a2++) {
+                float av = clamp01(a2 == 0 ? ax.load() : ay.load());
+                for (int i2 = 0; i2 < 8; i2++) {
+                    int tg = axisTg[a2][i2].load(std::memory_order_relaxed);
+                    if (tg < 0) continue;
+                    int md = axisMode[a2][i2];
+                    float v = av;
+                    if (md == 1) {
+                        v = 1.f - av;
+                    } else if (md >= 2) {
+                        if (axisShClk == 0) {
+                            if (md == 2) {
+                                axisHold[a2][i2] = av;
+                            } else {
+                                noiseState = noiseState * 1103515245u + 12345u;
+                                float r = (float)(noiseState >> 16) / 65536.f - 1.f;
+                                float j = av + r * 0.22f;
+                                axisHold[a2][i2] = j < 0.f ? 0.f : (j > 1.f ? 1.f : j);
+                            }
+                        }
+                        v = axisHold[a2][i2];
+                    }
+                    if (tg < 8) {
+                        applyAssign(tg, v, fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+                    } else {
+                        int i3 = tg - 8;
+                        fxAxisMask[i3 / 8] |= (unsigned char)(1u << (i3 % 8));
+                        fxAxisVal[i3 / 8][i3 % 8] = v;
+                    }
+                }
+            }
+            int nm = netMode.load(std::memory_order_relaxed);
+            if (nm > 0) {
+                float nch = clamp01(netChaos.load(std::memory_order_relaxed));
+                float nmd = clamp01(netMod.load(std::memory_order_relaxed));
+                float nal = clamp01(netAlias.load(std::memory_order_relaxed));
+                int nsp = (int)(clamp01(netSpeed.load(std::memory_order_relaxed)) * 3.f + 0.5f);
+                int div = 64 >> nsp;
+                if (div < 8) div = 8;
+                netClk++;
+                float avv[2] = {clamp01(ax.load()), clamp01(ay.load())};
+                if ((netClk & 7) == 0) {
+                    for (int a2 = 0; a2 < 2; a2++) {
+                        netBird[a2][netBirdPos[a2]] = avv[a2];
+                        netBirdPos[a2] = (netBirdPos[a2] + 1) & 15;
+                    }
+                }
+                float jit = 0.f;
+                bool burst = (netClk % div) == 0;
+                if (burst) {
+                    noiseState = noiseState * 1103515245u + 12345u;
+                    jit = ((float)(noiseState >> 16) / 65536.f - 1.f) * nch;
+                }
+                if (nm == 7) {
+                    netPhase += 32.f / (fs * 9.f);
+                    if (netPhase >= 1.f) netPhase -= 1.f;
+                }
+                for (int a2 = 0; a2 < 2; a2++) {
+                    int aO = 1 - a2;
+                    float bird = netBird[aO][(netBirdPos[aO] - 8 + 16) & 15];
+                    float cross = (avv[aO] - 0.5f) * nmd;
+                    for (int i2 = 0; i2 < 8; i2++) {
+                        int tg = axisTg[a2][i2].load(std::memory_order_relaxed);
+                        if (tg < 8) continue;
+                        int i3 = tg - 8;
+                        float v = fxAxisVal[i3 / 8][i3 % 8];
+                        if (nm == 1) {
+                            v += cross * 0.5f + jit * 0.12f;
+                        } else if (nm == 2) {
+                            v += cross * 0.3f + jit * 0.04f;
+                        } else if (nm == 3) {
+                            v += jit * 0.45f + cross * 0.2f;
+                            if (nal > 0.001f) {
+                                float st = 0.5f - nal * 0.42f;
+                                v = floorf(v / st + 0.5f) * st;
+                            }
+                        } else if (nm == 4) {
+                            v += jit * 0.85f + cross * 1.6f;
+                        } else if (nm == 5) {
+                            v += (bird - 0.5f) * nmd * 0.9f + jit * 0.1f;
+                        } else if (nm == 6) {
+                            if (burst) v += jit * 0.5f;
+                            if ((netClk / 3) & 1) v += cross * 0.3f;
+                        } else {
+                            v += (sinf(netPhase * 6.2831853f) * 0.5f + 0.5f) * nmd * 0.4f
+                                 + cross * 0.2f;
+                        }
+                        if (v < 0.f) v = 0.f;
+                        if (v > 1.f) v = 1.f;
+                        fxAxisVal[i3 / 8][i3 % 8] = v;
+                    }
+                }
+            }
+            axisShClk++;
+            if (axisShClk >= 192) axisShClk = 0;
             static const float clfoRates[6] = {0.25f, 0.5f, 1.f, 2.f, 4.f, 8.f};
             for (int L = 0; L < 2; L++) {
                 if (!clfoOn[L].load(std::memory_order_relaxed)) continue;
@@ -2109,6 +2330,111 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             }
         }
 
+
+        {
+            float w = fxWet[40].load();
+            if (w > 0.001f) {
+                if (!eq3Ok || eq3Fs != 1.f / fsr || (eq3Clk++ & 31) == 0) {
+                    eq3SetCoefs(1.f / fsr, fxP(40, 0), fxP(40, 1), fxP(40, 2));
+                    eq3Ok = true;
+                }
+                float lv = 0.5f + fxP(40, 3) * 1.3f;
+                float sl = eqProc(eq3L, outL) * lv;
+                float sr = eqProc(eq3R, outR) * lv;
+                outL = outL * (1.f - w) + sl * w;
+                outR = outR * (1.f - w) + sr * w;
+            }
+        }
+        {
+            float w = fxWet[41].load();
+            if (w > 0.001f) {
+                float th = 0.05f + fxP(41, 0) * 0.6f;
+                float rt = 1.f + fxP(41, 1) * 9.f;
+                float rel = expf(-1000.f * fsr / (50.f + fxP(41, 2) * 450.f));
+                float mk = 1.f + fxP(41, 3) * 1.5f;
+                float axm = fmaxf(fabsf(outL), fabsf(outR));
+                cmpEnv = (axm > cmpEnv) ? cmpEnv + (axm - cmpEnv) * 0.004f
+                                        : cmpEnv + (axm - cmpEnv) * rel;
+                float gr = 1.f;
+                if (cmpEnv > th) gr = (th + (cmpEnv - th) / rt) / cmpEnv;
+                cmpGr += (gr - cmpGr) * 0.006f;
+                float sl = outL * cmpGr * mk;
+                float sr = outR * cmpGr * mk;
+                outL = outL * (1.f - w) + sl * w;
+                outR = outR * (1.f - w) + sr * w;
+            }
+        }
+        {
+            float w = fxWet[42].load();
+            if (w > 0.001f) {
+                float dr = 1.f + fxP(42, 0) * 5.f;
+                float tn = 0.08f + fxP(42, 1) * 0.5f;
+                float lv = 0.5f + fxP(42, 2) * 1.f;
+                float nl = tanhf(dr), nr = tanhf(dr);
+                float sl = tanhf(outL * dr) / nl;
+                float sr = tanhf(outR * dr) / nr;
+                warmLpL += tn * (sl - warmLpL);
+                warmLpR += tn * (sr - warmLpR);
+                outL = outL * (1.f - w) + warmLpL * lv * w;
+                outR = outR * (1.f - w) + warmLpR * lv * w;
+            }
+        }
+        {
+            float w = fxWet[43].load();
+            if (w > 0.001f) {
+                float hp = expf(-6.2831853f * (20.f + fxP(43, 0) * 380.f) * fsr);
+                float lp = 1.f - expf(-6.2831853f * (4000.f + fxP(43, 1) * 12000.f) * fsr);
+                float gt = fxP(43, 2) * 0.12f;
+                float lv = 0.5f + fxP(43, 3) * 1.f;
+                float hl = hp * (clnHpYL + outL - clnHpXL);
+                float hr = hp * (clnHpYR + outR - clnHpXR);
+                clnHpXL = outL; clnHpYL = hl;
+                clnHpXR = outR; clnHpYR = hr;
+                clnLpL += lp * (hl - clnLpL);
+                clnLpR += lp * (hr - clnLpR);
+                float axm = fmaxf(fabsf(clnLpL), fabsf(clnLpR));
+                clnEnv = (axm > clnEnv) ? clnEnv + (axm - clnEnv) * 0.01f
+                                        : clnEnv + (axm - clnEnv) * 0.0005f;
+                float g = clnEnv > gt ? 1.f : 0.f;
+                clnGr += (g - clnGr) * 0.002f;
+                outL = outL * (1.f - w) + clnLpL * clnGr * lv * w;
+                outR = outR * (1.f - w) + clnLpR * clnGr * lv * w;
+            }
+        }
+        {
+            float w = fxWet[44].load();
+            if (w > 0.001f) {
+                float fz = 1.f + fxP(44, 0) * 24.f;
+                float tn = 0.1f + fxP(44, 1) * 0.55f;
+                float lv = 0.3f + fxP(44, 2) * 0.9f;
+                float axm = fmaxf(fabsf(outL), fabsf(outR));
+                fzEnv = (axm > fzEnv) ? fzEnv + (axm - fzEnv) * 0.05f
+                                      : fzEnv + (axm - fzEnv) * 0.0006f;
+                float gl = fz / (1.f + fzEnv * 1.5f);
+                float sl = (outL > 0.f) ? tanhf(outL * gl * 1.6f) : tanhf(outL * gl * 0.55f) * 1.8f;
+                float sr = (outR > 0.f) ? tanhf(outR * gl * 1.6f) : tanhf(outR * gl * 0.55f) * 1.8f;
+                fzLpL += tn * (sl - fzLpL);
+                fzLpR += tn * (sr - fzLpR);
+                outL = outL * (1.f - w) + fzLpL * lv * w;
+                outR = outR * (1.f - w) + fzLpR * lv * w;
+            }
+        }
+        {
+            float w = fxWet[45].load();
+            if (w > 0.001f) {
+                float gn = 1.f + fxP(45, 0) * 20.f;
+                float tn = 0.12f + fxP(45, 1) * 0.55f;
+                float lv = 0.3f + fxP(45, 2) * 0.9f;
+                float dl = outL * gn, dr = outR * gn;
+                dl = dl / (1.f + fabsf(dl)) * 1.6f;
+                dr = dr / (1.f + fabsf(dr)) * 1.6f;
+                dsLpL += tn * (dl - dsLpL);
+                dsLpR += tn * (dr - dsLpR);
+                outL = outL * (1.f - w) + dsLpL * lv * w;
+                outR = outR * (1.f - w) + dsLpR * lv * w;
+            }
+        }
+
         if (drumPos >= 0.f) {
             LoopBank& lb = banks[drumBank.load(std::memory_order_relaxed)];
             if (lb.buf && lb.samples > 4 && drumPos < drumEnd) {
@@ -2128,6 +2454,28 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
 
         outL += dryL * kLoopGain;
         outR += dryR * kLoopGain;
+
+        {
+            float ob = outBoost.load(std::memory_order_relaxed);
+            if (ob != 1.f) { outL *= ob; outR *= ob; }
+        }
+
+        if (masterEq.load(std::memory_order_relaxed)) {
+            if (!eqCoefOk || eqFs != 1.f / fsr) eqSetCoefs(1.f / fsr);
+            outL = eqProc(eqXL, outL);
+            outR = eqProc(eqXR, outR);
+        }
+
+        if (outLoud.load(std::memory_order_relaxed)) {
+            float axm = fmaxf(fabsf(outL), fabsf(outR));
+            loudEnv = (axm > loudEnv) ? loudEnv + (axm - loudEnv) * 0.02f
+                                      : loudEnv + (axm - loudEnv) * 0.0008f;
+            float gr = 1.f;
+            if (loudEnv > 0.25f) gr = (0.25f + (loudEnv - 0.25f) / 3.f) / loudEnv;
+            loudGr += (gr - loudGr) * 0.01f;
+            outL *= loudGr * 1.6f;
+            outR *= loudGr * 1.6f;
+        }
 
         if (outL > 0.95f) outL = 0.95f + (outL - 0.95f) / (1.f + (outL - 0.95f) * (outL - 0.95f) * 40.f);
         else if (outL < -0.95f) outL = -0.95f + (outL + 0.95f) / (1.f + (outL + 0.95f) * (outL + 0.95f) * 40.f);

@@ -127,7 +127,12 @@ class MainActivity : Activity() {
         val punchCol2: Int = 0,
         val motA: FloatArray? = null,
         val motB: FloatArray? = null,
-        val motLen: Int = 0
+        val motLen: Int = 0,
+        val axMulti: List<Int>? = null,
+        val ayMulti: List<Int>? = null,
+        val axCurve: IntArray? = null,
+        val ayCurve: IntArray? = null,
+        val masterFxList: List<Int>? = null
     )
     private val snapPads = arrayOfNulls<Snap>(14)
     private var activeZu = -1
@@ -161,9 +166,9 @@ class MainActivity : Activity() {
     private var punchCol = 0
     private var paramView: ParamPageView? = null
     private var paramFx = -1
-    private val fxParamInit = BooleanArray(40)
-    private val fxParamVals = Array(40) { FloatArray(8) }
-    private val fxParamAssign = Array(40) { IntArray(8) }
+    private val fxParamInit = BooleanArray(46)
+    private val fxParamVals = Array(46) { FloatArray(8) }
+    private val fxParamAssign = Array(46) { IntArray(8) }
     private val fxParamDefs = mapOf(
         27 to listOf("TEMPS", "FB", "TONAL", "SAT"),
         28 to listOf("GRAVE", "AIGU", "DRIVE", "HUM"),
@@ -177,7 +182,13 @@ class MainActivity : Activity() {
         36 to listOf("SLICES", "RANDOM", "PITCH", "NIVEAU"),
         37 to listOf("GATE", "PITCH", "ORDRE", "NIVEAU"),
         38 to listOf("DENSITE", "TAILLE", "NUAGE", "NIVEAU"),
-        39 to listOf("POINT", "TAILLE", "VITESSE", "NIVEAU")
+        39 to listOf("POINT", "TAILLE", "VITESSE", "NIVEAU"),
+        40 to listOf("GRAVE", "MED", "AIGU", "NIVEAU"),
+        41 to listOf("SEUIL", "RATIO", "REPRISE", "NIVEAU"),
+        42 to listOf("DRIVE", "TONAL", "NIVEAU"),
+        43 to listOf("GRAVE", "AIGU", "GATE", "NIVEAU"),
+        44 to listOf("FUZZ", "TONAL", "NIVEAU"),
+        45 to listOf("GAIN", "TONAL", "NIVEAU")
     )
     private val fxParamDefaults = mapOf(
         27 to floatArrayOf(0.45f, 0.8f, 0.22f, 0.2f),
@@ -192,7 +203,13 @@ class MainActivity : Activity() {
         36 to floatArrayOf(0.4f, 0.5f, 0.5f, 0.6f),
         37 to floatArrayOf(0.4f, 0.5f, 0f, 0.6f),
         38 to floatArrayOf(0.4f, 0.3f, 0.25f, 0.6f),
-        39 to floatArrayOf(0.3f, 0.3f, 0.5f, 0.6f)
+        39 to floatArrayOf(0.3f, 0.3f, 0.5f, 0.6f),
+        40 to floatArrayOf(0.65f, 0.5f, 0.6f, 0.6f),
+        41 to floatArrayOf(0.35f, 0.35f, 0.4f, 0.6f),
+        42 to floatArrayOf(0.35f, 0.5f, 0.6f),
+        43 to floatArrayOf(0.3f, 0.7f, 0.2f, 0.6f),
+        44 to floatArrayOf(0.45f, 0.5f, 0.55f),
+        45 to floatArrayOf(0.4f, 0.55f, 0.5f)
     )
     private var sendPadBank = -1
     private var sendPadAt = 0L
@@ -201,9 +218,9 @@ class MainActivity : Activity() {
     private var muteComboAt = 0L
     private var globalSaveArmed = false
     private var globalSaveAt = 0L
-    private val bankFxMask = Array(8) { BooleanArray(40) }
+    private val bankFxMask = Array(8) { BooleanArray(46) }
     private val bankOn = BooleanArray(8)
-    private val rackBackup = BooleanArray(40)
+    private val rackBackup = BooleanArray(46)
     private var rackBackedUp = false
     private var heldFxSlot = -1
     private var heldBankPad = -1
@@ -264,33 +281,36 @@ class MainActivity : Activity() {
         Color.rgb(236, 224, 196),
         Color.rgb(235, 255, 40),
         Color.rgb(255, 120, 80),
-        Color.rgb(0, 255, 170)
+        Color.rgb(0, 255, 170),
+        Color.rgb(190, 190, 255)
     )
 
     private val fxSections = listOf(
         "FILTRE" to listOf("LPF", "HPF", "BPF", "NOTCH", "PHASER"),
         "MODULATION" to listOf("TREMOLO", "AUTOPAN", "FLANGER", "CHORUS", "RING", "TALK", "WARP"),
         "TEMPS" to listOf("DELAY", "ECHO", "DUB", "REVERB", "FREEZE", "STOP", "REPEAT", "REVERSE", "SCRATCH"),
-        "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "TAPE", "GATER", "FOLD", "MEGA"),
+        "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "TAPE", "GATER", "FOLD", "MEGA", "FUZZ", "DISTO"),
         "RESONANCE" to listOf("RESO", "SPRING", "RINGS"),
         "GRANULAIRE" to listOf("GRAIN", "JUNGLE"),
         "TRANSITIONS" to listOf("TRANSIT", "COMBUSTOR", "TURNADO", "FALL", "SWELL", "PUMP"),
         "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "KICK", "SNARE", "HAT"),
-        "LECTURE SAMPLE" to listOf("SPLY", "GRAN", "JGL", "RND", "SLICR", "CLOUD", "FRZ")
+        "LECTURE SAMPLE" to listOf("SPLY", "GRAN", "JGL", "RND", "SLICR", "CLOUD", "FRZ"),
+        "STUDIO" to listOf("EQ3", "COMP", "WARM", "CLEAN")
     )
 
     private val fxCodes = listOf(
         "F0", "F1", "F2", "F3", "X2",
         "X3", "X4", "X5", "X6", "X7", "X31", "X30",
         "X0", "X1", "X27", "P2", "X10", "X12", "X13", "X14", "X18",
-        "P3", "P7", "X8", "X29", "X9", "X17", "X28",
+        "P3", "P7", "X8", "X29", "X9", "X17", "X28", "X44", "X45",
         "X15", "X16", "X32",
         "X19", "X20",
         "X21", "X22", "X23", "X24", "X25", "X26",
         "G0", "G13", "G14", "G12", "G5", "G6", "G7",
-        "X33", "X34", "X35", "X36", "X37", "X38", "X39"
+        "X33", "X34", "X35", "X36", "X37", "X38", "X39",
+        "X40", "X41", "X42", "X43"
     )
-    private val fxActive = BooleanArray(40)
+    private val fxActive = BooleanArray(46)
     private val paramActive = BooleanArray(8)
     private val paramDefaults = floatArrayOf(0f, 0f, 0.35f, 0.3f, 0f, 0f, 0f, 0.4f)
     private var genIdx = 0
@@ -312,6 +332,38 @@ class MainActivity : Activity() {
     private var bMotionBtn: Button? = null
     private var verticalUi = false
     private val menuOrientButtons = ArrayList<Button>()
+    private val menuSnapButtons = ArrayList<Button>()
+    private val menuInButtons = ArrayList<Button>()
+    private var inProfileSel = 0
+    private val menuEqButtons = ArrayList<Button>()
+    private var masterEqOn = false
+    private val menuBoostInButtons = ArrayList<Button>()
+    private val menuBoostOutButtons = ArrayList<Button>()
+    private var inBoostSel = 0
+    private var outBoostSel = 0
+    private val menuLoudButtons = ArrayList<Button>()
+    private var outLoudOn = false
+    private val menuNetButtons = ArrayList<Button>()
+    private var netModeSel = 0
+    private val menuNetChaosButtons = ArrayList<Button>()
+    private var netChaosSel = 1
+    private val menuNetModButtons = ArrayList<Button>()
+    private var netModSel = 1
+    private val menuNetAliasButtons = ArrayList<Button>()
+    private var netAliasSel = 0
+    private val menuNetSpeedButtons = ArrayList<Button>()
+    private var netSpeedSel = 1
+    private val masterFx = HashSet<Int>()
+    private val snapFxOverride = HashMap<Int, Boolean>()
+    private val axisMulti = Array(2) { ArrayList<Int>() }
+    private val axisCurve = Array(2) { IntArray(10) }
+    private var assignArm = -1
+    private var assignBlinkOn = false
+    private val curveNames = listOf("NORM", "INV", "S&H", "BOUILLON")
+    private var snapTransp = true
+    private var snapHold = false
+    private val snapHoldOld = HashMap<String, Float>()
+    private val snapHoldFx = HashMap<Int, FloatArray>()
     private var fRecTap = false
     private var zRecTap = false
     private var sceneSide = 0
@@ -378,6 +430,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         verticalUi = getSharedPreferences("zulu", MODE_PRIVATE).getBoolean("verticalUi", false)
+        snapTransp = getSharedPreferences("zulu", MODE_PRIVATE).getBoolean("snapTransp", true)
         requestedOrientation =
             if (verticalUi) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -404,12 +457,14 @@ class MainActivity : Activity() {
 
         pad.waveform = placeholderWaveform()
         pad.onAxisChange = { ax, ay, bx, by ->
-            engine.nativeSetAx(ax)
-            engine.nativeSetAy(ay)
-            engine.nativeSetBx(bx)
-            engine.nativeSetBy(by)
+            if (!(snapHold && snapTransp)) {
+                engine.nativeSetAx(ax)
+                engine.nativeSetAy(ay)
+                engine.nativeSetBx(bx)
+                engine.nativeSetBy(by)
+                if (arpOn && arpMode == 4) engine.nativeSetArpXy(ax, true)
+            }
             padAxisX = ax
-            if (arpOn && arpMode == 4) engine.nativeSetArpXy(ax, true)
         }
         pad.onPadTouchState = { t ->
             if (!t) engine.nativeSetArpXy(padAxisX, false)
@@ -606,6 +661,10 @@ class MainActivity : Activity() {
                         }
                         fRecTap = true
                         refreshBlink()
+                    } else if (fxOpen) {
+                        fRecTap = true
+                        if (assignArm == 0) exitAssignMode() else armAssign(0)
+                        refreshBlink()
                     } else {
                         fRecTap = false
                         if (shiftActive() && sendPadBank >= 0 &&
@@ -649,6 +708,10 @@ class MainActivity : Activity() {
                             Toast.makeText(this, "REC WET Z " + (if (loopWetB) "ON" else "OFF"), Toast.LENGTH_SHORT).show()
                         }
                         zRecTap = true
+                        refreshBlink()
+                    } else if (fxOpen) {
+                        zRecTap = true
+                        if (assignArm == 1) exitAssignMode() else armAssign(1)
                         refreshBlink()
                     } else {
                         zRecTap = false
@@ -991,13 +1054,47 @@ class MainActivity : Activity() {
         ppage.onParam = { k, v ->
             val fx = paramFx
             if (fx >= 0) {
-                fxParamVals[fx][k] = v
-                engine.nativeSetFxParam(fx, k, v)
+                if (snapHold && snapQuietFor(fx)) {
+                    if (!snapHoldFx.containsKey(fx)) snapHoldFx[fx] = fxParamVals[fx].copyOf()
+                    fxParamVals[fx][k] = v
+                } else {
+                    fxParamVals[fx][k] = v
+                    engine.nativeSetFxParam(fx, k, v)
+                }
             }
         }
         ppage.onAssignCycle = { k -> cycleParamAssign(k) }
         ppage.onExit = { closeParamPage() }
         ppage.shiftCheck = { shiftActive() }
+        ppage.onMasterToggle = {
+            val fx = paramFx
+            if (fx >= 0) {
+                if (masterFx.contains(fx)) {
+                    masterFx.remove(fx)
+                    Toast.makeText(this, "FX RETIRE DU MASTER", Toast.LENGTH_SHORT).show()
+                } else {
+                    masterFx.add(fx)
+                    Toast.makeText(this, "FX ROUTE AU MASTER", Toast.LENGTH_SHORT).show()
+                }
+                ppage.masterOn = masterFx.contains(fx)
+                ppage.refresh()
+                refreshFxHighlight()
+            }
+        }
+        ppage.onSnapToggle = {
+            val fx = paramFx
+            if (fx >= 0) {
+                val next = when (snapFxOverride[fx]) { null -> 1; true -> 2; else -> 0 }
+                if (next == 0) snapFxOverride.remove(fx) else snapFxOverride[fx] = (next == 1)
+                ppage.snapMode = next
+                ppage.refresh()
+                Toast.makeText(
+                    this,
+                    "SNAP : " + if (next == 1) "SILENCE" else if (next == 2) "SON" else "AUTO (MENU)",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
         paramView = ppage
         padPane.addView(
             ppage,
@@ -1439,19 +1536,19 @@ class MainActivity : Activity() {
                         when (code[0]) {
                             'F' -> {
                                 activeFilter = num
-                                engine.nativeSetFilterType(num)
+                                if (!(snapHold && snapTransp)) engine.nativeSetFilterType(num)
                             }
                             'X' -> {
                                 if ((shiftActive() || editFxMode) && fxParamDefs.containsKey(num)) {
                                     openParamPage(num)
                                 } else {
                                     fxActive[num] = !fxActive[num]
-                                    engine.nativeSetFx(num, fxActive[num])
+                                    if (!(snapHold && snapQuietFor(num))) engine.nativeSetFx(num, fxActive[num])
                                 }
                             }
                             'P' -> {
                                 paramActive[num] = !paramActive[num]
-                                engine.nativeSetParam(
+                                if (!(snapHold && snapTransp)) engine.nativeSetParam(
                                     num,
                                     if (paramActive[num]) paramDefaults[num] else 0f,
                                     paramActive[num]
@@ -1486,13 +1583,13 @@ class MainActivity : Activity() {
         val bax = makeButton("X : CUTOFF", yellow)
         bax.setOnClickListener {
             assignXIdx = (assignXIdx + 1) % assignNames.size
-            engine.nativeSetAssign(0, assignXIdx)
+            if (!(snapHold && snapTransp)) engine.nativeSetAssign(0, assignXIdx)
             refreshAssignLabels()
         }
         val bay = makeButton("Y : RESO", pink)
         bay.setOnClickListener {
             assignYIdx = (assignYIdx + 1) % assignNames.size
-            engine.nativeSetAssign(1, assignYIdx)
+            if (!(snapHold && snapTransp)) engine.nativeSetAssign(1, assignYIdx)
             refreshAssignLabels()
         }
         btnAssignX = bax
@@ -1533,7 +1630,8 @@ class MainActivity : Activity() {
                 'G' -> genIdx == num
                 else -> false
             }
-            b.setTextColor(if (on) amber else fxButtonCols.getOrElse(i) { silk })
+            val master = code.getOrNull(0) == 'X' && num in masterFx
+            b.setTextColor(if (on) amber else if (master) violet else fxButtonCols.getOrElse(i) { silk })
         }
         refreshPresetRow()
     }
@@ -1552,6 +1650,7 @@ class MainActivity : Activity() {
     private fun closeFx() {
         fxOpen = false
         fxOverlay.visibility = View.GONE
+        exitAssignMode()
     }
 
     private fun buildScalePanel(d: Float) {
@@ -1968,11 +2067,11 @@ class MainActivity : Activity() {
                         arpSlices = o.optInt("arpSlices", 2),
                         assignX = o.optInt("assignX", 0),
                         assignY = o.optInt("assignY", 1),
-                        fxOn = BooleanArray(40) { f ->
+                        fxOn = BooleanArray(46) { f ->
                             val a = o.optJSONArray("fxOn")
                             a != null && f < a.length() && a.optInt(f, 0) == 1
                         },
-                        fxParams = Array(40) { f ->
+                        fxParams = Array(46) { f ->
                             val a = o.optJSONArray("fxP")
                             FloatArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -1980,7 +2079,7 @@ class MainActivity : Activity() {
                                 else 0f
                             }
                         },
-                        fxAssign = Array(40) { f ->
+                        fxAssign = Array(46) { f ->
                             val a = o.optJSONArray("fxA")
                             IntArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -2422,8 +2521,8 @@ class MainActivity : Activity() {
             assignX = assignXIdx,
             assignY = assignYIdx,
             fxOn = fxActive.copyOf(),
-            fxParams = Array(40) { fxParamVals[it].copyOf() },
-            fxAssign = Array(40) { fxParamAssign[it].copyOf() },
+            fxParams = Array(46) { fxParamVals[it].copyOf() },
+            fxAssign = Array(46) { fxParamAssign[it].copyOf() },
             lfoTg = lfoTargets.copyOf()
         )
         pad.userPresets[slot] = true
@@ -2448,7 +2547,7 @@ class MainActivity : Activity() {
         assignYIdx = p.assignY
         engine.nativeSetAssign(0, p.assignX)
         engine.nativeSetAssign(1, p.assignY)
-        for (f in 0 until 40) {
+        for (f in 0 until 46) {
             if (fxActive[f] != p.fxOn[f]) {
                 fxActive[f] = p.fxOn[f]
                 engine.nativeSetFx(f, fxActive[f])
@@ -2458,10 +2557,10 @@ class MainActivity : Activity() {
                 engine.nativeSetFxParam(f, k, fxParamVals[f][k])
             }
         }
-        for (f in 0 until 40) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
+        for (f in 0 until 46) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
         var xT = -1
         val lT = intArrayOf(-1, -1)
-        for (f in 0 until 40) for (k in 0 until 8) {
+        for (f in 0 until 46) for (k in 0 until 8) {
             when (p.fxAssign[f][k]) {
                 1 -> if (xT < 0) xT = 8 + f * 8 + k
                 2 -> if (lT[0] < 0) lT[0] = 8 + f * 8 + k
@@ -2541,6 +2640,7 @@ class MainActivity : Activity() {
             }
             recSnapSide >= 0 && recArmPad > 0 -> {
                 captureSnap(recSnapSide, recArmPad - 1)
+                endSnapHold()
                 recArmed = false
                 recSnapSide = -1
                 recArmPad = -1
@@ -2556,6 +2656,7 @@ class MainActivity : Activity() {
                 recArmed = !recArmed
                 recArmPad = -1
                 recSnapSide = -1
+                endSnapHold()
                 motionSrcA = false
                 motionSrcB = false
                 padGrid.recArmed = recArmed
@@ -2578,6 +2679,7 @@ class MainActivity : Activity() {
             if (n - 1 in zone) {
                 recArmPad = n
                 padGrid.recPad = n - 1
+                beginSnapHold()
                 Toast.makeText(this, "SNAPSHOT PAD $n \u2014 REC = CAPTURER", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(
@@ -2613,6 +2715,7 @@ class MainActivity : Activity() {
         if (recMotion) finalizeMotionRec() else stopSampleRec()
         recArmed = false
         recSnapSide = -1
+        endSnapHold()
         recArmPad = -1
         padGrid.recArmed = false
     }
@@ -2806,7 +2909,7 @@ class MainActivity : Activity() {
     }
 
     private fun wireFaders() {
-        mixFader.onValueChange = { v -> engine.nativeSetMix(v) }
+        mixFader.onValueChange = { v -> if (!(snapHold && snapTransp)) engine.nativeSetMix(v) }
         flyFader.onValueChange = { v, st ->
             engine.nativeSetFly(v)
             engine.nativeSetStutter(st)
@@ -2826,8 +2929,65 @@ class MainActivity : Activity() {
         ax = pad.ax, ay = pad.ay, bx = pad.bx, by = pad.by,
         mix = mixFader.value,
         filter = activeFilter, assignX = assignXIdx, assignY = assignYIdx,
-        punch = punchLatched.copyOf(), punchCol2 = punchCol
+        punch = punchLatched.copyOf(), punchCol2 = punchCol,
+        axMulti = if (axisMulti[0].isEmpty()) null else ArrayList(axisMulti[0]),
+        ayMulti = if (axisMulti[1].isEmpty()) null else ArrayList(axisMulti[1]),
+        axCurve = if (axisMulti[0].isEmpty()) null else axisCurve[0].copyOf(),
+        ayCurve = if (axisMulti[1].isEmpty()) null else axisCurve[1].copyOf(),
+        masterFxList = if (masterFx.isEmpty()) null else ArrayList(masterFx)
     )
+
+    private fun beginSnapHold() {
+        if (snapHold) return
+        snapHold = true
+        snapHoldOld.clear()
+        snapHoldFx.clear()
+        snapHoldOld["ax"] = pad.ax
+        snapHoldOld["ay"] = pad.ay
+        snapHoldOld["bx"] = pad.bx
+        snapHoldOld["by"] = pad.by
+        snapHoldOld["mix"] = mixFader.value
+        snapHoldOld["filter"] = activeFilter.toFloat()
+        snapHoldOld["axi"] = assignXIdx.toFloat()
+        snapHoldOld["ayi"] = assignYIdx.toFloat()
+    }
+
+    private fun endSnapHold() {
+        if (!snapHold) return
+        snapHold = false
+        snapHoldOld["ax"]?.let { pad.ax = it }
+        snapHoldOld["ay"]?.let { pad.ay = it }
+        snapHoldOld["bx"]?.let { pad.bx = it }
+        snapHoldOld["by"]?.let { pad.by = it }
+        padAxisX = pad.ax
+        pad.invalidate()
+        snapHoldOld["mix"]?.let {
+            mixFader.value = it
+            mixFader.invalidate()
+        }
+        snapHoldOld["filter"]?.let {
+            activeFilter = it.toInt()
+            refreshFxHighlight()
+        }
+        snapHoldOld["axi"]?.let {
+            assignXIdx = it.toInt()
+            refreshAssignLabels()
+        }
+        snapHoldOld["ayi"]?.let {
+            assignYIdx = it.toInt()
+            refreshAssignLabels()
+        }
+        for ((fx, arr) in snapHoldFx) {
+            fxParamVals[fx] = arr
+            val pv = paramView
+            val defs = fxParamDefs[fx]
+            if (paramFx == fx && pv != null && defs != null && pv.visibility == View.VISIBLE) {
+                pv.setContent(defs, fxParamVals[fx], fxParamAssign[fx])
+            }
+        }
+        snapHoldFx.clear()
+        snapHoldOld.clear()
+    }
 
     private fun captureSnap(side: Int, idx: Int) {
         if (idx !in snapPads.indices) return
@@ -2854,6 +3014,7 @@ class MainActivity : Activity() {
         refreshSnapGrid()
         applyMorph(zuLuFader.value)
         if (s != null) {
+            applyRouting(s)
             applyPunch(s)
             if ((s.motA != null && s.motA!!.size >= 4) || (s.motB != null && s.motB!!.size >= 4)) {
                 startMotionPlayback(idx)
@@ -2871,6 +3032,27 @@ class MainActivity : Activity() {
                 punchApply(z, pch[z])
                 punchCol = saved
             }
+        }
+    }
+
+    private fun applyRouting(s: Snap) {
+        val am = s.axMulti
+        if (am != null) {
+            s.axCurve?.let { axisCurve[0] = it.copyOf() }
+            axisMulti[0].clear()
+            axisMulti[0].addAll(am)
+            pushAxisMulti(0)
+        }
+        val ay = s.ayMulti
+        if (ay != null) {
+            s.ayCurve?.let { axisCurve[1] = it.copyOf() }
+            axisMulti[1].clear()
+            axisMulti[1].addAll(ay)
+            pushAxisMulti(1)
+        }
+        s.masterFxList?.let {
+            masterFx.clear()
+            masterFx.addAll(it)
         }
     }
 
@@ -3148,6 +3330,141 @@ class MainActivity : Activity() {
         }
         panel.addView(midiRow)
 
+        header("ENTREE (LINE-IN)")
+        val inRow = LinearLayout(this)
+        for ((i, lbl) in listOf("TRANSP", "INSTRU", "VOIX", "BBOX").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                inProfileSel = i
+                engine.nativeSetInProfile(i)
+                refreshMenu()
+            }
+            menuInButtons.add(b)
+            inRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(inRow)
+
+        header("EQUALISEUR (ENTREE + SORTIE)")
+        val eqRow = LinearLayout(this)
+        for ((i, lbl) in listOf("OFF", "ON").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                masterEqOn = i == 1
+                engine.nativeSetMasterEq(masterEqOn)
+                refreshMenu()
+            }
+            menuEqButtons.add(b)
+            eqRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(eqRow)
+
+        header("BOOST")
+        val biRow = LinearLayout(this)
+        for ((i, lbl) in listOf("IN x1", "IN x2", "IN x4").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                inBoostSel = i
+                engine.nativeSetInBoost(if (i == 0) 1f else if (i == 1) 2f else 4f)
+                refreshMenu()
+            }
+            menuBoostInButtons.add(b)
+            biRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(biRow)
+        val boRow = LinearLayout(this)
+        for ((i, lbl) in listOf("OUT x1", "OUT x2", "OUT x3").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                outBoostSel = i
+                engine.nativeSetOutBoost(if (i == 0) 1f else if (i == 1) 2f else 3f)
+                refreshMenu()
+            }
+            menuBoostOutButtons.add(b)
+            boRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(boRow)
+
+        header("LOUDNESS (SORTIE)")
+        val ldRow = LinearLayout(this)
+        for ((i, lbl) in listOf("OFF", "ON").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                outLoudOn = i == 1
+                engine.nativeSetOutLoud(outLoudOn)
+                refreshMenu()
+            }
+            menuLoudButtons.add(b)
+            ldRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(ldRow)
+
+        header("RESEAU (FX QUI SE PARLENT)")
+        val netRow = LinearLayout(this)
+        for ((i, lbl) in listOf(
+            "OFF", "MYCELIUM", "HUMUS", "NET VINTAGE",
+            "CHAOS", "OISEAUX", "INSECTES", "MAREE"
+        ).withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                netModeSel = i
+                engine.nativeSetNetworkMode(i)
+                refreshMenu()
+            }
+            menuNetButtons.add(b)
+            netRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(netRow)
+
+        header("RESEAU : REGLAGES")
+        val nchRow = LinearLayout(this)
+        for ((i, lbl) in listOf("CHAOS DOUX", "CHAOS MOYEN", "CHAOS FORT").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                netChaosSel = i
+                pushNetParams()
+                refreshMenu()
+            }
+            menuNetChaosButtons.add(b)
+            nchRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(nchRow)
+        val nmdRow = LinearLayout(this)
+        for ((i, lbl) in listOf("MOD LEGER", "MOD MOYEN", "MOD FORT").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                netModSel = i
+                pushNetParams()
+                refreshMenu()
+            }
+            menuNetModButtons.add(b)
+            nmdRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(nmdRow)
+        val nalRow = LinearLayout(this)
+        for ((i, lbl) in listOf("ALIAS OFF", "ALIAS LEGER", "ALIAS FORT").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                netAliasSel = i
+                pushNetParams()
+                refreshMenu()
+            }
+            menuNetAliasButtons.add(b)
+            nalRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(nalRow)
+        val nspRow = LinearLayout(this)
+        for ((i, lbl) in listOf("VITESSE LENTE", "VITESSE NORMALE", "VITESSE RAPIDE", "VITESSE FRENETIQUE").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                netSpeedSel = i
+                pushNetParams()
+                refreshMenu()
+            }
+            menuNetSpeedButtons.add(b)
+            nspRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(nspRow)
+
         header("ORIENTATION (REDEMARRE)")
         val orientRow = LinearLayout(this)
         for ((i, lbl) in listOf("HORIZ", "VERT").withIndex()) {
@@ -3157,6 +3474,20 @@ class MainActivity : Activity() {
             orientRow.addView(b, wrapParams((4 * d).toInt()))
         }
         panel.addView(orientRow)
+
+        header("SNAPSHOT")
+        val snapRow = LinearLayout(this)
+        for ((i, lbl) in listOf("TRANSPARENT", "DIRECT").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                snapTransp = i == 0
+                getSharedPreferences("zulu", MODE_PRIVATE).edit().putBoolean("snapTransp", snapTransp).apply()
+                refreshMenu()
+            }
+            menuSnapButtons.add(b)
+            snapRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(snapRow)
 
         header("FINITIONS")
         val curveRow = LinearLayout(this)
@@ -3273,14 +3604,16 @@ class MainActivity : Activity() {
                 fxActive.copyInto(rackBackup)
                 rackBackedUp = true
             }
-            for (f in 0 until 40) {
+            for (f in 0 until 46) {
+                if (masterFx.contains(f)) continue
                 if (fxActive[f] != mask[f]) {
                     fxActive[f] = mask[f]
                     engine.nativeSetFx(f, fxActive[f])
                 }
             }
         } else if (rackBackedUp) {
-            for (f in 0 until 40) {
+            for (f in 0 until 46) {
+                if (masterFx.contains(f)) continue
                 if (fxActive[f] != rackBackup[f]) {
                     fxActive[f] = rackBackup[f]
                     engine.nativeSetFx(f, fxActive[f])
@@ -3299,6 +3632,10 @@ class MainActivity : Activity() {
     private fun presetTap(i: Int) {
         if (heldBankPad in 1..8) {
             assignBankFx(heldBankPad - 1)
+            return
+        }
+        if (assignArm >= 0) {
+            toggleAxisBank(assignArm, i)
             return
         }
         if (punchMode) {
@@ -3388,12 +3725,98 @@ class MainActivity : Activity() {
         }
         for (k in 0 until 8) engine.nativeSetFxParam(fx, k, fxParamVals[fx][k])
         pv.setContent(defs, fxParamVals[fx], fxParamAssign[fx])
+        pv.masterOn = masterFx.contains(fx)
+        pv.snapMode = when (snapFxOverride[fx]) { null -> 0; true -> 1; else -> 2 }
         pv.visibility = View.VISIBLE
     }
 
     private fun closeParamPage() {
         paramView?.visibility = View.GONE
         paramFx = -1
+    }
+
+    private fun armAssign(axis: Int) {
+        assignArm = axis
+        Toast.makeText(
+            this,
+            "AXE " + (if (axis == 0) "F" else "Z") + " : CHOISIR BANQUES (SHIFT+BANQUE = COURBE, FX = SORTIR)",
+            Toast.LENGTH_LONG
+        ).show()
+        startAssignBlink()
+    }
+
+    private fun exitAssignMode() {
+        if (assignArm < 0) return
+        assignArm = -1
+        stopAssignBlink()
+    }
+
+    private val assignBlinkRunnable = object : Runnable {
+        override fun run() {
+            if (assignArm < 0) return
+            assignBlinkOn = !assignBlinkOn
+            val b = if (assignArm == 0) btnF else btnZ
+            b.setTextColor(if (assignBlinkOn) (if (assignArm == 0) yellow else pink) else silk)
+            motionHandler.postDelayed(this, 280)
+        }
+    }
+
+    private fun startAssignBlink() {
+        motionHandler.removeCallbacks(assignBlinkRunnable)
+        motionHandler.post(assignBlinkRunnable)
+    }
+
+    private fun stopAssignBlink() {
+        motionHandler.removeCallbacks(assignBlinkRunnable)
+        assignBlinkOn = false
+        updateAxisButtons()
+    }
+
+    private fun pushAxisMulti(axis: Int) {
+        val list = axisMulti[axis]
+        val n = min(list.size, 8)
+        val idxs = FloatArray(n)
+        val modes = FloatArray(n)
+        for (i in 0 until n) {
+            idxs[i] = list[i].toFloat()
+            modes[i] = axisCurve[axis][((list[i] - 8) / 8).coerceIn(0, 9)].toFloat()
+        }
+        engine.nativeSetAxisTargets(axis, idxs, modes)
+    }
+
+    private fun toggleAxisBank(axis: Int, bank: Int) {
+        val an = if (axis == 0) "F" else "Z"
+        if (shiftActive()) {
+            axisCurve[axis][bank] = (axisCurve[axis][bank] + 1) % 4
+            Toast.makeText(this, "BANQUE ${bank + 1} \u2192 $an : " + curveNames[axisCurve[axis][bank]], Toast.LENGTH_SHORT).show()
+            pushAxisMulti(axis)
+            return
+        }
+        val p = userPresets[bank]
+        if (p == null) {
+            Toast.makeText(this, "BANQUE ${bank + 1} VIDE", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val idxs = ArrayList<Int>()
+        for (f in 0 until 46) {
+            if (!p.fxOn[f]) continue
+            for (k in 0 until 8) if (fxParamAssign[f][k] == 1) idxs.add(8 + f * 8 + k)
+        }
+        if (idxs.isEmpty()) {
+            Toast.makeText(this, "AUCUN PARAM XY DANS LA BANQUE ${bank + 1}", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cur = axisMulti[axis]
+        val had = idxs.all { cur.contains(it) }
+        if (had) {
+            cur.removeAll(idxs)
+            Toast.makeText(this, "BANQUE ${bank + 1} \u2192 $an OFF", Toast.LENGTH_SHORT).show()
+        } else {
+            for (t in idxs) if (!cur.contains(t) && cur.size < 8) cur.add(t)
+            if (cur.size >= 8) Toast.makeText(this, "MAX 8 CIBLES PAR AXE", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "BANQUE ${bank + 1} \u2192 $an ON (" + cur.size + ")", Toast.LENGTH_SHORT).show()
+        }
+        pushAxisMulti(axis)
     }
 
     private fun cycleParamAssign(k: Int) {
@@ -3443,17 +3866,19 @@ class MainActivity : Activity() {
     private fun punchApply(zone: Int, on: Boolean) {
         val fx = punchFx[punchCol][zone]
         val pr = punchParam[punchCol][zone]
-        if (fx >= 0) engine.nativeSetFx(fx, on)
-        else if (pr >= 0) engine.nativeSetParam(pr, punchVal[punchCol][zone], on)
-        val combo = punchCombo[punchCol * 9 + zone]
-        if (combo != null) {
-            for (cfx in combo) engine.nativeSetFx(cfx, on)
-            if (on) {
-                engine.nativeSetFilterType(1)
-                engine.nativeSetParam(0, 0.22f, true)
-            } else {
-                engine.nativeSetFilterType(activeFilter)
-                engine.nativeSetParam(0, 0f, false)
+        if (!(snapHold && snapTransp)) {
+            if (fx >= 0) engine.nativeSetFx(fx, on)
+            else if (pr >= 0) engine.nativeSetParam(pr, punchVal[punchCol][zone], on)
+            val combo = punchCombo[punchCol * 9 + zone]
+            if (combo != null) {
+                for (cfx in combo) engine.nativeSetFx(cfx, on)
+                if (on) {
+                    engine.nativeSetFilterType(1)
+                    engine.nativeSetParam(0, 0.22f, true)
+                } else {
+                    engine.nativeSetFilterType(activeFilter)
+                    engine.nativeSetParam(0, 0f, false)
+                }
             }
         }
         punchLatched[zone] = on
@@ -3478,6 +3903,16 @@ class MainActivity : Activity() {
         punchView?.visibility = if (on) View.VISIBLE else View.GONE
         menuPunchBtn?.setTextColor(if (on) amber else silk)
         refreshPresetRow()
+    }
+
+    private fun snapQuietFor(fx: Int): Boolean = snapFxOverride[fx] ?: snapTransp
+
+    private fun pushNetParams() {
+        val chaos = floatArrayOf(0.25f, 0.5f, 0.9f)[netChaosSel]
+        val mod = floatArrayOf(0.25f, 0.5f, 0.85f)[netModSel]
+        val alias = floatArrayOf(0f, 0.4f, 0.9f)[netAliasSel]
+        val speed = floatArrayOf(0.15f, 0.5f, 0.8f, 1f)[netSpeedSel]
+        engine.nativeSetNetworkParams(chaos, mod, alias, speed)
     }
 
     private fun refreshMenu() {
@@ -3513,8 +3948,41 @@ class MainActivity : Activity() {
         for ((i, b) in menuMidiButtons.withIndex()) {
             b.setTextColor(if ((i == 0) == recMidiEngines) amber else silk)
         }
+        for ((i, b) in menuInButtons.withIndex()) {
+            b.setTextColor(if (i == inProfileSel) amber else silk)
+        }
+        for ((i, b) in menuEqButtons.withIndex()) {
+            b.setTextColor(if ((i == 1) == masterEqOn) amber else silk)
+        }
+        for ((i, b) in menuBoostInButtons.withIndex()) {
+            b.setTextColor(if (i == inBoostSel) amber else silk)
+        }
+        for ((i, b) in menuBoostOutButtons.withIndex()) {
+            b.setTextColor(if (i == outBoostSel) amber else silk)
+        }
+        for ((i, b) in menuLoudButtons.withIndex()) {
+            b.setTextColor(if ((i == 1) == outLoudOn) amber else silk)
+        }
+        for ((i, b) in menuNetButtons.withIndex()) {
+            b.setTextColor(if (i == netModeSel) amber else silk)
+        }
+        for ((i, b) in menuNetChaosButtons.withIndex()) {
+            b.setTextColor(if (i == netChaosSel) amber else silk)
+        }
+        for ((i, b) in menuNetModButtons.withIndex()) {
+            b.setTextColor(if (i == netModSel) amber else silk)
+        }
+        for ((i, b) in menuNetAliasButtons.withIndex()) {
+            b.setTextColor(if (i == netAliasSel) amber else silk)
+        }
+        for ((i, b) in menuNetSpeedButtons.withIndex()) {
+            b.setTextColor(if (i == netSpeedSel) amber else silk)
+        }
         for ((i, b) in menuOrientButtons.withIndex()) {
             b.setTextColor(if ((i == 1) == verticalUi) amber else silk)
+        }
+        for ((i, b) in menuSnapButtons.withIndex()) {
+            b.setTextColor(if ((i == 0) == snapTransp) amber else silk)
         }
         for (s in 1..8) {
             menuProjButtons[s - 1].setTextColor(if (projFile(s).exists()) amber else silk)

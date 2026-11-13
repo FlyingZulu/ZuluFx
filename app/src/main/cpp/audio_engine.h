@@ -84,6 +84,7 @@ public:
     void setArpSlices(int n) { arpSlices.store(n); }
     void setArpXy(float x, bool t) { arpXy.store(x); arpXyTouch.store(t); }
     void setAssign(int axis, int p) { if (axis == 0) assignX.store(p); else assignY.store(p); }
+    void setAxisTargets(int axis, const float* idxs, const float* modes, int n);
     void setBend(bool b, float x, float level) {
         bend.store(b); bendX.store(x); bendLevel.store(level);
     }
@@ -102,6 +103,7 @@ public:
     void setRecFlavor(int f) { recFlavor.store(f); }
 
     AudioEngine() {
+        for (int a = 0; a < 2; a++) for (int i = 0; i < 8; i++) axisTg[a][i].store(-1);
         for (int i = 0; i < kNumBanks; i++) bankFxSend[i] = true;
         for (int s = 0; s < kMaxSteps; s++) { undoStepPitch[s] = 0.f; undoStepVel[s] = 1.f; }
     }
@@ -121,6 +123,8 @@ public:
     void recordBank(int bank, int steps, bool wet);
     void startResample(int bank, int steps);
     void setInGain(float v) { inGain.store(v); }
+    void setInProfile(int p) { inProfile.store(p); }
+    void setMasterEq(bool on) { masterEq.store(on); eqCoefOk = false; }
     void drumHit(int bank, int slice, int total, float pitch);
     void setPlayerBank(int b) {
         if (b >= 0 && b < kNumBanks) playerBank.store(b);
@@ -223,7 +227,7 @@ private:
     float qSmoothed = 0.7f;
     float lfoRateSmoothed = 2.0f;
     float lfoDepthSmoothed = 0.2f;
-    std::atomic<float> fxWet[40] = {};
+    std::atomic<float> fxWet[46] = {};
     std::atomic<float> paramManual[8] = {};
     std::atomic<unsigned int> paramManualMask{0};
     static constexpr int kDelayMax = 144000;
@@ -262,7 +266,7 @@ private:
     bool freezeFull = false;
     bool prevFreeze = false;
     float compEnv = 0.f;
-    static constexpr int kNumFx = 40;
+    static constexpr int kNumFx = 46;
     std::atomic<float> fxParam[kNumFx][8] = {};
     float fxMod[kNumFx][8] = {};
     float fxAxisVal[kNumFx][8] = {};
@@ -274,6 +278,47 @@ private:
     float rndPhase = 0.f, rndRead = 0.f;
     int rndCur = 0, rndOff = 0, rndLen = 0;
     std::atomic<float> inGain{1.f};
+    std::atomic<int> inProfile{0};
+    float inHpfX = 0.f, inHpfY = 0.f, inEnv = 0.f, inGr = 1.f;
+    int inCoefProf = -1;
+    float inCoefFs = 0.f, inA = 0.f, inCa = 0.f, inCr = 0.f;
+    float inputChain(float x, float fsr);
+    struct EqBiquad {
+        float b0 = 1.f, b1 = 0.f, b2 = 0.f, a1 = 0.f, a2 = 0.f;
+        float x1 = 0.f, x2 = 0.f, y1 = 0.f, y2 = 0.f;
+        float proc(float x) {
+            float y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+            x2 = x1; x1 = x; y2 = y1; y1 = y;
+            return y;
+        }
+    };
+    void eqSetCoefs(float fs);
+    float eqProc(EqBiquad* ch, float x);
+    std::atomic<bool> masterEq{false};
+    bool eqCoefOk = false;
+    float eqFs = 0.f;
+    EqBiquad eqIn[3], eqXL[3], eqXR[3];
+    EqBiquad eq3L[3], eq3R[3];
+    bool eq3Ok = false;
+    float eq3Fs = 0.f;
+    int eq3Clk = 0;
+    float cmpEnv = 0.f, cmpGr = 1.f;
+    float warmLpL = 0.f, warmLpR = 0.f;
+    float clnHpXL = 0.f, clnHpYL = 0.f, clnHpXR = 0.f, clnHpYR = 0.f;
+    float clnLpL = 0.f, clnLpR = 0.f, clnEnv = 0.f, clnGr = 1.f;
+    float fzLpL = 0.f, fzLpR = 0.f, fzEnv = 0.f;
+    float dsLpL = 0.f, dsLpR = 0.f;
+    std::atomic<float> inBoost{1.f}, outBoost{1.f};
+    std::atomic<bool> outLoud{false};
+    float loudEnv = 0.f, loudGr = 1.f;
+    void setInBoost(float v) { inBoost.store(v); }
+    void setOutBoost(float v) { outBoost.store(v); }
+    void setOutLoud(bool on) { outLoud.store(on); }
+    void setNetworkMode(int m) { netMode.store(m); }
+    void setNetworkParams(float ch, float md, float al, float sp) {
+        netChaos.store(ch); netMod.store(md); netAlias.store(al); netSpeed.store(sp);
+    }
+    void eq3SetCoefs(float fs, float gl, float gm, float gh);
     std::atomic<int> drumBank{0};
     float drumPos = -1.f, drumEnd = 0.f, drumRate = 1.f, drumEnv = 0.f;
     int slcCur = 0;
@@ -385,6 +430,16 @@ private:
     float clfoPhase[2] = {0.f, 0.f};
     float clfoVal(int idx);
     float fxP(int fx, int k);
+    std::atomic<int> axisTg[2][8];
+    unsigned char axisMode[2][8] = {};
+    float axisHold[2][8] = {};
+    int axisShClk = 0;
+    std::atomic<int> netMode{0};
+    std::atomic<float> netChaos{0.5f}, netMod{0.5f}, netAlias{0.f}, netSpeed{0.5f};
+    int netClk = 0;
+    float netBird[2][16] = {};
+    int netBirdPos[2] = {0, 0};
+    float netPhase = 0.f;
     float muteGain = 1.0f;
     int coeffClock = 0;
 

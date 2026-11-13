@@ -648,7 +648,7 @@ class PadGridView(context: Context) : View(context) {
         val padW = (w - 5f * gap) / 4f
         val padH = (height - (rowsF + 1f) * gap) / rowsF
         val col = ((x - gap) / (padW + gap)).toInt()
-        val row = ((y - topPad - gap) / (padH + gap)).toInt()
+        val row = ((y - gap) / (padH + gap)).toInt()
         if (col !in 0..3 || row !in 0 until rows) return -1
         val i = row * 4 + col
         return if (i in 0 until padCount) i else -1
@@ -1259,7 +1259,11 @@ class ParamPageView(context: Context) : View(context) {
     var onParam: ((Int, Float) -> Unit)? = null
     var onAssignCycle: ((Int) -> Unit)? = null
     var onExit: (() -> Unit)? = null
+    var onMasterToggle: (() -> Unit)? = null
+    var onSnapToggle: (() -> Unit)? = null
     var shiftCheck: (() -> Boolean)? = null
+    var masterOn = false
+    var snapMode = 0
 
     private var labels: List<String> = emptyList()
     private var values = FloatArray(0)
@@ -1271,6 +1275,7 @@ class ParamPageView(context: Context) : View(context) {
     private val pSlot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(40, 44, 54) }
     private val pHandle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = amber }
     private val pDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(40, 44, 54) }
+    private val pBox = Paint().apply { color = Color.rgb(40, 44, 54) }
     private val pLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = silk
         typeface = marker
@@ -1309,8 +1314,13 @@ class ParamPageView(context: Context) : View(context) {
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val n = labels.size.coerceAtLeast(1)
+        val dd = context.resources.displayMetrics.density
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (e.y < 19 * dd && e.x > width - 152 * dd) {
+                    if (e.x > width - 70 * dd) onMasterToggle?.invoke() else onSnapToggle?.invoke()
+                    return true
+                }
                 if (shiftCheck?.invoke() == true) {
                     if (e.y < height * 0.06f || e.y > height * 0.9f) {
                         onExit?.invoke()
@@ -1378,6 +1388,26 @@ class ParamPageView(context: Context) : View(context) {
             pLabel.textSize = minOf(cw * 0.3f, 13f * d)
             c.drawText(labels[i], cx, h * 0.86f, pLabel)
         }
+        val by2 = 17f * d
+        val bx1 = w - 66f * d
+        pBox.color = if (masterOn) Color.rgb(185, 110, 255) else Color.rgb(40, 44, 54)
+        c.drawRect(bx1, 3f * d, w - 4f * d, by2, pBox)
+        pLabel.textSize = 8.5f * d
+        pLabel.color = if (masterOn) Color.rgb(22, 16, 34) else silk
+        c.drawText("MASTER", (bx1 + w - 4f * d) / 2f, by2 - 4.5f * d, pLabel)
+        val sx1 = bx1 - 82f * d
+        pBox.color = when (snapMode) {
+            1 -> Color.rgb(0, 240, 255)
+            2 -> Color.rgb(70, 255, 130)
+            else -> Color.rgb(40, 44, 54)
+        }
+        c.drawRect(sx1, 3f * d, bx1 - 4f * d, by2, pBox)
+        pLabel.color = if (snapMode > 0) Color.rgb(22, 16, 34) else silk
+        c.drawText(
+            if (snapMode == 1) "SNAP:MUTE" else if (snapMode == 2) "SNAP:SON" else "SNAP:AUTO",
+            (sx1 + bx1 - 4f * d) / 2f, by2 - 4.5f * d, pLabel
+        )
+        pLabel.color = silk
     }
 }
 

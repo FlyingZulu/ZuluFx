@@ -138,6 +138,41 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetInGain(JNIEnv*, jobject, jfloat v) { if (g) g->setInGain(v); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetInProfile(JNIEnv*, jobject, jint p) { if (g) g->setInProfile(p); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetMasterEq(JNIEnv*, jobject, jboolean on) { if (g) g->setMasterEq(on == JNI_TRUE); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetInBoost(JNIEnv*, jobject, jfloat v) { if (g) g->setInBoost(v); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetOutBoost(JNIEnv*, jobject, jfloat v) { if (g) g->setOutBoost(v); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetOutLoud(JNIEnv*, jobject, jboolean on) { if (g) g->setOutLoud(on == JNI_TRUE); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetAxisTargets(JNIEnv* env, jobject, jint axis, jfloatArray idxs, jfloatArray modes) {
+    if (!g) return;
+    jsize n = env->GetArrayLength(idxs);
+    jsize m = env->GetArrayLength(modes);
+    if (m < n) n = m;
+    if (n > 8) n = 8;
+    jfloat* pi = env->GetFloatArrayElements(idxs, 0);
+    jfloat* pm = env->GetFloatArrayElements(modes, 0);
+    g->setAxisTargets(axis, pi, pm, n);
+    env->ReleaseFloatArrayElements(idxs, pi, JNI_ABORT);
+    env->ReleaseFloatArrayElements(modes, pm, JNI_ABORT);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetNetworkMode(JNIEnv*, jobject, jint m) { if (g) g->setNetworkMode(m); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetNetworkParams(JNIEnv*, jobject, jfloat ch, jfloat md, jfloat al, jfloat sp) { if (g) g->setNetworkParams(ch, md, al, sp); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeDrumHit(JNIEnv*, jobject, jint bank, jint slice, jint total, jfloat pitch) {
     if (g) g->drumHit(bank, slice, total, pitch);
 }

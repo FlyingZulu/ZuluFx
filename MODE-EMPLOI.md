@@ -96,6 +96,14 @@ longueur courte = re-tap pour couper avant).
   (longueur = réglage de boucle en cours). Tap sur le pad actif = stop.
 - **Snapshot** : REC → ZU ou LU (choisir le côté) → pad (1-6) → REC. Capture TOUS les
   réglages en cours, punch-ins compris (ils se réactivent au rappel).
+- **Édition TRANSPARENTE** (MENU · SNAPSHOT, activée par défaut) : une fois le pad de
+  destination choisi, les réglages que tu bouges (curseurs, MIX, filtre, tirettes,
+  punch) ne s'entendent PAS — ils ne prennent effet qu'une fois la snapshot enclenchée
+  (fader ou pad). Option **DIRECT** au menu pour retrouver l'ancien comportement.
+  **Par effet** : dans la page EDIT d'un FX, le bouton **SNAP** choisit le
+  comportement de CET effet pendant la capture — **AUTO** (suit le menu),
+  **SNAP:MUTE** (silencieux, défaut) ou **SNAP:SON** (il continue de s'entendre
+  pendant que tu règles les autres).
 
 ## FX send par sample (v0.26)
 
@@ -180,6 +188,62 @@ restent en audio. **MENU · REC ENGINES** : MIDI ou AUDIO.
 
 **MENU · ORIENTATION** : **HORIZ** (défaut) ou **VERT** (pad XY en haut, boutons en
 dessous). Jamais de rotation automatique ; le changement redémarre l'appli.
+
+## Entrée & sortie studio (v0.32)
+
+- **Potard IN** (ligne du haut, après UNDO) : glisser verticalement = gain line-in.
+- **MENU · ENTRÉE (LINE-IN)** — 4 profils avec compresseur/coupe-bas adapté :
+  **TRANSP** (limiteur seul, défaut : ça ne sature plus si ça tape dans le rouge),
+  **INSTRU** (kalimba, cordes), **VOIX** (chant), **BBOX** (beatbox : transients
+  serrés + légère saturation chaude).
+- **MENU · EQUALISEUR** : ON/OFF — EQ 3 bandes doux, appliqué en entrée ET en sortie.
+- **MENU · BOOST** : IN x1/x2/x4 et OUT x1/x2/x3.
+- **MENU · LOUDNESS** : ON/OFF — maximiseur de loudness en sortie (compresseur +
+  makeup + limiteur doux).
+- **Catégorie STUDIO dans la fenêtre FX** (retraitement subtil, idéal avant resampling) :
+  **EQ3** (3 bandes réglables), **COMP**, **WARM** (saturation k7 douce), **CLEAN**
+  (coupe-bas/coupe-haut + gate). Et dans TEXTURE : **FUZZ** (fuzz asymétrique qui
+  "sag") et **DISTO** (grosse disto symétrique).
+
+## Multi-assign des axes (v0.32)
+
+Un axe (F ou Z) peut piloter PLUSIEURS banques en même temps (ex. F = 1+3,
+Z = 5+7), et un même paramètre peut recevoir F et Z à la fois (croisement).
+
+Protocole, fenêtre FX ouverte :
+1. **Tap sur F ou Z** : le bouton clignote → mode assignation.
+2. **Tap sur les banques 1-9** : ajoute/retire la banque des cibles de l'axe
+   (max 8 cibles par axe). Seuls les params XY des FX actifs de la banque
+   sont repris ; banque vide = « BANQUE VIDE », aucun param XY = « AUCUN
+   PARAM XY ».
+3. **SHIFT + banque** : courbe de la banque pour cet axe — **NORM** (direct),
+   **INV** (inversé), **S&H** (échantillonné-bloqué), **BOUILLON** (jitter).
+4. **Re-tap sur F/Z ou fermer la fenêtre FX** : sortie du mode.
+
+Les **snapshots capturent aussi le routage** multi-assign (banques + courbes
+F/Z) : rappeler un snapshot remet le routage qui était actif à la capture.
+
+## Chaîne MASTER (v0.32)
+
+Dans la page **EDIT** d'un FX (SHIFT + FX, ou EDIT dans la fenêtre FX), le
+bouton **MASTER** en haut à droite route l'effet sur le master : c'est un
+pont direct vers la sortie, même si l'effet n'est assigné à aucune banque.
+Les masques d'effets de banques ne l'éteignent pas, et le routage est
+mémorisé dans les snapshots. Rappel : un effet routé au master ne s'entend
+que s'il est **activé** (tap sur l'effet) — pas d'activation, pas de son.
+Re-appui sur MASTER = retirer du master. Max conseillé : quelques FX, la
+chaîne master s'entend sur TOUT.
+
+## Réseau : les FX qui se parlent (v0.32)
+
+Quand plusieurs banques sont multi-assignées, **MENU · RESEAU** fait
+communiquer les cibles entre elles (ce que fait un axe réagit sur l'autre).
+7 profils : **MYCELIUM** (lent, organique), **HUMUS** (très lent, profond),
+**NET VINTAGE** (rafales de machines + aliasing), **CHAOS** (tempête),
+**OISEAUX** (échos qui se répondent), **INSECTES** (stridulation rythmique),
+**MARÉE** (respiration très lente, lune). Réglages : **CHAOS**
+(doux/moyen/fort), **MODULATION** (léger/moyen/fort), **ALIASING**
+(off/léger/fort), **VITESSE** (lente → frénétique).
 
 ## À venir (v0.27+)
 
