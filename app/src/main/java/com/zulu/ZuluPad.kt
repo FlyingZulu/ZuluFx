@@ -171,6 +171,8 @@ class ZuluPad(context: Context) : View(context) {
     private var merged = false
     private var lastMergeTap = 0L
     private var lastTouched = false
+    private var pinchInitSpread = 0f
+    private var pinchFused = false
 
     private var billardTicks = 0
     private var velAx = 0f
@@ -375,8 +377,8 @@ class ZuluPad(context: Context) : View(context) {
                     ) < 44f * d ||
                         (abs(caX - cbX) < 60f * d && abs(caY - cbY) < 60f * d &&
                             Math.hypot((tx - (caX + cbX) / 2.0).toDouble(), (ty - (caY + cbY) / 2.0).toDouble()) < 70f * d)
-                    if (now - lastMergeTap < 450 && near) {
-                        if (merged) unfuse() else fuse()
+                    if (now - lastMergeTap < 450 && near && merged) {
+                        unfuse()
                         lastMergeTap = 0L
                     } else {
                         lastMergeTap = now
@@ -434,6 +436,26 @@ class ZuluPad(context: Context) : View(context) {
                         fingerB == -1 && stateB == AxisState.MOM -> takeB()
                     }
                 }
+                if (event.pointerCount >= 3 && !pinchFused) {
+                    var mx = 0f
+                    for (i in 0 until 3) for (j in i + 1 until 3) {
+                        mx = maxOf(
+                            mx,
+                            Math.hypot(
+                                (event.getX(i) - event.getX(j)).toDouble(),
+                                (event.getY(i) - event.getY(j)).toDouble()
+                            ).toFloat()
+                        )
+                    }
+                    if (pinchInitSpread == 0f) {
+                        pinchInitSpread = mx
+                    } else if (pinchInitSpread > 50f * d && mx < pinchInitSpread * 0.62f) {
+                        if (!merged) fuse()
+                        pinchFused = true
+                        pinchInitSpread = 0f
+                        lastMergeTap = 0L
+                    }
+                }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val id = event.getPointerId(event.actionIndex)
@@ -452,6 +474,10 @@ class ZuluPad(context: Context) : View(context) {
                     }
                 }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(false)
+                if (event.pointerCount <= 1) {
+                    pinchInitSpread = 0f
+                    pinchFused = false
+                }
             }
             MotionEvent.ACTION_CANCEL -> {
                 fingerA = -1
@@ -465,6 +491,8 @@ class ZuluPad(context: Context) : View(context) {
                     targetBy = restBy
                 }
                 onBendTouch?.invoke(false)
+                pinchInitSpread = 0f
+                pinchFused = false
             }
         }
 
