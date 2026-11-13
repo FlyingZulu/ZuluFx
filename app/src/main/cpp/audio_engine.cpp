@@ -4,6 +4,22 @@
 
 static inline float clamp01(float v) { return v < 0.f ? 0.f : (v > 1.f ? 1.f : v); }
 
+static int autoDecim(float dur) {
+    if (dur <= 7.f) return 1;
+    if (dur <= 10.f) return 2;
+    if (dur <= 14.f) return 3;
+    return 4;
+}
+
+static int flavorDecim(int f) {
+    switch (f) {
+        case 1: return 6;
+        case 2: return 3;
+        case 3: return 8;
+        default: return 1;
+    }
+}
+
 static const int8_t scaleTable[6][12] = {
     {0,3,5,7,10,-1,-1,-1,-1,-1,-1,-1},
     {0,2,4,7,9,-1,-1,-1,-1,-1,-1,-1},
@@ -59,6 +75,21 @@ float AudioEngine::genSample(float fsr, float bpm) {
     if (t == 12) {
         noiseState = noiseState * 1103515245u + 12345u;
         return ((float)(noiseState >> 16) / 32768.f - 1.f) * 0.22f;
+    }
+
+    if (t == 13) {
+        oscPhase += 110.f * fsr;
+        if (oscPhase >= 1.f) oscPhase -= 1.f;
+        return (oscPhase < 0.5f ? 1.f : -1.f) * 0.3f;
+    }
+
+    if (t == 14) {
+        oscPhase += 110.f * fsr;
+        if (oscPhase >= 1.f) oscPhase -= 1.f;
+        fmPhase += 660.f * fsr;
+        if (fmPhase >= 1.f) fmPhase -= 1.f;
+        return sinf(2.f * 3.14159265f * oscPhase +
+            2.6f * sinf(2.f * 3.14159265f * fmPhase)) * 0.45f;
     }
 
     bool tonal = (t >= 1 && t <= 4);
@@ -374,6 +405,27 @@ void AudioEngine::applyAssign(int p, float v, float& fc, float& q, float& lr, fl
     }
 }
 
+void AudioEngine::setFx(int fx, bool on) {
+    if (fx < 0 || fx >= kNumFx) return;
+    static const float defWet[kNumFx] = {
+        0.4f, 0.45f, 0.6f, 0.5f, 0.6f, 0.5f, 0.5f, 0.4f, 0.7f, 0.8f, 1.0f, 0.6f, 1.0f
+    };
+    fxWet[fx].store(on ? defWet[fx] : 0.f);
+}
+
+void AudioEngine::setParam(int p, float v, bool on) {
+    if (p < 0 || p > 7) return;
+    if (v < 0.f) v = 0.f; if (v > 1.f) v = 1.f;
+    unsigned int m = paramManualMask.load();
+    if (on) {
+        paramManual[p].store(v);
+        m |= (1u << p);
+    } else {
+        m &= ~(1u << p);
+    }
+    paramManualMask.store(m);
+}
+
 float AudioEngine::clfoVal(int idx) {
     float ph = clfoPhase[idx];
     if (ph < 0.f) ph = 0.f;
@@ -399,8 +451,12 @@ void AudioEngine::recordBank(int bank, int steps, bool wet) {
     if (steps < 1) steps = 1;
     if (steps > kMaxSteps) steps = kMaxSteps;
     float b = fmaxf(bpm.load(), 40.f);
-    int n = (int)((60.f / b) * steps * fs);
-    if (n < 4800) n = 4800;
+    float dur = (60.f / b) * steps;
+    int fl = recFlavor.load();
+    if (fl < 0 || fl > 3) fl = 0;
+    int D = (fl == 0) ? autoDecim(dur) : flavorDecim(fl);
+    int n = (int)(dur * fs / (float)D);
+    if (n < 2400) n = 2400;
     LoopBank& lb = banks[bank];
     if (!lb.buf || lb.cap < n) {
         int extra = n - (lb.samples > 0 ? lb.samples : 0);
@@ -414,10 +470,15 @@ void AudioEngine::recordBank(int bank, int steps, bool wet) {
     lb.pos = 0;
     lb.playing = false;
     lb.steps = steps;
+    lb.decim = D;
     for (int s = 0; s < kMaxSteps; s++) { lb.stepPitch[s] = 0.f; lb.stepVel[s] = 1.f; }
     lb.acc = 0.f;
     recBank = bank;
     recWet = wet;
+    recAccum = 0.f;
+    recDiv = 0;
+    recWarmLp = 0.f;
+    recFizzLp = 0.f;
 }
 
 void AudioEngine::startResample(int bank, int steps) {
@@ -426,8 +487,12 @@ void AudioEngine::startResample(int bank, int steps) {
     if (steps < 1) steps = 1;
     if (steps > kMaxSteps) steps = kMaxSteps;
     float b = fmaxf(bpm.load(), 40.f);
-    int n = (int)((60.f / b) * steps * fs);
-    if (n < 4800) n = 4800;
+    float dur = (60.f / b) * steps;
+    int fl = recFlavor.load();
+    if (fl < 0 || fl > 3) fl = 0;
+    int D = (fl == 0) ? autoDecim(dur) : flavorDecim(fl);
+    int n = (int)(dur * fs / (float)D);
+    if (n < 2400) n = 2400;
     LoopBank& lb = banks[bank];
     if (lb.samples > 0) return;
     if (!lb.buf || lb.cap < n) {
@@ -441,10 +506,14 @@ void AudioEngine::startResample(int bank, int steps) {
     lb.pos = 0;
     lb.playing = false;
     lb.steps = steps;
+    lb.decim = D;
     for (int s = 0; s < kMaxSteps; s++) { lb.stepPitch[s] = 0.f; lb.stepVel[s] = 1.f; }
     lb.acc = 0.f;
     resBank = bank;
     resPos = 0;
+    resAccumL = 0.f;
+    resAccumR = 0.f;
+    resDiv = 0;
 }
 
 void AudioEngine::setStep(int bank, int step, float pitch, float vel) {
@@ -504,6 +573,7 @@ void AudioEngine::loadBank(int bank, const float* src, int frames) {
     lb.samples = frames;
     lb.pos = 0;
     lb.playing = true;
+    lb.decim = 1;
 }
 
 void AudioEngine::jumpSlice(int slice, int total) {
@@ -558,6 +628,17 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             float rwT = 0.f, btT = 16.f, rtT = 1.f, drT = 1.f;
             applyAssign(assignX.load(), ax.load(), fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
             applyAssign(assignY.load(), ay.load(), fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+
+            unsigned int pm = paramManualMask.load(std::memory_order_relaxed);
+            if (pm != 0u) {
+                int px = assignX.load(), py = assignY.load();
+                for (int p = 0; p < 8; p++) {
+                    if ((pm & (1u << p)) == 0u) continue;
+                    if (p == px || p == py) continue;
+                    applyAssign(p, paramManual[p].load(std::memory_order_relaxed),
+                                fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+                }
+            }
 
             float baseNorm[8] = {
                 clamp01(ax.load()), clamp01(ay.load()), 0.f, 1.f,
@@ -692,13 +773,36 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         if (recBank >= 0) {
             LoopBank& lb = banks[recBank];
             float c = recWet ? smp : inS;
-            lb.buf[2 * lb.pos] = c;
-            lb.buf[2 * lb.pos + 1] = c;
-            lb.pos++;
-            if (lb.pos >= lb.samples) {
-                lb.playing = true;
-                lb.pos = 0;
-                recBank = -1;
+            int D = lb.decim > 0 ? lb.decim : 1;
+            recAccum += c;
+            recDiv++;
+            if (recDiv >= D) {
+                float v = recAccum / (float)D;
+                int fl = recFlavor.load();
+                if (fl >= 1 && fl <= 3) {
+                    recWarmLp += 0.02f * (v - recWarmLp);
+                    v += 0.25f * recWarmLp;
+                    float sat = (fl == 2) ? 1.2f : (fl == 3) ? 2.2f : 1.f;
+                    if (sat > 1.f) v = tanhf(v * sat) * 0.85f;
+                    recFizzLp += ((fl == 3) ? 0.25f : 0.4f) * (v - recFizzLp);
+                    v = recFizzLp;
+                    int bits = (fl == 1) ? 10 : (fl == 2) ? 12 : 8;
+                    float q = powf(2.f, (float)bits - 1.f);
+                    v = floorf(v * q + 0.5f) / q;
+                    noiseState = noiseState * 1103515245u + 12345u;
+                    float nz = (float)(noiseState >> 16) / 32768.f - 1.f;
+                    v += nz * ((fl == 2) ? 0.004f : (fl == 3) ? 0.010f : 0.002f);
+                }
+                lb.buf[2 * lb.pos] = v;
+                lb.buf[2 * lb.pos + 1] = v;
+                recAccum = 0.f;
+                recDiv = 0;
+                lb.pos++;
+                if (lb.pos >= lb.samples) {
+                    lb.playing = true;
+                    lb.pos = 0;
+                    recBank = -1;
+                }
             }
         }
 
@@ -745,16 +849,13 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             if (si >= 0 && lb.stepPitch[si] != 0.f) prate = powf(2.f, lb.stepPitch[si] / 12.f);
             loopL += lb.buf[2 * lb.pos] * vel;
             loopR += lb.buf[2 * lb.pos + 1] * vel;
+            float dec = lb.decim > 0 ? (float)lb.decim : 1.f;
             if (xyT) {
-                if (rate != 1.f) {
-                    xyAcc += rate;
-                    lb.pos += (int)xyAcc;
-                    xyAcc -= (int)xyAcc;
-                } else {
-                    lb.pos += 1;
-                }
+                xyAcc += rate / dec;
+                lb.pos += (int)xyAcc;
+                xyAcc -= (int)xyAcc;
             } else {
-                lb.acc += prate;
+                lb.acc += prate / dec;
                 lb.pos += (int)lb.acc;
                 lb.acc -= (int)lb.acc;
             }
@@ -799,20 +900,269 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
 
         float outL = liveL + loopL * kLoopGain;
         float outR = liveR + loopR * kLoopGain;
-        if (outL > 1.f) outL = 1.f; if (outL < -1.f) outL = -1.f;
-        if (outR > 1.f) outR = 1.f; if (outR < -1.f) outR = -1.f;
+
+        {
+            float w = fxWet[0].load();
+            float b = fmaxf(bpm.load(), 40.f);
+            int dly = (int)((60.f / b) * fs);
+            if (dly > kDelayMax - 2) dly = kDelayMax - 2;
+            int rp = (delayPos - dly + kDelayMax) % kDelayMax;
+            float dl = delayBuf[2 * rp], dr = delayBuf[2 * rp + 1];
+            delayLpL += 0.25f * (dl * 0.45f - delayLpL);
+            delayLpR += 0.25f * (dr * 0.45f - delayLpR);
+            delayBuf[2 * delayPos] = outL + delayLpL;
+            delayBuf[2 * delayPos + 1] = outR + delayLpR;
+            delayPos = (delayPos + 1) % kDelayMax;
+            if (w > 0.001f) {
+                outL = outL * (1.f - w * 0.5f) + dl * w;
+                outR = outR * (1.f - w * 0.5f) + dr * w;
+            }
+        }
+        {
+            float w = fxWet[1].load();
+            float b = fmaxf(bpm.load(), 40.f);
+            int dly = (int)(1.5f * (60.f / b) * fs);
+            if (dly > kDelayMax - 2) dly = kDelayMax - 2;
+            int rp = (echoPos - dly + kDelayMax) % kDelayMax;
+            float dl = echoBuf[2 * rp], dr = echoBuf[2 * rp + 1];
+            echoLpL += 0.12f * (dl * 0.62f - echoLpL);
+            echoLpR += 0.12f * (dr * 0.62f - echoLpR);
+            echoBuf[2 * echoPos] = outL + echoLpL;
+            echoBuf[2 * echoPos + 1] = outR + echoLpR;
+            echoPos = (echoPos + 1) % kDelayMax;
+            if (w > 0.001f) {
+                outL = outL * (1.f - w * 0.5f) + dl * w;
+                outR = outR * (1.f - w * 0.5f) + dr * w;
+            }
+        }
+        {
+            float w = fxWet[2].load();
+            if (w > 0.001f) {
+                phLfo += 0.4f * fsr;
+                if (phLfo >= 1.f) phLfo -= 1.f;
+                float lf = 0.5f - 0.5f * cosf(2.f * 3.14159265f * phLfo);
+                float fc = 200.f * powf(40.f, lf);
+                float g = tanf(3.14159265f * fc * fsr);
+                if (g > 15.f) g = 15.f;
+                float c = (g - 1.f) / (g + 1.f);
+                float y1 = c * outL + phAp1; phAp1 = outL - c * y1;
+                float y2 = c * y1 + phAp2; phAp2 = y1 - c * y2;
+                float y3 = c * y2 + phAp3; phAp3 = y2 - c * y3;
+                float y4 = c * y3 + phAp4; phAp4 = y3 - c * y4;
+                float z1 = c * outR + phApR1; phApR1 = outR - c * z1;
+                float z2 = c * z1 + phApR2; phApR2 = z1 - c * z2;
+                float z3 = c * z2 + phApR3; phApR3 = z2 - c * z3;
+                float z4 = c * z3 + phApR4; phApR4 = z3 - c * z4;
+                outL = outL * (1.f - w) + y4 * w;
+                outR = outR * (1.f - w) + z4 * w;
+            }
+        }
+        {
+            float w = fxWet[3].load();
+            if (w > 0.001f) {
+                tremPhase += 4.f * fsr;
+                if (tremPhase >= 1.f) tremPhase -= 1.f;
+                float g = 1.f - w * 0.5f * (1.f - cosf(2.f * 3.14159265f * tremPhase));
+                outL *= g; outR *= g;
+            }
+        }
+        {
+            float w = fxWet[4].load();
+            if (w > 0.001f) {
+                panLfo += 0.5f * fsr;
+                if (panLfo >= 1.f) panLfo -= 1.f;
+                float p = 0.5f - 0.5f * cosf(2.f * 3.14159265f * panLfo);
+                outL *= 1.f - w * 0.5f * p;
+                outR *= 1.f - w * 0.5f * (1.f - p);
+            }
+        }
+        {
+            float w = fxWet[5].load();
+            if (w > 0.001f) {
+                flLfo += 0.3f * fsr;
+                if (flLfo >= 1.f) flLfo -= 1.f;
+                float dep = (2.f + 4.f * (0.5f - 0.5f * cosf(2.f * 3.14159265f * flLfo))) * 0.001f * fs;
+                int d0 = (int)dep;
+                float fr = dep - (float)d0;
+                int rp = (modPos - d0 + kModMax) % kModMax;
+                int rp1 = (rp - 1 + kModMax) % kModMax;
+                float dl = modBuf[2 * rp] * (1.f - fr) + modBuf[2 * rp1] * fr;
+                float dr = modBuf[2 * rp + 1] * (1.f - fr) + modBuf[2 * rp1 + 1] * fr;
+                outL += w * dl; outR += w * dr;
+                modBuf[2 * modPos] = outL + 0.55f * dl;
+                modBuf[2 * modPos + 1] = outR + 0.55f * dr;
+                modPos = (modPos + 1) % kModMax;
+            }
+        }
+        {
+            float w = fxWet[6].load();
+            if (w > 0.001f) {
+                choLfo += 0.6f * fsr;
+                if (choLfo >= 1.f) choLfo -= 1.f;
+                float base = 0.020f * fs;
+                float dep = 0.005f * fs;
+                float pl = 2.f * 3.14159265f * choLfo;
+                float dl = base + dep * sinf(pl);
+                float dr = base + dep * sinf(pl + 0.7f);
+                int l0 = (int)dl; float lfr = dl - (float)l0;
+                int r0 = (int)dr; float rfr = dr - (float)r0;
+                int lp0 = (chorusPos - l0 + kModMax) % kModMax;
+                int lp1 = (lp0 - 1 + kModMax) % kModMax;
+                int rp0 = (chorusPos - r0 + kModMax) % kModMax;
+                int rp1 = (rp0 - 1 + kModMax) % kModMax;
+                float sl = chorusBuf[2 * lp0] * (1.f - lfr) + chorusBuf[2 * lp1] * lfr;
+                float sr = chorusBuf[2 * rp0] * (1.f - rfr) + chorusBuf[2 * rp1] * rfr;
+                outL += w * 0.7f * sl;
+                outR += w * 0.7f * sr;
+                chorusBuf[2 * chorusPos] = outL;
+                chorusBuf[2 * chorusPos + 1] = outR;
+                chorusPos = (chorusPos + 1) % kModMax;
+            }
+        }
+        {
+            float w = fxWet[7].load();
+            if (w > 0.001f) {
+                ringPhase += 660.f * fsr;
+                if (ringPhase >= 1.f) ringPhase -= 1.f;
+                float car = sinf(2.f * 3.14159265f * ringPhase);
+                outL = outL * (1.f - w) + outL * car * w;
+                outR = outR * (1.f - w) + outR * car * w;
+            }
+        }
+        {
+            float w = fxWet[8].load();
+            if (w > 0.001f) {
+                wowBuf[2 * wowPos] = outL;
+                wowBuf[2 * wowPos + 1] = outR;
+                wowPhase += 0.5f * fsr;
+                if (wowPhase >= 1.f) wowPhase -= 1.f;
+                flutPhase += 6.5f * fsr;
+                if (flutPhase >= 1.f) flutPhase -= 1.f;
+                float dep = 48.f + 24.f * sinf(2.f * 3.14159265f * wowPhase)
+                          + 4.f * sinf(2.f * 3.14159265f * flutPhase);
+                int d0 = (int)dep;
+                float fr = dep - (float)d0;
+                int rp = (wowPos - d0 + kWowMax) % kWowMax;
+                int rp1 = (rp - 1 + kWowMax) % kWowMax;
+                float dl = wowBuf[2 * rp] * (1.f - fr) + wowBuf[2 * rp1] * fr;
+                float dr = wowBuf[2 * rp + 1] * (1.f - fr) + wowBuf[2 * rp1 + 1] * fr;
+                outL = outL * (1.f - w) + dl * w;
+                outR = outR * (1.f - w) + dr * w;
+                lofiLpL += 0.14f * (outL - lofiLpL);
+                lofiLpR += 0.14f * (outR - lofiLpR);
+                lofiNoise = lofiNoise * 1103515245u + 12345u;
+                float hiss = ((float)(lofiNoise >> 16) / 32768.f - 1.f) * 0.012f;
+                outL = outL * (1.f - w) + (lofiLpL + hiss) * w;
+                outR = outR * (1.f - w) + (lofiLpR + hiss) * w;
+                wowPos = (wowPos + 1) % kWowMax;
+            }
+        }
+        {
+            float w = fxWet[9].load();
+            if (w > 0.001f) {
+                static const int8_t gpat[16] = {1,0,1,1,0,1,0,1,1,0,1,0,0,1,1,0};
+                float b = fmaxf(bpm.load(), 40.f);
+                int per = (int)((60.f / b) * 0.25f * fs);
+                if (per < 32) per = 32;
+                gateClock = (gateClock + 1) % (per * 16);
+                int st = gateClock / per;
+                int ip = gateClock % per;
+                float g = gpat[st] ? 1.f : 0.f;
+                if (ip < 64) g *= (float)ip / 64.f;
+                if (per - ip < 64) g *= (float)(per - ip) / 64.f;
+                float k = 1.f - w + w * g;
+                outL *= k; outR *= k;
+            }
+        }
+        {
+            float w = fxWet[10].load();
+            if (w > 0.001f) {
+                if (!prevFreeze) {
+                    freezeFill = 0; freezeFull = false; freezePos = 0;
+                }
+                if (!freezeFull) {
+                    freezeBuf[2 * freezeFill] = outL;
+                    freezeBuf[2 * freezeFill + 1] = outR;
+                    freezeFill++;
+                    if (freezeFill >= kFreezeMax) { freezeFull = true; freezePos = 0; }
+                } else {
+                    outL = outL * (1.f - w) + freezeBuf[2 * freezePos] * w;
+                    outR = outR * (1.f - w) + freezeBuf[2 * freezePos + 1] * w;
+                    freezePos = (freezePos + 1) % kFreezeMax;
+                }
+            }
+            prevFreeze = w > 0.001f;
+        }
+        {
+            float w = fxWet[11].load();
+            if (w > 0.001f) {
+                float lvl = 0.5f * (fabsf(outL) + fabsf(outR));
+                compEnv += (lvl > compEnv ? 0.02f : 0.0015f) * (lvl - compEnv);
+                float g = 1.f;
+                if (compEnv > 0.35f) g = 0.35f / compEnv;
+                g *= 1.15f;
+                g = 1.f + w * (g - 1.f);
+                outL *= g; outR *= g;
+            }
+        }
+        {
+            float w = fxWet[12].load();
+            stopBuf[2 * stopWrite] = outL;
+            stopBuf[2 * stopWrite + 1] = outR;
+            stopWrite = (stopWrite + 1) % kStopMax;
+            if (w > 0.001f && !prevStop) {
+                stopRead = (float)((stopWrite - 480 + kStopMax) % kStopMax);
+                stopRate = 1.f;
+            }
+            prevStop = w > 0.001f;
+            if (w > 0.001f) {
+                stopRate -= 0.8f * fsr;
+                if (stopRate < 0.f) stopRate = 0.f;
+            } else if (stopRate < 1.f) {
+                stopRate += 2.f * fsr;
+                if (stopRate > 1.f) stopRate = 1.f;
+            }
+            if (stopRate < 0.999f) {
+                float weff = w > 0.001f ? w : 1.f;
+                stopRead += stopRate;
+                if (stopRead >= (float)kStopMax) stopRead -= (float)kStopMax;
+                int i0 = (int)stopRead;
+                float fr = stopRead - (float)i0;
+                int i1 = (i0 + 1) % kStopMax;
+                float dl = stopBuf[2 * i0] * (1.f - fr) + stopBuf[2 * i1] * fr;
+                float dr = stopBuf[2 * i0 + 1] * (1.f - fr) + stopBuf[2 * i1 + 1] * fr;
+                float fade = stopRate * 4.f;
+                if (fade > 1.f) fade = 1.f;
+                outL = outL * (1.f - weff) + dl * weff * fade;
+                outR = outR * (1.f - weff) + dr * weff * fade;
+            }
+        }
+
+        if (outL > 0.95f) outL = 0.95f + (outL - 0.95f) / (1.f + (outL - 0.95f) * (outL - 0.95f) * 40.f);
+        else if (outL < -0.95f) outL = -0.95f + (outL + 0.95f) / (1.f + (outL + 0.95f) * (outL + 0.95f) * 40.f);
+        if (outR > 0.95f) outR = 0.95f + (outR - 0.95f) / (1.f + (outR - 0.95f) * (outR - 0.95f) * 40.f);
+        else if (outR < -0.95f) outR = -0.95f + (outR + 0.95f) / (1.f + (outR + 0.95f) * (outR + 0.95f) * 40.f);
 
         if (resBank >= 0) {
             LoopBank& rb = banks[resBank];
             if (rb.buf) {
-                rb.buf[2 * resPos] = outL;
-                rb.buf[2 * resPos + 1] = outR;
-            }
-            resPos++;
-            if (resPos >= rb.samples) {
-                rb.playing = true;
-                rb.pos = 0;
-                resBank = -1;
+                int D = rb.decim > 0 ? rb.decim : 1;
+                resAccumL += outL;
+                resAccumR += outR;
+                resDiv++;
+                if (resDiv >= D) {
+                    rb.buf[2 * resPos] = resAccumL / (float)D;
+                    rb.buf[2 * resPos + 1] = resAccumR / (float)D;
+                    resAccumL = 0.f;
+                    resAccumR = 0.f;
+                    resDiv = 0;
+                    resPos++;
+                    if (resPos >= rb.samples) {
+                        rb.playing = true;
+                        rb.pos = 0;
+                        resBank = -1;
+                    }
+                }
             }
         }
 

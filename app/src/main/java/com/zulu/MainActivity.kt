@@ -133,6 +133,8 @@ class MainActivity : Activity() {
     private val menuFingerButtons = ArrayList<Button>()
     private var menuFreezeBtn: Button? = null
     private val menuBillardButtons = ArrayList<Button>()
+    private val menuLofiButtons = ArrayList<Button>()
+    private var recFlavor = 0
     private val menuProjButtons = ArrayList<Button>()
     private var morphCurve = 0
     private var fingerModeOpt = 0
@@ -174,10 +176,22 @@ class MainActivity : Activity() {
     private val fxSections = listOf(
         "FILTRE" to listOf("LPF", "HPF", "BPF", "NOTCH", "PHASER"),
         "MODULATION" to listOf("TREMOLO", "AUTOPAN", "FLANGER", "CHORUS", "RING"),
-        "TEMPS" to listOf("DELAY", "ECHO", "REVERB", "FREEZE"),
+        "TEMPS" to listOf("DELAY", "ECHO", "REVERB", "FREEZE", "STOP"),
         "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "GATER"),
         "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE")
     )
+
+    private val fxCodes = listOf(
+        "F0", "F1", "F2", "F3", "X2",
+        "X3", "X4", "X5", "X6", "X7",
+        "X0", "X1", "P2", "X10", "X12",
+        "P3", "P7", "X8", "X9",
+        "G0", "G13", "G14", "G12"
+    )
+    private val fxActive = BooleanArray(13)
+    private val paramActive = BooleanArray(8)
+    private val paramDefaults = floatArrayOf(0f, 0f, 0.35f, 0.3f, 0f, 0f, 0f, 0.4f)
+    private var genIdx = 0
 
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
@@ -948,9 +962,31 @@ class MainActivity : Activity() {
                 val idx = globalIdx
                 b.setOnClickListener {
                     activeFx = idx
-                    if (idx <= 3) {
-                        activeFilter = idx
-                        engine.nativeSetFilterType(idx)
+                    val code = fxCodes.getOrNull(idx) ?: ""
+                    if (code.length >= 2) {
+                        val num = code.substring(1).toIntOrNull() ?: 0
+                        when (code[0]) {
+                            'F' -> {
+                                activeFilter = num
+                                engine.nativeSetFilterType(num)
+                            }
+                            'X' -> {
+                                fxActive[num] = !fxActive[num]
+                                engine.nativeSetFx(num, fxActive[num])
+                            }
+                            'P' -> {
+                                paramActive[num] = !paramActive[num]
+                                engine.nativeSetParam(
+                                    num,
+                                    if (paramActive[num]) paramDefaults[num] else 0f,
+                                    paramActive[num]
+                                )
+                            }
+                            'G' -> {
+                                genIdx = num
+                                engine.nativeSetGen(num)
+                            }
+                        }
                     }
                     pad.activePreset = idx % 9
                     refreshFxHighlight()
@@ -996,7 +1032,18 @@ class MainActivity : Activity() {
     }
 
     private fun refreshFxHighlight() {
-        for ((i, b) in fxButtons.withIndex()) b.setTextColor(if (i == activeFx) amber else silk)
+        for ((i, b) in fxButtons.withIndex()) {
+            val code = fxCodes.getOrNull(i) ?: ""
+            val num = if (code.length >= 2) code.substring(1).toIntOrNull() ?: -1 else -1
+            val on = when (code.getOrNull(0)) {
+                'F' -> activeFilter == num
+                'X' -> num in fxActive.indices && fxActive[num]
+                'P' -> num in paramActive.indices && paramActive[num]
+                'G' -> genIdx == num
+                else -> false
+            }
+            b.setTextColor(if (on) amber else silk)
+        }
     }
 
     private fun refreshAssignLabels() {
@@ -1337,6 +1384,7 @@ class MainActivity : Activity() {
             json.put("lfos", lfos)
             json.put("activeZu", activeZu)
             json.put("activeLu", activeLu)
+            json.put("recFlavor", recFlavor)
             projFile(slot).writeText(json.toString())
             refreshProjSlots()
         } catch (e: Exception) {
@@ -1359,6 +1407,8 @@ class MainActivity : Activity() {
             activeRoot = json.optInt("root", 9)
             engine.nativeSetScale(activeScale)
             engine.nativeSetRoot(activeRoot)
+            recFlavor = json.optInt("recFlavor", 0)
+            engine.nativeSetRecFlavor(recFlavor)
             assignXIdx = json.optInt("assignX", 0)
             assignYIdx = json.optInt("assignY", 1)
             engine.nativeSetAssign(0, assignXIdx)
@@ -2085,6 +2135,20 @@ class MainActivity : Activity() {
         }
         panel.addView(padsRow)
 
+        header("REC \u00b7 SAVEUR LO-FI")
+        val lofiRow = LinearLayout(this)
+        for ((i, lbl) in listOf("OFF", "SP", "K7", "M\u00c9TAL").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                recFlavor = i
+                engine.nativeSetRecFlavor(recFlavor)
+                refreshMenu()
+            }
+            menuLofiButtons.add(b)
+            lofiRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(lofiRow)
+
         header("SC\u00c8NES")
         val scRow = LinearLayout(this)
         val bSnap = makeButton("SNAPSHOT", amber)
@@ -2165,6 +2229,9 @@ class MainActivity : Activity() {
         menuFreezeBtn?.setTextColor(if (bendFreezeOpt) amber else silk)
         for ((i, b) in menuBillardButtons.withIndex()) {
             b.setTextColor(if (i == pad.billardFriction) amber else silk)
+        }
+        for ((i, b) in menuLofiButtons.withIndex()) {
+            b.setTextColor(if (i == recFlavor) amber else silk)
         }
         for (s in 1..8) {
             menuProjButtons[s - 1].setTextColor(if (projFile(s).exists()) amber else silk)

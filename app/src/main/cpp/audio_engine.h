@@ -92,6 +92,9 @@ public:
         synWave.store(wave); synAtk.store(atk); synDecay.store(decay);
         synOct.store(oct); synPitch.store(pitch); synTune.store(tune);
     }
+    void setFx(int fx, bool on);
+    void setParam(int p, float v, bool on);
+    void setRecFlavor(int f) { recFlavor.store(f); }
     void setCustomLfo(int idx, const float* table, bool on, int rateIdx, float depth,
                       float amount, int target, int wave) {
         if (idx < 0 || idx > 1) return;
@@ -160,6 +163,7 @@ private:
     std::atomic<float> bendX{0.5f};
     std::atomic<float> bendLevel{0.5f};
     std::atomic<float> levelL{0.0f}, levelR{0.0f};
+    std::atomic<int> recFlavor{0};
 
     bool mic = false;
     float fs = 48000.0f;
@@ -204,6 +208,46 @@ private:
     float qSmoothed = 0.7f;
     float lfoRateSmoothed = 2.0f;
     float lfoDepthSmoothed = 0.2f;
+    std::atomic<float> fxWet[13] = {};
+    std::atomic<float> paramManual[8] = {};
+    std::atomic<unsigned int> paramManualMask{0};
+    static constexpr int kDelayMax = 144000;
+    float delayBuf[kDelayMax * 2] = {0.f};
+    float echoBuf[kDelayMax * 2] = {0.f};
+    int delayPos = 0;
+    int echoPos = 0;
+    float delayLpL = 0.f, delayLpR = 0.f;
+    float echoLpL = 0.f, echoLpR = 0.f;
+    static constexpr int kModMax = 4096;
+    float modBuf[kModMax * 2] = {0.f};
+    float chorusBuf[kModMax * 2] = {0.f};
+    int modPos = 0;
+    int chorusPos = 0;
+    float phAp1 = 0.f, phAp2 = 0.f, phAp3 = 0.f, phAp4 = 0.f;
+    float phApR1 = 0.f, phApR2 = 0.f, phApR3 = 0.f, phApR4 = 0.f;
+    float phLfo = 0.f, tremPhase = 0.f, panLfo = 0.f, flLfo = 0.f, choLfo = 0.f;
+    float ringPhase = 0.f;
+    int gateClock = 0;
+    unsigned int lofiNoise = 22222u;
+    float lofiLpL = 0.f, lofiLpR = 0.f;
+    static constexpr int kWowMax = 2400;
+    float wowBuf[kWowMax * 2] = {0.f};
+    int wowPos = 0;
+    float wowPhase = 0.f, flutPhase = 0.f;
+    static constexpr int kStopMax = 72000;
+    float stopBuf[kStopMax * 2] = {0.f};
+    int stopWrite = 0;
+    float stopRead = 0.f;
+    float stopRate = 1.f;
+    bool prevStop = false;
+    static constexpr int kFreezeMax = 57600;
+    float freezeBuf[kFreezeMax * 2] = {0.f};
+    int freezeFill = 0;
+    int freezePos = 0;
+    bool freezeFull = false;
+    bool prevFreeze = false;
+    float compEnv = 0.f;
+    static constexpr int kNumFx = 13;
     std::atomic<float> clfoShape[128] = {};
     std::atomic<bool> clfoOn[2] = {};
     std::atomic<int> clfoRate[2] = {};
@@ -228,6 +272,7 @@ private:
         int pos = 0;
         bool playing = false;
         int steps = 0;
+        int decim = 1;
         float stepPitch[kMaxSteps];
         float stepVel[kMaxSteps];
         float acc = 0.f;
@@ -240,8 +285,14 @@ private:
     int totalFrames = 0;
     int recBank = -1;
     bool recWet = false;
+    float recAccum = 0.f;
+    int recDiv = 0;
+    float recWarmLp = 0.f;
+    float recFizzLp = 0.f;
     int resBank = -1;
     int resPos = 0;
+    float resAccumL = 0.f, resAccumR = 0.f;
+    int resDiv = 0;
     std::atomic<int> loopSliceReq{-1};
     std::atomic<int> loopSliceTotal{0};
     static constexpr float kLoopGain = 0.9f;

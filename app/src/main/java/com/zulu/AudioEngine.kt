@@ -4,6 +4,7 @@ class AudioEngine {
     external fun nativeStart(mic: Boolean): Boolean
     external fun nativeStop()
     external fun nativeSetFilterType(t: Int)
+    external fun nativeSetGen(t: Int)
     external fun nativeSetAx(v: Float)
     external fun nativeSetAy(v: Float)
     external fun nativeSetBx(v: Float)
@@ -22,6 +23,9 @@ class AudioEngine {
     external fun nativeSetBend(b: Boolean, x: Float, level: Float)
     external fun nativeSetSoloMask(m: Int)
     external fun nativeSetSynth(wave: Int, atk: Float, dec: Float, oct: Int, pitch: Float, tune: Float)
+    external fun nativeSetFx(fx: Int, on: Boolean)
+    external fun nativeSetRecFlavor(f: Int)
+    external fun nativeSetParam(p: Int, v: Float, on: Boolean)
     external fun nativeBankFrames(bank: Int): Int
     external fun nativeCopyBank(bank: Int, dst: FloatArray): Int
     external fun nativeLoadBank(bank: Int, src: FloatArray, frames: Int)

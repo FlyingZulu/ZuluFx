@@ -20,6 +20,9 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetFilterType(JNIEnv*, jobject, jint t) { if (g) g->setFilterType(t); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetGen(JNIEnv*, jobject, jint t) { if (g) g->setGen(t); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetAx(JNIEnv*, jobject, jfloat v) { if (g) g->setAx(v); }
 
 JNIEXPORT void JNICALL
@@ -90,6 +93,21 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetSynth(JNIEnv*, jobject, jint wave, jfloat atk, jfloat dec,
         jint oct, jfloat pitch, jfloat tune) {
     if (g) g->setSynth(wave, atk, dec, oct, pitch, tune);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetFx(JNIEnv*, jobject, jint fx, jboolean on) {
+    if (g) g->setFx(fx, on == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetRecFlavor(JNIEnv*, jobject, jint f) {
+    if (g) g->setRecFlavor(f);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetParam(JNIEnv*, jobject, jint p, jfloat v, jboolean on) {
+    if (g) g->setParam(p, v, on == JNI_TRUE);
 }
 
 JNIEXPORT void JNICALL
