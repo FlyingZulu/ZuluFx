@@ -88,20 +88,14 @@ class BarVuView(context: Context) : View(context) {
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 17)
 
         val m = 4f * d
-        val barH = (h - 3f * m) / 2f
-        drawBar(canvas, m, m, w - m, m + barH, levelL)
-        drawBar(canvas, m, m * 2f + barH, w - m, h - m, levelR)
-
-        paint.fill(Color.rgb(120, 128, 144))
-        paint.textAlign = Paint.Align.RIGHT
-        paint.typeface = marker
-        paint.textSize = 7f * d
-        canvas.drawText("L/R", w - 5f * d, h - 3.5f * d, paint)
+        val barW = (w - 3f * m) / 2f
+        drawBar(canvas, m, m, m + barW, h - m, levelL)
+        drawBar(canvas, m * 2f + barW, m, w - m, h - m, levelR)
     }
 
     private fun drawBar(canvas: Canvas, l: Float, t: Float, r: Float, b: Float, level: Float) {
         val segs = 20
-        val segW = (r - l) / segs
+        val segH = (b - t) / segs
         val lit = (level * segs).toInt()
         for (i in 0 until segs) {
             paint.fill(
@@ -113,7 +107,7 @@ class BarVuView(context: Context) : View(context) {
                 }
             )
             canvas.drawRoundRect(
-                l + i * segW + 1f, t, l + (i + 1) * segW - 1f, b,
+                l + 1f, b - (i + 1) * segH + 1f, r - 1f, b - i * segH - 0.5f,
                 1.5f * d, 1.5f * d, paint
             )
         }
@@ -388,44 +382,43 @@ class FlyFaderView(context: Context) : View(context) {
         paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 71)
 
-        val cx = w / 2f
+        val cy = h / 2f
         paint.stroke(Color.rgb(18, 20, 25), 5f * d)
-        canvas.drawLine(cx, m, cx, h - m, paint)
+        canvas.drawLine(m, cy, w - m, cy, paint)
         paint.stroke(Color.rgb(60, 66, 80), 1f * d)
-        canvas.drawLine(cx, m, cx, h - m, paint)
+        canvas.drawLine(m, cy, w - m, cy, paint)
 
-        val zoneBottom = m + (h - 2f * m) * 0.25f
+        val zoneStart = m + (w - 2f * m) * 0.75f
         paint.stroke(if (stutter) amber else Color.rgb(52, 58, 72), 1f * d)
-        var hy = zoneBottom
-        while (hy > m + 2f) {
-            canvas.drawLine(cx - 6f * d, hy, cx + 6f * d, hy - 3f * d, paint)
-            hy -= 4f * d
+        var hx = zoneStart
+        while (hx < w - m - 2f) {
+            canvas.drawLine(hx, cy - 6f * d, hx - 3f * d, cy + 6f * d, paint)
+            hx += 4f * d
         }
 
-        val ky = (h - m) - value * (h - 2f * m)
-        paint.fill(Color.rgb(55, 60, 74))
-        canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
-        paint.stroke(if (stutter) amber else silk, 1.2f * d)
-        canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
-        paint.stroke(Color.rgb(28, 31, 38), 1f * d)
-        canvas.drawLine(cx - 7f * d, ky, cx + 7f * d, ky, paint)
-
-        canvas.save()
-        canvas.rotate(-90f, cx, h * 0.28f)
+        val kx = m + value * (w - 2f * m)
         paint.fill(amber)
-        paint.textAlign = Paint.Align.CENTER
+        canvas.drawRoundRect(kx - 8f * d, cy - 13f * d, kx + 8f * d, cy + 13f * d, 4f * d, 4f * d, paint)
+        paint.stroke(if (stutter) Color.WHITE else silk, 1.2f * d)
+        paint.alpha = if (stutter) 220 else 90
+        canvas.drawRoundRect(kx - 8f * d, cy - 13f * d, kx + 8f * d, cy + 13f * d, 4f * d, 4f * d, paint)
+        paint.alpha = 255
+        paint.stroke(Color.rgb(40, 26, 8), 1.5f * d)
+        canvas.drawLine(kx, cy - 9f * d, kx, cy + 9f * d, paint)
+
+        paint.fill(amber)
+        paint.textAlign = Paint.Align.LEFT
         paint.typeface = marker
         paint.textSize = 9f * d
-        canvas.drawText("FLY", cx, h * 0.28f + 3f * d, paint)
-        canvas.restore()
+        canvas.drawText("FLY", m + 2f * d, m + 9f * d, paint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
-                val h = height.toFloat()
+                val w = width.toFloat()
                 val m = 8f * d
-                value = 1f - ((event.y - m) / (h - 2f * m)).coerceIn(0f, 1f)
+                value = ((event.x - m) / (w - 2f * m)).coerceIn(0f, 1f)
                 onValueChange?.invoke(value, stutter)
             }
         }
@@ -492,8 +485,24 @@ class GlitchScopeView(context: Context) : View(context) {
 class VFaderView(
     context: Context,
     private val label: String,
-    private val marks: List<Pair<Float, String>> = emptyList()
+    private val marks: List<Pair<Float, String>> = emptyList(),
+    private val thumbColor: Int = Color.rgb(165, 172, 185),
+    private val blendMorph: Boolean = false
 ) : View(context) {
+
+    private val turquoise = Color.rgb(60, 220, 200)
+    private val violet = Color.rgb(190, 120, 255)
+
+    private fun currentThumbColor(): Int {
+        if (!blendMorph) return thumbColor
+        val t = value.coerceIn(0f, 1f)
+        fun lerp(a: Int, b: Int) = (a + (b - a) * t).toInt()
+        return Color.rgb(
+            lerp(Color.red(turquoise), Color.red(violet)),
+            lerp(Color.green(turquoise), Color.green(violet)),
+            lerp(Color.blue(turquoise), Color.blue(violet))
+        )
+    }
 
     val cmdId = "vfader_$label"
 
@@ -519,47 +528,48 @@ class VFaderView(
         paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 73)
 
-        val cx = w * 0.42f
+        val cy = h / 2f
         paint.stroke(Color.rgb(18, 20, 25), 5f * d)
-        canvas.drawLine(cx, m, cx, h - m, paint)
+        canvas.drawLine(m, cy, w - m, cy, paint)
         paint.stroke(Color.rgb(60, 66, 80), 1f * d)
-        canvas.drawLine(cx, m, cx, h - m, paint)
+        canvas.drawLine(m, cy, w - m, cy, paint)
 
-        paint.textAlign = Paint.Align.LEFT
+        paint.textAlign = Paint.Align.CENTER
         paint.typeface = marker
         paint.textSize = 8f * d
         for ((p, txt) in marks) {
-            val my = (h - m) - p * (h - 2f * m)
+            val mx = m + p * (w - 2f * m)
             paint.stroke(Color.rgb(90, 97, 114), 1f * d)
-            canvas.drawLine(cx + 4f * d, my, cx + 9f * d, my, paint)
+            canvas.drawLine(mx, cy + 4f * d, mx, cy + 9f * d, paint)
             paint.fill(Color.rgb(120, 128, 144))
-            canvas.drawText(txt, cx + 11f * d, my + 3f * d, paint)
+            canvas.drawText(txt, mx, cy + 20f * d, paint)
         }
 
-        val ky = (h - m) - value * (h - 2f * m)
-        paint.fill(Color.rgb(55, 60, 74))
-        canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
-        paint.stroke(silk, 1.2f * d)
-        canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
-        paint.stroke(Color.rgb(28, 31, 38), 1f * d)
-        canvas.drawLine(cx - 7f * d, ky, cx + 7f * d, ky, paint)
+        val kx = m + value * (w - 2f * m)
+        val th = min(h * 0.7f, 44f * d)
+        val tc = currentThumbColor()
+        paint.fill(tc)
+        canvas.drawRoundRect(kx - 8f * d, cy - th / 2f, kx + 8f * d, cy + th / 2f, 4f * d, 4f * d, paint)
+        paint.stroke(Color.WHITE, 1.2f * d)
+        paint.alpha = 90
+        canvas.drawRoundRect(kx - 8f * d, cy - th / 2f, kx + 8f * d, cy + th / 2f, 4f * d, 4f * d, paint)
+        paint.alpha = 255
+        paint.stroke(Color.rgb(20, 22, 28), 1.5f * d)
+        canvas.drawLine(kx, cy - th / 2f + 4f * d, kx, cy + th / 2f - 4f * d, paint)
 
-        canvas.save()
-        canvas.rotate(-90f, cx, h * 0.16f)
         paint.fill(silk)
-        paint.textAlign = Paint.Align.CENTER
+        paint.textAlign = Paint.Align.LEFT
         paint.typeface = marker
         paint.textSize = 9f * d
-        canvas.drawText(label, cx, h * 0.16f + 3f * d, paint)
-        canvas.restore()
+        canvas.drawText(label, m + 2f * d, m + 10f * d, paint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
-                val h = height.toFloat()
+                val w = width.toFloat()
                 val m = 8f * d
-                value = 1f - ((event.y - m) / (h - 2f * m)).coerceIn(0f, 1f)
+                value = ((event.x - m) / (w - 2f * m)).coerceIn(0f, 1f)
                 onValueChange?.invoke(value)
             }
         }

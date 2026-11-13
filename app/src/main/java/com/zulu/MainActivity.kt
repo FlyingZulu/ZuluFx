@@ -157,9 +157,9 @@ class MainActivity : Activity() {
         bpmLcd = BpmLcdView(this)
         padGrid = PadGridView(this)
         padGrid.padCount = 12
-        zuLuFader = VFaderView(this, "ZU/LU")
+        zuLuFader = VFaderView(this, "ZU/LU", blendMorph = true)
         flyFader = FlyFaderView(this)
-        mixFader = VFaderView(this, "MIX")
+        mixFader = VFaderView(this, "MIX", thumbColor = Color.rgb(90, 200, 90))
         mixFader.value = 1f
         glitchScope = GlitchScopeView(this)
         glitchScope.visibility = View.GONE
@@ -347,6 +347,14 @@ class MainActivity : Activity() {
             }
         }
 
+        val vuModule = LinearLayout(this)
+        vuModule.orientation = LinearLayout.VERTICAL
+        vuModule.gravity = Gravity.CENTER_HORIZONTAL
+        vuModule.addView(vuMeter, LinearLayout.LayoutParams((48 * d).toInt(), (40 * d).toInt()))
+        val lcdParams = LinearLayout.LayoutParams((110 * d).toInt(), (24 * d).toInt())
+        lcdParams.topMargin = (4 * d).toInt()
+        vuModule.addView(bpmLcd, lcdParams)
+
         val row1 = LinearLayout(this)
         row1.orientation = LinearLayout.HORIZONTAL
         row1.gravity = Gravity.CENTER_VERTICAL
@@ -358,37 +366,37 @@ class MainActivity : Activity() {
         val recParams = LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt())
         recParams.setMargins((4 * d).toInt(), 0, 0, 0)
         row1.addView(btnRec, recParams)
-        val vuParams = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
-        vuParams.setMargins((6 * d).toInt(), 0, 0, 0)
-        row1.addView(vuMeter, vuParams)
-
-        val bpmRow = LinearLayout(this)
-        bpmRow.gravity = Gravity.END
-        val lcdParams = LinearLayout.LayoutParams((110 * d).toInt(), (24 * d).toInt())
-        lcdParams.setMargins(0, (5 * d).toInt(), (2 * d).toInt(), 0)
-        bpmRow.addView(bpmLcd, lcdParams)
+        val vuWrap = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        vuWrap.setMargins((6 * d).toInt(), 0, 0, 0)
+        row1.addView(vuModule, vuWrap)
 
         val zuLuBtns = LinearLayout(this)
         zuLuBtns.orientation = LinearLayout.HORIZONTAL
-        val zuParams = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
-        zuParams.setMargins((2 * d).toInt(), (8 * d).toInt(), (2 * d).toInt(), 0)
+        val zuParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, (20 * d).toInt()
+        )
+        zuParams.setMargins((2 * d).toInt(), (6 * d).toInt(), 0, 0)
         zuLuBtns.addView(btnZu, zuParams)
-        zuLuBtns.addView(btnLu, zuParams)
+        zuLuBtns.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        val luParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, (20 * d).toInt()
+        )
+        luParams.setMargins(0, (6 * d).toInt(), (2 * d).toInt(), 0)
+        zuLuBtns.addView(btnLu, luParams)
 
-        val faderRow = LinearLayout(this)
-        faderRow.orientation = LinearLayout.HORIZONTAL
-        for (f in listOf(flyFader, mixFader)) {
-            val fp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-            fp.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
-            faderRow.addView(f, fp)
-        }
         wireFaders()
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
         column.setPadding((6 * d).toInt(), (4 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
         column.addView(row1)
-        column.addView(bpmRow)
+        gridParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (96 * d).toInt()
+        )
+        gridParams.setMargins(0, (6 * d).toInt(), 0, 0)
+        column.addView(padGrid, gridParams)
         column.addView(zuLuBtns)
         column.addView(
             zuLuFader,
@@ -396,10 +404,18 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
             )
         )
+        val faderRow = LinearLayout(this)
+        faderRow.orientation = LinearLayout.HORIZONTAL
+        val flyParams = LinearLayout.LayoutParams(0, (40 * d).toInt(), 3f)
+        flyParams.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
+        faderRow.addView(flyFader, flyParams)
+        val mixParams = LinearLayout.LayoutParams(0, (40 * d).toInt(), 2f)
+        mixParams.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
+        faderRow.addView(mixFader, mixParams)
         val faderRowParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, (90 * d).toInt()
+            LinearLayout.LayoutParams.MATCH_PARENT, (40 * d).toInt()
         )
-        faderRowParams.topMargin = (10 * d).toInt()
+        faderRowParams.topMargin = (8 * d).toInt()
         column.addView(faderRow, faderRowParams)
 
         content = LinearLayout(this)
@@ -415,11 +431,6 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
         leftColumn.addView(padPane, padPaneParams)
-        gridParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, (96 * d).toInt()
-        )
-        gridParams.setMargins(0, (6 * d).toInt(), 0, 0)
-        leftColumn.addView(padGrid, gridParams)
 
         vuMeter.onLongPress = {
             if (!simulLock) {
@@ -450,11 +461,10 @@ class MainActivity : Activity() {
 
         val edgeColumn = LinearLayout(this)
         edgeColumn.orientation = LinearLayout.VERTICAL
-        edgeColumn.setPadding((3 * d).toInt(), (6 * d).toInt(), (3 * d).toInt(), 0)
+        edgeColumn.setPadding((3 * d).toInt(), (6 * d).toInt(), (3 * d).toInt(), (6 * d).toInt())
         edgeColumn.addView(btnShift, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
-        val edgeMuteParams = LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt())
-        edgeMuteParams.setMargins(0, (14 * d).toInt(), 0, 0)
-        edgeColumn.addView(btnMute, edgeMuteParams)
+        edgeColumn.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
+        edgeColumn.addView(btnMute, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
         padPane.addView(
             pad,
             FrameLayout.LayoutParams(
