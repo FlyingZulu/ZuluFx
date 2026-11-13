@@ -202,18 +202,24 @@ class PadGridView(context: Context) : View(context) {
 
     var activeBank = 0
 
+    var padCount = 8
+        set(value) { field = value; invalidate() }
+
     var onPadTouch: ((Int) -> Unit)? = null
 
     private var flash = -1
+
+    private val rows: Int get() = if (padCount > 8) 3 else 2
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
         val gap = 4f * d
+        val rowsF = rows.toFloat()
         val padW = (w - 5f * gap) / 4f
-        val padH = (h - 3f * gap) / 2f
+        val padH = (h - (rowsF + 1f) * gap) / rowsF
 
-        for (i in 0..7) {
+        for (i in 0 until padCount) {
             val col = i % 4
             val row = i / 4
             val l = gap + col * (padW + gap)
@@ -257,12 +263,14 @@ class PadGridView(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
         val gap = 4f * d
+        val rowsF = rows.toFloat()
         val padW = (w - 5f * gap) / 4f
-        val padH = (h - 3f * gap) / 2f
+        val padH = (h - (rowsF + 1f) * gap) / rowsF
         val col = ((x - gap) / (padW + gap)).toInt()
         val row = ((y - gap) / (padH + gap)).toInt()
-        if (col !in 0..3 || row !in 0..1) return -1
-        return row * 4 + col
+        if (col !in 0..3 || row !in 0 until rows) return -1
+        val i = row * 4 + col
+        return if (i in 0 until padCount) i else -1
     }
 }
 

@@ -241,22 +241,29 @@ class MainActivity : Activity() {
         row1.addView(btnMenu, menuParams)
 
         val row2 = LinearLayout(this)
-        row2.addView(
-            segAB,
-            LinearLayout.LayoutParams((160 * d).toInt(), (38 * d).toInt())
-        )
-
-        val rowShift = LinearLayout(this)
-        rowShift.gravity = Gravity.CENTER_VERTICAL
-        val shiftParams = LinearLayout.LayoutParams((48 * d).toInt(), (48 * d).toInt())
-        shiftParams.setMargins((8 * d).toInt(), 0, 0, 0)
-        rowShift.addView(btnShift, shiftParams)
+        row2.gravity = Gravity.CENTER_VERTICAL
+        row2.addView(btnShift, LinearLayout.LayoutParams((48 * d).toInt(), (48 * d).toInt()))
+        val segParams = LinearLayout.LayoutParams((160 * d).toInt(), (38 * d).toInt())
+        segParams.setMargins((8 * d).toInt(), 0, 0, 0)
+        row2.addView(segAB, segParams)
 
         val row3 = LinearLayout(this)
-        row3.addView(
-            padGrid,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (84 * d).toInt())
+        val row3Params = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (80 * d).toInt()
         )
+        row3Params.topMargin = (4 * d).toInt()
+        row3.addView(padGrid, row3Params)
+
+        btnMenu.setOnClickListener {
+            padGrid.padCount = when (padGrid.padCount) {
+                8 -> 10
+                10 -> 12
+                else -> 8
+            }
+            row3Params.height =
+                ((if (padGrid.padCount > 8) 96 else 80) * d).toInt()
+            column.requestLayout()
+        }
 
         val row4 = LinearLayout(this)
         row4.addView(
@@ -267,6 +274,7 @@ class MainActivity : Activity() {
         val row5 = FrameLayout(this)
         val faderRow = LinearLayout(this)
         faderRow.orientation = LinearLayout.HORIZONTAL
+        faderRow.setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
         faderRow.addView(
             diagFader,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
@@ -291,22 +299,21 @@ class MainActivity : Activity() {
         val mixParams = FrameLayout.LayoutParams(
             (120 * d).toInt(), (26 * d).toInt(), Gravity.BOTTOM or Gravity.END
         )
-        mixParams.setMargins(0, 0, (44 * d).toInt(), (8 * d).toInt())
+        mixParams.setMargins(0, 0, (44 * d).toInt(), (10 * d).toInt())
         row5.addView(mixFader, mixParams)
         wireFaders()
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
-        column.setPadding((6 * d).toInt(), (4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt())
+        column.setPadding((6 * d).toInt(), (4 * d).toInt(), (6 * d).toInt(), (8 * d).toInt())
         column.addView(row1)
         column.addView(row2, columnRowParams(d))
-        column.addView(rowShift, columnRowParams(d))
         column.addView(row3, columnRowParams(d))
         column.addView(row4, columnRowParams(d))
         val row5Params = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, (110 * d).toInt()
+            LinearLayout.LayoutParams.MATCH_PARENT, (106 * d).toInt()
         )
-        row5Params.topMargin = (6 * d).toInt()
+        row5Params.topMargin = (12 * d).toInt()
         column.addView(row5, row5Params)
 
         val content = LinearLayout(this)
@@ -409,7 +416,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        p.topMargin = (6 * d).toInt()
+        p.topMargin = (8 * d).toInt()
         return p
     }
 
