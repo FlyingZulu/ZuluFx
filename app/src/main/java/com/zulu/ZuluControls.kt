@@ -69,8 +69,10 @@ class BarVuView(context: Context) : View(context) {
         }
 
     var onDoubleTap: (() -> Unit)? = null
+    var onLongPress: (() -> Unit)? = null
 
     private var lastTap = 0L
+    private var longPressPending = false
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -114,14 +116,24 @@ class BarVuView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            val now = System.currentTimeMillis()
-            if (now - lastTap < 300) {
-                onDoubleTap?.invoke()
-                lastTap = 0
-            } else {
-                lastTap = now
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val now = System.currentTimeMillis()
+                longPressPending = true
+                postDelayed({
+                    if (longPressPending) {
+                        longPressPending = false
+                        onLongPress?.invoke()
+                    }
+                }, 600)
+                if (now - lastTap < 300) {
+                    onDoubleTap?.invoke()
+                    lastTap = 0
+                } else {
+                    lastTap = now
+                }
             }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> longPressPending = false
         }
         return true
     }

@@ -105,8 +105,6 @@ class MainActivity : Activity() {
     private val green = Color.rgb(140, 255, 150)
     private val silk = Color.rgb(165, 172, 185)
     private val amber = Color.rgb(255, 176, 0)
-    private val yellow = Color.rgb(245, 255, 90)
-    private val pink = Color.rgb(255, 125, 205)
     private val turquoise = Color.rgb(0, 229, 255)
     private val violet = Color.rgb(170, 140, 255)
     private val red = Color.rgb(255, 90, 70)
@@ -119,6 +117,8 @@ class MainActivity : Activity() {
     private var blinkOn = true
     private var axisAOn = true
     private var axisBOn = true
+    private var mirrored = false
+    private lateinit var content: LinearLayout
     private var lastShiftUp = 0L
 
     private val blinkHandler = Handler(Looper.getMainLooper())
@@ -388,7 +388,7 @@ class MainActivity : Activity() {
         faderRowParams.topMargin = (10 * d).toInt()
         column.addView(faderRow, faderRowParams)
 
-        val content = LinearLayout(this)
+        content = LinearLayout(this)
         content.orientation = LinearLayout.HORIZONTAL
         content.setBackgroundColor(Color.rgb(18, 20, 25))
         val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT)
@@ -406,6 +406,12 @@ class MainActivity : Activity() {
         )
         gridParams.setMargins(0, (6 * d).toInt(), 0, 0)
         leftColumn.addView(padGrid, gridParams)
+
+        vuMeter.onLongPress = {
+            mirrored = !mirrored
+            content.layoutDirection =
+                if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        }
 
         vuMeter.onDoubleTap = {
             if (shiftActive()) {
@@ -442,7 +448,7 @@ class MainActivity : Activity() {
             )
         )
         val scopeParams = FrameLayout.LayoutParams(
-            (110 * d).toInt(), (64 * d).toInt(), Gravity.TOP or Gravity.END
+            (110 * d).toInt(), (64 * d).toInt(), Gravity.TOP or Gravity.RIGHT
         )
         scopeParams.setMargins(0, (26 * d).toInt(), (10 * d).toInt(), 0)
         padPane.addView(glitchScope, scopeParams)
@@ -504,11 +510,11 @@ class MainActivity : Activity() {
         val edgeR = View(this)
         root.addView(
             edgeL,
-            FrameLayout.LayoutParams(margin, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START)
+            FrameLayout.LayoutParams(margin, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.LEFT)
         )
         root.addView(
             edgeR,
-            FrameLayout.LayoutParams(margin, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END)
+            FrameLayout.LayoutParams(margin, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.RIGHT)
         )
 
         if (Build.VERSION.SDK_INT >= 29) {
