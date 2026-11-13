@@ -374,6 +374,26 @@ void AudioEngine::applyAssign(int p, float v, float& fc, float& q, float& lr, fl
     }
 }
 
+float AudioEngine::clfoVal(int idx) {
+    float ph = clfoPhase[idx];
+    if (ph < 0.f) ph = 0.f;
+    if (ph > 0.9999f) ph = 0.9999f;
+    switch (clfoWave[idx].load(std::memory_order_relaxed)) {
+        case 0: return sinf(2.f * 3.14159265f * ph);
+        case 1: return 1.f - 4.f * fabsf(ph - 0.5f);
+        case 2: return 2.f * ph - 1.f;
+        case 3: return (ph < 0.5f) ? -1.f : 1.f;
+        default: {
+            float pos = ph * 63.f;
+            int i0 = (int)pos;
+            float fr = pos - (float)i0;
+            float a = clfoShape[idx * 64 + i0].load(std::memory_order_relaxed);
+            float b = clfoShape[idx * 64 + i0 + 1].load(std::memory_order_relaxed);
+            return 2.f * (a + (b - a) * fr) - 1.f;
+        }
+    }
+}
+
 void AudioEngine::recordBank(int bank, int steps, bool wet) {
     if (bank < 0 || bank >= kNumBanks) return;
     if (steps < 1) steps = 1;
@@ -538,6 +558,30 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             float rwT = 0.f, btT = 16.f, rtT = 1.f, drT = 1.f;
             applyAssign(assignX.load(), ax.load(), fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
             applyAssign(assignY.load(), ay.load(), fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+
+            float baseNorm[8] = {
+                clamp01(ax.load()), clamp01(ay.load()), 0.f, 1.f,
+                0.f, clamp01(bx.load()), clamp01(by.load()), 0.f
+            };
+            int axn = assignX.load();
+            int ayn = assignY.load();
+            if (axn >= 0 && axn < 8) baseNorm[axn] = clamp01(ax.load());
+            if (ayn >= 0 && ayn < 8) baseNorm[ayn] = clamp01(ay.load());
+            static const float clfoRates[6] = {0.25f, 0.5f, 1.f, 2.f, 4.f, 8.f};
+            for (int L = 0; L < 2; L++) {
+                if (!clfoOn[L].load(std::memory_order_relaxed)) continue;
+                int ri = clfoRate[L].load(std::memory_order_relaxed);
+                if (ri < 0) ri = 0;
+                if (ri > 5) ri = 5;
+                clfoPhase[L] += clfoRates[ri] * 32.f / fs;
+                if (clfoPhase[L] >= 1.f) clfoPhase[L] -= 1.f;
+                int tg = clfoTarget[L].load(std::memory_order_relaxed);
+                if (tg < 0 || tg > 7) continue;
+                float dep = clfoDepth[L].load(std::memory_order_relaxed);
+                float amt = clfoAmount[L].load(std::memory_order_relaxed);
+                applyAssign(tg, clamp01(baseNorm[tg] + dep * amt * clfoVal(L)),
+                            fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+            }
 
             if (bend.load()) {
                 float bxv = clamp01(bendX.load());

@@ -92,6 +92,18 @@ public:
         synWave.store(wave); synAtk.store(atk); synDecay.store(decay);
         synOct.store(oct); synPitch.store(pitch); synTune.store(tune);
     }
+    void setCustomLfo(int idx, const float* table, bool on, int rateIdx, float depth,
+                      float amount, int target, int wave) {
+        if (idx < 0 || idx > 1) return;
+        for (int i = 0; i < 64; i++)
+            clfoShape[idx * 64 + i].store(table[i], std::memory_order_relaxed);
+        clfoOn[idx].store(on, std::memory_order_relaxed);
+        clfoRate[idx].store(rateIdx, std::memory_order_relaxed);
+        clfoDepth[idx].store(depth, std::memory_order_relaxed);
+        clfoAmount[idx].store(amount, std::memory_order_relaxed);
+        clfoTarget[idx].store(target, std::memory_order_relaxed);
+        clfoWave[idx].store(wave, std::memory_order_relaxed);
+    }
 
     void recordBank(int bank, int steps, bool wet);
     void startResample(int bank, int steps);
@@ -192,6 +204,15 @@ private:
     float qSmoothed = 0.7f;
     float lfoRateSmoothed = 2.0f;
     float lfoDepthSmoothed = 0.2f;
+    std::atomic<float> clfoShape[128] = {};
+    std::atomic<bool> clfoOn[2] = {};
+    std::atomic<int> clfoRate[2] = {};
+    std::atomic<float> clfoDepth[2] = {};
+    std::atomic<float> clfoAmount[2] = {};
+    std::atomic<int> clfoTarget[2] = {};
+    std::atomic<int> clfoWave[2] = {};
+    float clfoPhase[2] = {0.f, 0.f};
+    float clfoVal(int idx);
     float muteGain = 1.0f;
     int coeffClock = 0;
 

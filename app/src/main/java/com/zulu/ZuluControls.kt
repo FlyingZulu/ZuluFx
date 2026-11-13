@@ -761,3 +761,84 @@ class StepEditorView(context: Context) : View(context) {
         return true
     }
 }
+
+class LfoDrawView(context: Context) : View(context) {
+
+    var onShapeChange: ((FloatArray) -> Unit)? = null
+    private val shape = FloatArray(64) { 0.5f }
+    private var lastBin = -1
+    private var lastVal = 0.5f
+    private val d = resources.displayMetrics.density
+
+    private val pBg = Paint().apply { color = Color.rgb(12, 14, 18) }
+    private val pGrid = Paint().apply {
+        color = Color.argb(40, 110, 118, 134)
+        strokeWidth = 1f * d
+    }
+    private val pMid = Paint().apply {
+        color = Color.rgb(75, 82, 98)
+        strokeWidth = 1f * d
+    }
+    private val pLine = Paint().apply {
+        color = Color.rgb(255, 176, 64)
+        strokeWidth = 2.5f * d
+        style = Paint.Style.STROKE
+        isAntiAlias = true
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val pPlay = Paint().apply {
+        color = Color.argb(120, 236, 224, 196)
+        strokeWidth = 1.5f * d
+    }
+
+    fun setShape(s: FloatArray) {
+        for (i in 0 until 64) shape[i] = s[i].coerceIn(0f, 1f)
+        invalidate()
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                val x = (e.x / width).coerceIn(0f, 1f)
+                val v = 1f - (e.y / height).coerceIn(0f, 1f)
+                val bin = (x * 63f).toInt().coerceIn(0, 63)
+                if (lastBin >= 0 && bin != lastBin) {
+                    val from = min(lastBin, bin)
+                    val to = maxOf(lastBin, bin)
+                    val span = (bin - lastBin).toFloat()
+                    for (i in from..to) {
+                        val t = if (span == 0f) 0f else (i - lastBin) / span
+                        shape[i] = lastVal + (v - lastVal) * t
+                    }
+                } else {
+                    shape[bin] = v
+                }
+                lastBin = bin
+                lastVal = v
+                onShapeChange?.invoke(shape.copyOf())
+                invalidate()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> lastBin = -1
+        }
+        return true
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        c.drawRect(0f, 0f, w, h, pBg)
+        for (i in 1 until 8) c.drawLine(w * i / 8f, 0f, w * i / 8f, h, pGrid)
+        c.drawLine(0f, h / 2f, w, h / 2f, pMid)
+        val path = android.graphics.Path()
+        for (i in 0 until 64) {
+            val x = w * i / 63f
+            val y = (1f - shape[i]) * h
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        c.drawPath(path, pLine)
+        val ph = (System.nanoTime() % 1_000_000_000L) / 1_000_000_000f
+        c.drawLine(w * ph, 0f, w * ph, h, pPlay)
+        if (isShown) postInvalidateOnAnimation()
+    }
+}

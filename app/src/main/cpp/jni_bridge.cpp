@@ -62,6 +62,19 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetArpSlices(JNIEnv*, jobject, jint n) { if (g) g->setArpSlices(n); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetCustomLfo(JNIEnv* env, jobject, jint idx, jfloatArray arr,
+                                             jboolean on, jint rateIdx, jfloat depth,
+                                             jfloat amount, jint target, jint wave) {
+    if (!g) return;
+    jsize n = env->GetArrayLength(arr);
+    if (n > 64) n = 64;
+    float tmp[64];
+    if (n > 0) env->GetFloatArrayRegion(arr, 0, n, tmp);
+    for (int i = 0; i < 64; i++) tmp[i] = (i < n) ? tmp[i] : (n > 0 ? tmp[n - 1] : 0.5f);
+    g->setCustomLfo(idx, tmp, on == JNI_TRUE, rateIdx, depth, amount, target, wave);
+}
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetArpXy(JNIEnv*, jobject, jfloat x, jboolean t) { if (g) g->setArpXy(x, t); }
 
 JNIEXPORT void JNICALL

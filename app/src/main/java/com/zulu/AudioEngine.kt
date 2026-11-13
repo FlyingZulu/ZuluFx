@@ -34,6 +34,7 @@ class AudioEngine {
     external fun nativeJumpSlice(slice: Int, total: Int)
     external fun nativeIsLoopRecording(): Boolean
     external fun nativeGetLevels(out: FloatArray)
+    external fun nativeSetCustomLfo(idx: Int, shape: FloatArray, on: Boolean, rateIdx: Int, depth: Float, amount: Float, target: Int, wave: Int)
 
     companion object {
         init { System.loadLibrary("zulu") }

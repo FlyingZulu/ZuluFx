@@ -15,6 +15,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import java.io.File
 import java.nio.ByteBuffer
@@ -133,6 +134,15 @@ class MainActivity : Activity() {
     private var synOctIdx = 2
     private var synPitIdx = 2
     private var synTunIdx = 1
+    private val lfoShapes = Array(2) { FloatArray(64) { 0.5f } }
+    private val lfoOn = BooleanArray(2)
+    private val lfoRateIdxArr = IntArray(2) { 2 }
+    private val lfoDepthIdxArr = IntArray(2) { 2 }
+    private val lfoAmountIdxArr = IntArray(2) { 3 }
+    private val lfoTargets = IntArray(2) { -1 }
+    private val lfoWaves = IntArray(2) { 0 }
+    private var lfoSel = 0
+    private var lfoDraw: LfoDrawView? = null
 
     private data class UserPreset(
         val filter: Int,
@@ -1300,6 +1310,20 @@ class MainActivity : Activity() {
                 }
             }
             json.put("snaps", snaps)
+            val lfos = JSONArray()
+            for (i in 0 until 2) {
+                lfos.put(
+                    JSONObject()
+                        .put("on", lfoOn[i])
+                        .put("rate", lfoRateIdxArr[i])
+                        .put("depth", lfoDepthIdxArr[i])
+                        .put("amount", lfoAmountIdxArr[i])
+                        .put("target", lfoTargets[i])
+                        .put("wave", lfoWaves[i])
+                        .put("shape", JSONArray(lfoShapes[i].toList()))
+                )
+            }
+            json.put("lfos", lfos)
             json.put("activeZu", activeZu)
             json.put("activeLu", activeLu)
             projFile(slot).writeText(json.toString())
@@ -1416,6 +1440,25 @@ class MainActivity : Activity() {
                     }
                 }
             }
+            val lfos = json.optJSONArray("lfos")
+            if (lfos != null) {
+                for (i in 0 until min(2, lfos.length())) {
+                    val o = lfos.getJSONObject(i)
+                    lfoOn[i] = o.optBoolean("on", false)
+                    lfoRateIdxArr[i] = o.optInt("rate", 2)
+                    lfoDepthIdxArr[i] = o.optInt("depth", 2)
+                    lfoAmountIdxArr[i] = o.optInt("amount", 3)
+                    lfoTargets[i] = o.optInt("target", -1)
+                    lfoWaves[i] = o.optInt("wave", 0)
+                    val sh = o.optJSONArray("shape")
+                    if (sh != null && sh.length() == 64) {
+                        for (j in 0 until 64) lfoShapes[i][j] = sh.getDouble(j).toFloat()
+                    }
+                }
+                pushLfo(0)
+                pushLfo(1)
+                lfoDraw?.setShape(lfoShapes[lfoSel])
+            }
             activeZu = json.optInt("activeZu", -1)
             activeLu = json.optInt("activeLu", -1)
             refreshSnapGrid()
@@ -1475,7 +1518,8 @@ class MainActivity : Activity() {
 
         val list = LinearLayout(this)
         list.orientation = LinearLayout.VERTICAL
-        panel.addView(list)
+        val listScroll = ScrollView(this)
+        listScroll.addView(list)
 
         fun header(t: String) {
             val h = TextView(this)
@@ -1566,11 +1610,105 @@ class MainActivity : Activity() {
             pushSynth()
         }
 
+        header("LFO CUSTOM")
+        val lfoTabs = LinearLayout(this)
+        for ((i, l) in listOf("LFO A", "LFO B").withIndex()) {
+            val b = makeButton(l, silk)
+            b.tag = "ltab" to i
+            b.setOnClickListener {
+                lfoSel = i
+                lfoDraw?.setShape(lfoShapes[i])
+                refreshArpHighlight()
+            }
+            arpButtons.add(b)
+            lfoTabs.addView(b, wrapParams((4 * d).toInt()))
+        }
+        list.addView(lfoTabs)
+
+        header("FORME")
+        row(listOf("SIN", "TRI", "SAW", "SQR", "DESSIN"), "lfw") { i ->
+            lfoWaves[lfoSel] = i
+            pushLfo(lfoSel)
+        }
+
+        val draw = LfoDrawView(this)
+        draw.setShape(lfoShapes[lfoSel])
+        draw.onShapeChange = { s ->
+            lfoShapes[lfoSel] = s
+            pushLfo(lfoSel)
+        }
+        lfoDraw = draw
+        list.addView(draw, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (140 * d).toInt()))
+
+        header("VITESSE (HZ)")
+        row(listOf("0.25", "0.5", "1", "2", "4", "8"), "lfov") { i ->
+            lfoRateIdxArr[lfoSel] = i
+            pushLfo(lfoSel)
+        }
+        header("PROF")
+        row(listOf("25%", "50%", "75%", "100%"), "lfod") { i ->
+            lfoDepthIdxArr[lfoSel] = i
+            pushLfo(lfoSel)
+        }
+        header("MONTANT")
+        row(listOf("25%", "50%", "75%", "100%"), "lfoa") { i ->
+            lfoAmountIdxArr[lfoSel] = i
+            pushLfo(lfoSel)
+        }
+        header("CIBLE")
+        fun lfoTargetRow(labels: List<String>, targets: List<Int>) {
+            val r = LinearLayout(this)
+            for (t in labels.withIndex()) {
+                val b = makeButton(t.value, silk)
+                b.tag = "lfot" to targets[t.index]
+                b.setOnClickListener {
+                    lfoTargets[lfoSel] = targets[t.index]
+                    pushLfo(lfoSel)
+                }
+                arpButtons.add(b)
+                r.addView(b, wrapParams((4 * d).toInt()))
+            }
+            list.addView(r)
+        }
+        lfoTargetRow(listOf("RIEN", "CUT", "RES", "REV"), listOf(-1, 0, 1, 2))
+        lfoTargetRow(listOf("BIT", "VIT", "L-V", "L-P", "DRI"), listOf(3, 4, 5, 6, 7))
+
+        val lfoRow = LinearLayout(this)
+        val bLfoOn = makeButton("ACTIF", silk)
+        bLfoOn.tag = "lfoon" to 0
+        bLfoOn.setOnClickListener {
+            lfoOn[lfoSel] = !lfoOn[lfoSel]
+            pushLfo(lfoSel)
+        }
+        val bFlat = makeButton("PLAT", silk)
+        bFlat.setOnClickListener {
+            lfoShapes[lfoSel] = FloatArray(64) { 0.5f }
+            lfoDraw?.setShape(lfoShapes[lfoSel])
+            pushLfo(lfoSel)
+        }
+        lfoRow.addView(bLfoOn, wrapParams((4 * d).toInt()))
+        lfoRow.addView(bFlat, wrapParams((4 * d).toInt()))
+        list.addView(lfoRow)
+
+        panel.addView(listScroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
         val panelParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER
         )
-        panelParams.setMargins((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        panelParams.setMargins((10 * d).toInt(), (16 * d).toInt(), (10 * d).toInt(), (16 * d).toInt())
         arpOverlay.addView(panel, panelParams)
+    }
+
+    private fun pushLfo(idx: Int) {
+        engine.nativeSetCustomLfo(
+            idx, lfoShapes[idx], lfoOn[idx], lfoRateIdxArr[idx],
+            floatArrayOf(0.25f, 0.5f, 0.75f, 1f)[lfoDepthIdxArr[idx]],
+            floatArrayOf(0.25f, 0.5f, 0.75f, 1f)[lfoAmountIdxArr[idx]],
+            lfoTargets[idx], lfoWaves[idx]
+        )
+        refreshArpHighlight()
     }
 
     private fun pushArp() {
@@ -1610,6 +1748,14 @@ class MainActivity : Activity() {
                 "soct" -> idx == synOctIdx
                 "spit" -> idx == synPitIdx
                 "stun" -> idx == synTunIdx
+                "ltab" -> idx == lfoSel
+                "lfw" -> idx == lfoWaves[lfoSel]
+                "lfov" -> idx == lfoRateIdxArr[lfoSel]
+                "lfod" -> idx == lfoDepthIdxArr[lfoSel]
+                "lfoa" -> idx == lfoAmountIdxArr[lfoSel]
+                "lfot" -> idx == lfoTargets[lfoSel]
+                "lfoon" -> lfoOn[lfoSel]
+                "lfooff" -> !lfoOn[lfoSel]
                 else -> false
             }
             b.setTextColor(if (lit) amber else silk)
