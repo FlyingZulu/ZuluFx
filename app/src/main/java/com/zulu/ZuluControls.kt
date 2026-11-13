@@ -997,8 +997,8 @@ class PunchPadView(context: Context) : View(context) {
             c.drawText(colNames[i], chw * i + chw / 2f, headerH * 0.68f, pChip)
         }
         if (colIdx in colNames.indices) {
-            c.drawLine(chw * collectionIndex + chw * 0.15f, headerH - 4f,
-                chw * (collectionIndex + 1) - chw * 0.15f, headerH - 4f, pOnBorder)
+            c.drawLine(chw * colIdx + chw * 0.15f, headerH - 4f,
+                chw * (colIdx + 1) - chw * 0.15f, headerH - 4f, pOnBorder)
         }
         pLabel.textSize = ch / 3.6f
         for (z in 0 until 9) {
