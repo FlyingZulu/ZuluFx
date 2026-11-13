@@ -9,8 +9,28 @@ import android.view.View
 
 class ZuluPad(context: Context) : View(context) {
 
+    enum class AxisState { OFF, MOM }
+
     private val d = resources.displayMetrics.density
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    var stateA = AxisState.MOM
+        set(value) {
+            field = value
+            if (value == AxisState.OFF && fingerA != -1) {
+                fingerA = -1
+            }
+            invalidate()
+        }
+
+    var stateB = AxisState.MOM
+        set(value) {
+            field = value
+            if (value == AxisState.OFF && fingerB != -1) {
+                fingerB = -1
+            }
+            invalidate()
+        }
 
     private var ax = 0.35f
     private var ay = 0.50f
@@ -25,8 +45,9 @@ class ZuluPad(context: Context) : View(context) {
     private var fingerA = -1
     private var fingerB = -1
 
-    private val yellow = Color.rgb(255, 242, 0)
+    private val yellow = Color.rgb(255, 245, 0)
     private val pink = Color.rgb(255, 70, 170)
+    private val offColor = Color.rgb(90, 96, 108)
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -50,8 +71,15 @@ class ZuluPad(context: Context) : View(context) {
         bx += (targetBx - bx) * 0.18f
         by += (targetBy - by) * 0.18f
 
-        drawCursor(canvas, ax * w, (1f - ay) * h, yellow, "A")
-        drawCursor(canvas, bx * w, (1f - by) * h, pink, "B")
+        drawCursor(
+            canvas, ax * w, (1f - ay) * h,
+            yellow, "A", stateA == AxisState.MOM
+        )
+
+        drawCursor(
+            canvas, bx * w, (1f - by) * h,
+            pink, "B", stateB == AxisState.MOM
+        )
 
         postInvalidateOnAnimation()
     }
@@ -61,18 +89,28 @@ class ZuluPad(context: Context) : View(context) {
         x: Float,
         y: Float,
         color: Int,
-        letter: String
+        letter: String,
+        active: Boolean
     ) {
+        paint.color = if (active) color else offColor
+
+        if (active) {
+            paint.style = Paint.Style.FILL
+            paint.alpha = 45
+            canvas.drawCircle(x, y, 42f * d, paint)
+            paint.alpha = 255
+            canvas.drawCircle(x, y, 17f * d, paint)
+        } else {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 2f * d
+            paint.alpha = 180
+            canvas.drawCircle(x, y, 13f * d, paint)
+        }
+
         paint.style = Paint.Style.FILL
-        paint.color = color
-        paint.alpha = 45
-        canvas.drawCircle(x, y, 42f * d, paint)
-
         paint.alpha = 255
-        canvas.drawCircle(x, y, 17f * d, paint)
-
-        paint.color = Color.WHITE
-        canvas.drawCircle(x, y, 6f * d, paint)
+        paint.color = if (active) Color.WHITE else offColor
+        canvas.drawCircle(x, y, 5f * d, paint)
 
         paint.color = Color.rgb(20, 22, 28)
         paint.textSize = 13f * d
@@ -86,9 +124,9 @@ class ZuluPad(context: Context) : View(context) {
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val id = event.getPointerId(event.actionIndex)
 
-                if (fingerA == -1) {
+                if (stateA == AxisState.MOM && fingerA == -1) {
                     fingerA = id
-                } else if (fingerB == -1) {
+                } else if (stateB == AxisState.MOM && fingerB == -1) {
                     fingerB = id
                 }
             }
@@ -96,14 +134,8 @@ class ZuluPad(context: Context) : View(context) {
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_POINTER_UP -> {
                 val id = event.getPointerId(event.actionIndex)
-
-                if (id == fingerA) {
-                    fingerA = -1
-                }
-
-                if (id == fingerB) {
-                    fingerB = -1
-                }
+                if (id == fingerA) fingerA = -1
+                if (id == fingerB) fingerB = -1
             }
 
             MotionEvent.ACTION_CANCEL -> {
@@ -115,12 +147,12 @@ class ZuluPad(context: Context) : View(context) {
         val indexA = event.findPointerIndex(fingerA)
         val indexB = event.findPointerIndex(fingerB)
 
-        if (indexA >= 0) {
+        if (stateA == AxisState.MOM && indexA >= 0) {
             targetAx = (event.getX(indexA) / width).coerceIn(0f, 1f)
             targetAy = (1f - event.getY(indexA) / height).coerceIn(0f, 1f)
         }
 
-        if (indexB >= 0) {
+        if (stateB == AxisState.MOM && indexB >= 0) {
             targetBx = (event.getX(indexB) / width).coerceIn(0f, 1f)
             targetBy = (1f - event.getY(indexB) / height).coerceIn(0f, 1f)
         }
