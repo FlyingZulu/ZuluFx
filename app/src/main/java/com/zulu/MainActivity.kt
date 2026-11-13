@@ -22,6 +22,7 @@ import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -119,6 +120,12 @@ class MainActivity : Activity() {
     private lateinit var menuOverlay: FrameLayout
     private val menuPadButtons = ArrayList<Button>()
     private var menuMirrorBtn: Button? = null
+    private val menuCurveButtons = ArrayList<Button>()
+    private val menuFingerButtons = ArrayList<Button>()
+    private var menuFreezeBtn: Button? = null
+    private var morphCurve = 0
+    private var fingerModeOpt = 0
+    private var bendFreezeOpt = false
     private var synWaveIdx = 0
     private var synAtkIdx = 0
     private var synDecIdx = 1
@@ -1780,7 +1787,13 @@ class MainActivity : Activity() {
     }
 
     private fun applyMorph(tIn: Float) {
-        val t = tIn.coerceIn(0f, 1f)
+        val tRaw = tIn.coerceIn(0f, 1f)
+        val t = when (morphCurve) {
+            1 -> sqrt(tRaw)
+            2 -> tRaw * tRaw
+            3 -> tRaw * tRaw * (3f - 2f * tRaw)
+            else -> tRaw
+        }
         val zu = activeZu.takeIf { it >= 0 }?.let { snapPads[it] } ?: autoZu ?: return
         val lu = activeLu.takeIf { it >= 0 }?.let { snapPads[it] } ?: autoLu ?: return
         fun l(a: Float, b: Float) = a + (b - a) * t
@@ -1876,6 +1889,42 @@ class MainActivity : Activity() {
         scRow.addView(bMotion, wrapParams((4 * d).toInt()))
         panel.addView(scRow)
 
+        header("COURBE DU FADER")
+        val curveRow = LinearLayout(this)
+        for ((i, lbl) in listOf("LIN", "D\u00c9BUT", "FIN", "S").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener { morphCurve = i; refreshMenu() }
+            menuCurveButtons.add(b)
+            curveRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(curveRow)
+
+        header("ATTRIBUTION DOIGTS")
+        val fingerRow = LinearLayout(this)
+        for ((i, lbl) in listOf("ORDRE", "INVERS\u00c9", "ZONES").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                fingerModeOpt = i
+                pad.fingerMode = fingerModeOpt
+                refreshMenu()
+            }
+            menuFingerButtons.add(b)
+            fingerRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(fingerRow)
+
+        header("BEND")
+        val bendRow = LinearLayout(this)
+        val bFreeze = makeButton("JEU FIG\u00c9", silk)
+        bFreeze.setOnClickListener {
+            bendFreezeOpt = !bendFreezeOpt
+            pad.bendFreeze = bendFreezeOpt
+            refreshMenu()
+        }
+        menuFreezeBtn = bFreeze
+        bendRow.addView(bFreeze, wrapParams((4 * d).toInt()))
+        panel.addView(bendRow)
+
         header("PAGES")
         val pagesRow = LinearLayout(this)
         val bProj = makeButton("PROJET", silk)
@@ -1911,6 +1960,13 @@ class MainActivity : Activity() {
             b.setTextColor(if (counts[i] == padGrid.padCount) amber else silk)
         }
         menuMirrorBtn?.setTextColor(if (mirrored) amber else silk)
+        for ((i, b) in menuCurveButtons.withIndex()) {
+            b.setTextColor(if (i == morphCurve) amber else silk)
+        }
+        for ((i, b) in menuFingerButtons.withIndex()) {
+            b.setTextColor(if (i == fingerModeOpt) amber else silk)
+        }
+        menuFreezeBtn?.setTextColor(if (bendFreezeOpt) amber else silk)
     }
 
     private fun openMenuPanel() {

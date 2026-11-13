@@ -102,6 +102,9 @@ class ZuluPad(context: Context) : View(context) {
             invalidate()
         }
 
+    var fingerMode = 0
+    var bendFreeze = false
+
     var onBendTouch: ((Boolean) -> Unit)? = null
     var onBendPos: ((Float, Float) -> Unit)? = null
 
@@ -338,28 +341,56 @@ class ZuluPad(context: Context) : View(context) {
                     }
                 }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(true)
-                if (fingerA == -1 && fingerB == -1) {
-                    if (stateA != AxisState.OFF) {
-                        if (stateA == AxisState.MOM) {
+                if (!(bendFreeze && bendActive)) {
+                    val px = event.getX(event.actionIndex)
+                    val py = event.getY(event.actionIndex)
+                    val dA = Math.hypot(
+                        (px - ax * width).toDouble(),
+                        (py - (1f - ay) * height).toDouble()
+                    )
+                    val dB = Math.hypot(
+                        (px - bx * width).toDouble(),
+                        (py - (1f - by) * height).toDouble()
+                    )
+                    val grab = (30f * d).toDouble()
+                    val nearA = dA < grab
+                    val nearB = dB < grab
+                    val firstA = when (fingerMode) {
+                        1 -> false
+                        2 -> px < width / 2f
+                        else -> true
+                    }
+                    fun takeA() {
+                        if (stateA == AxisState.MOM && fingerA == -1) {
                             restAx = targetAx; restAy = targetAy
+                            fingerA = id
                         }
-                        fingerA = id
-                    } else if (stateB != AxisState.OFF) {
-                        if (stateB == AxisState.MOM) {
+                    }
+                    fun takeB() {
+                        if (stateB == AxisState.MOM && fingerB == -1) {
                             restBx = targetBx; restBy = targetBy
+                            fingerB = id
                         }
-                        fingerB = id
                     }
-                } else if (fingerA == -1 && stateA != AxisState.OFF) {
-                    if (stateA == AxisState.MOM) {
-                        restAx = targetAx; restAy = targetAy
+                    when {
+                        nearA && stateA == AxisState.MOM && fingerA == -1 &&
+                            (!nearB || dA <= dB) -> takeA()
+                        nearB && stateB == AxisState.MOM && fingerB == -1 -> takeB()
+                        nearA && stateA == AxisState.MOM && fingerA == -1 -> takeA()
+                        nearA && stateA == AxisState.HOLD -> {}
+                        nearB && stateB == AxisState.HOLD -> {}
+                        fingerA == -1 && fingerB == -1 -> {
+                            if (firstA) {
+                                takeA()
+                                if (fingerA == -1) takeB()
+                            } else {
+                                takeB()
+                                if (fingerB == -1) takeA()
+                            }
+                        }
+                        fingerA == -1 && stateA == AxisState.MOM -> takeA()
+                        fingerB == -1 && stateB == AxisState.MOM -> takeB()
                     }
-                    fingerA = id
-                } else if (fingerB == -1 && stateB != AxisState.OFF) {
-                    if (stateB == AxisState.MOM) {
-                        restBx = targetBx; restBy = targetBy
-                    }
-                    fingerB = id
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
