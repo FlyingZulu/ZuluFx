@@ -267,7 +267,7 @@ class MainActivity : Activity() {
                     12, 10 -> 96
                     else -> 80
                 }) * d).toInt()
-            column.requestLayout()
+            padGrid.requestLayout()
         }
 
         val row4 = LinearLayout(this)
