@@ -155,6 +155,11 @@ class MainActivity : Activity() {
     private val menuFingerButtons = ArrayList<Button>()
     private val menuArtButtons = ArrayList<Button>()
     private val menuStyleButtons = ArrayList<Button>()
+    private val menuEcoButtons = ArrayList<Button>()
+    private var ecoOpt = false
+    private var bgArtEcoPrev = 0
+    private var lastDrumZone = -1
+    private var padTouchDown = false
     private var bgArtOpt = 1
     private var menuFreezeBtn: Button? = null
     private val menuBillardButtons = ArrayList<Button>()
@@ -166,9 +171,9 @@ class MainActivity : Activity() {
     private var punchCol = 0
     private var paramView: ParamPageView? = null
     private var paramFx = -1
-    private val fxParamInit = BooleanArray(46)
-    private val fxParamVals = Array(46) { FloatArray(8) }
-    private val fxParamAssign = Array(46) { IntArray(8) }
+    private val fxParamInit = BooleanArray(62)
+    private val fxParamVals = Array(62) { FloatArray(8) }
+    private val fxParamAssign = Array(62) { IntArray(8) }
     private val fxParamDefs = mapOf(
         27 to listOf("TEMPS", "FB", "TONAL", "SAT"),
         28 to listOf("GRAVE", "AIGU", "DRIVE", "HUM"),
@@ -188,7 +193,43 @@ class MainActivity : Activity() {
         42 to listOf("DRIVE", "TONAL", "NIVEAU"),
         43 to listOf("GRAVE", "AIGU", "GATE", "NIVEAU"),
         44 to listOf("FUZZ", "TONAL", "NIVEAU"),
-        45 to listOf("GAIN", "TONAL", "NIVEAU")
+        45 to listOf("GAIN", "TONAL", "NIVEAU"),
+        0 to listOf("TEMPS", "FB", "TONAL", "NIVEAU"),
+        1 to listOf("TEMPS", "FB", "TONAL", "NIVEAU"),
+        2 to listOf("VITESSE", "GRAVE", "AIGU", "NIVEAU"),
+        3 to listOf("VITESSE", "PROF", "FORME", "NIVEAU"),
+        4 to listOf("VITESSE", "FORME", "PROF", "NIVEAU"),
+        5 to listOf("VITESSE", "PROF", "FB", "NIVEAU"),
+        6 to listOf("VITESSE", "PROF", "SPREAD", "NIVEAU"),
+        7 to listOf("FREQUENCE", "TIMBRE", "PROF", "NIVEAU"),
+        8 to listOf("WOW", "FLUTTER", "SOUFFLE", "NIVEAU"),
+        9 to listOf("VITESSE", "FENETRE", "FIGURE", "NIVEAU"),
+        10 to listOf("TAILLE", "POINT", "TONAL", "NIVEAU"),
+        11 to listOf("SEUIL", "GAIN", "REPRISE", "NIVEAU"),
+        12 to listOf("VITESSE", "RELANCE", "PROF", "NIVEAU"),
+        13 to listOf("DUREE", "POINT", "TONAL", "NIVEAU"),
+        14 to listOf("TAILLE", "POINT", "TONAL", "NIVEAU"),
+        15 to listOf("ACCORD", "AMORTI", "RICHESSE", "NIVEAU"),
+        16 to listOf("TENSION", "RICHESSE", "ROULIS", "NIVEAU"),
+        17 to listOf("GAIN", "ASYM", "REPLI", "NIVEAU"),
+        18 to listOf("VITESSE", "PLAGE", "SENS", "NIVEAU"),
+        19 to listOf("TAILLE", "PITCH", "ESPACE", "NIVEAU"),
+        20 to listOf("TAILLE", "FOLIE", "SAUT", "NIVEAU"),
+        21 to listOf("DUREE", "GRAVE", "REVERB", "NIVEAU"),
+        22 to listOf("DRIVE", "CHALEUR", "GRAIN", "NIVEAU"),
+        23 to listOf("VITESSE", "DRIVE", "TROU", "NIVEAU"),
+        24 to listOf("DUREE", "GRAVE", "REVERB", "NIVEAU"),
+        25 to listOf("DUREE", "COURBE", "NUAGE", "NIVEAU"),
+        26 to listOf("PUNCH", "PROF", "FORME", "NIVEAU"),
+        46 to listOf("TUNE", "ATTAQUE", "RELEASE", "NIVEAU"),
+        51 to listOf("TUNE", "DECAY", "CLICK", "NIVEAU"),
+        52 to listOf("TON", "DECAY", "GRAINS", "NIVEAU"),
+        53 to listOf("TON", "DECAY", "PITCH", "NIVEAU"),
+        58 to listOf("TUNE", "ATTAQUE", "RELEASE", "NIVEAU"),
+        59 to listOf("TUNE", "ATTAQUE", "RELEASE", "NIVEAU"),
+        60 to listOf("TUNE", "ATTAQUE", "RELEASE", "NIVEAU"),
+        61 to listOf("CUT", "GLIDE", "RESO", "NIVEAU"),
+        62 to listOf("TON", "DECAY", "MORDANT", "NIVEAU")
     )
     private val fxParamDefaults = mapOf(
         27 to floatArrayOf(0.45f, 0.8f, 0.22f, 0.2f),
@@ -209,7 +250,43 @@ class MainActivity : Activity() {
         42 to floatArrayOf(0.35f, 0.5f, 0.6f),
         43 to floatArrayOf(0.3f, 0.7f, 0.2f, 0.6f),
         44 to floatArrayOf(0.45f, 0.5f, 0.55f),
-        45 to floatArrayOf(0.4f, 0.55f, 0.5f)
+        45 to floatArrayOf(0.4f, 0.55f, 0.5f),
+        0 to floatArrayOf(0.27f, 0.42f, 0.5f, 0.5f),
+        1 to floatArrayOf(0.5f, 0.6f, 0.5f, 0.5f),
+        2 to floatArrayOf(0.33f, 0.5f, 0.5f, 0.5f),
+        3 to floatArrayOf(0.5f, 0.5f, 0f, 0.5f),
+        4 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
+        5 to floatArrayOf(0.5f, 0.33f, 0.5f, 0.5f),
+        6 to floatArrayOf(0.5f, 0.33f, 0.5f, 0.5f),
+        7 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
+        8 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        9 to floatArrayOf(0.25f, 0.2f, 0f, 0.5f),
+        10 to floatArrayOf(1f, 0f, 0.5f, 0.5f),
+        11 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        12 to floatArrayOf(0.5f, 0.5f, 1f, 0.5f),
+        13 to floatArrayOf(0.25f, 0f, 0.5f, 0.5f),
+        14 to floatArrayOf(0.5f, 1f, 0.5f, 0.5f),
+        15 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        16 to floatArrayOf(0.5f, 0.5f, 0f, 0.5f),
+        17 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        18 to floatArrayOf(0.5f, 0.5f, 0f, 0.5f),
+        19 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        20 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        21 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        22 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        23 to floatArrayOf(0.25f, 0.5f, 0.5f, 0.5f),
+        24 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        25 to floatArrayOf(0.5f, 0.5f, 0f, 0.5f),
+        26 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        46 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
+        51 to floatArrayOf(0.5f, 0.5f, 0.2f, 0.5f),
+        52 to floatArrayOf(0.5f, 0.5f, 0.33f, 0.5f),
+        53 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        58 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
+        59 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
+        60 to floatArrayOf(0.5f, 0f, 0.5f, 0.5f),
+        61 to floatArrayOf(0.5f, 0.35f, 0.5f, 0.5f),
+        62 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f)
     )
     private var sendPadBank = -1
     private var sendPadAt = 0L
@@ -293,7 +370,7 @@ class MainActivity : Activity() {
         "RESONANCE" to listOf("RESO", "SPRING", "RINGS"),
         "GRANULAIRE" to listOf("GRAIN", "JUNGLE"),
         "TRANSITIONS" to listOf("TRANSIT", "COMBUSTOR", "TURNADO", "FALL", "SWELL", "PUMP"),
-        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "KICK", "SNARE", "HAT"),
+        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "303", "KICK", "SNARE", "HAT", "PERC"),
         "LECTURE SAMPLE" to listOf("SPLY", "GRAN", "JGL", "RND", "SLICR", "CLOUD", "FRZ"),
         "STUDIO" to listOf("EQ3", "COMP", "WARM", "CLEAN")
     )
@@ -306,7 +383,7 @@ class MainActivity : Activity() {
         "X15", "X16", "X32",
         "X19", "X20",
         "X21", "X22", "X23", "X24", "X25", "X26",
-        "G0", "G13", "G14", "G12", "G5", "G6", "G7",
+        "G0", "G13", "G14", "G12", "G15", "G5", "G6", "G7", "G16",
         "X33", "X34", "X35", "X36", "X37", "X38", "X39",
         "X40", "X41", "X42", "X43"
     )
@@ -477,10 +554,24 @@ class MainActivity : Activity() {
                 engine.nativeSetBy(by)
                 if (arpOn && arpMode == 4) engine.nativeSetArpXy(ax, true)
             }
+            if (padTouchDown && (genIdx == 5 || genIdx == 6 || genIdx == 7 || genIdx == 16)) {
+                val col = (ax.coerceIn(0f, 0.999f) * 3f).toInt()
+                val row = (ay.coerceIn(0f, 0.999f) * 3f).toInt()
+                val zone = row * 3 + col
+                if (zone != lastDrumZone) {
+                    lastDrumZone = zone
+                    engine.nativeGenHit(genIdx, ax, ay)
+                }
+            }
             padAxisX = ax
         }
         pad.onPadTouchState = { t ->
-            if (!t) engine.nativeSetArpXy(padAxisX, false)
+            padTouchDown = t
+            engine.nativeSetGenTouch(t)
+            if (!t) {
+                engine.nativeSetArpXy(padAxisX, false)
+                lastDrumZone = -1
+            }
         }
         pad.onBendTouch = { down ->
             val bend = down && shiftLocked
@@ -1312,6 +1403,10 @@ class MainActivity : Activity() {
         if (!playing) {
             Toast.makeText(this, "AUDIO : demarrage impossible", Toast.LENGTH_LONG).show()
         }
+        for (f in 0 until 62) {
+            val d = fxParamDefaults[f] ?: continue
+            for (k in d.indices) engine.nativeSetFxParam(f, k, d[k])
+        }
         refreshPlayBtn()
         if (globalFile(0).exists()) {
             loadProject(0, global = true)
@@ -1323,6 +1418,18 @@ class MainActivity : Activity() {
     private var swipeY0 = 0f
 
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+        if (fxOpen || paramView?.visibility == View.VISIBLE) {
+            val loc = IntArray(2)
+            btnFx.getLocationOnScreen(loc)
+            val dd = resources.displayMetrics.density
+            if (e.actionMasked == MotionEvent.ACTION_DOWN &&
+                e.rawX >= loc[0] - 6 * dd && e.rawX <= loc[0] + btnFx.width + 6 * dd &&
+                e.rawY >= loc[1] - 6 * dd && e.rawY <= loc[1] + btnFx.height + 6 * dd) {
+                closeParamPage()
+                if (fxOpen) closeFx()
+                return true
+            }
+        }
         if (::projOverlay.isInitialized && projOverlay.visibility == View.VISIBLE) {
             if (e.actionMasked == MotionEvent.ACTION_DOWN) {
                 swipeX0 = e.x
@@ -1474,8 +1581,11 @@ class MainActivity : Activity() {
                 fxActive[f] = false
                 engine.nativeSetFx(f, false)
             }
-            fxParamInit[f] = false
-            for (k in 0 until 8) engine.nativeSetFxParam(f, k, 0f)
+        }
+        for (f in 0 until 62) fxParamInit[f] = false
+        for (f in 0 until 62) {
+            val df = fxParamDefaults[f]
+            for (k in 0 until 8) engine.nativeSetFxParam(f, k, if (df != null && k < df.size) df[k] else 0f)
         }
         paramActive.fill(false)
         for (pp in 0 until 8) engine.nativeSetParam(pp, 0f, false)
@@ -1789,8 +1899,12 @@ class MainActivity : Activity() {
                                 )
                             }
                             'G' -> {
-                                genIdx = num
-                                engine.nativeSetGen(num)
+                                if ((shiftActive() || editFxMode) && fxParamDefs.containsKey(46 + num)) {
+                                    openParamPage(46 + num)
+                                } else {
+                                    genIdx = num
+                                    engine.nativeSetGen(num)
+                                }
                             }
                         }
                     }
@@ -1804,33 +1918,6 @@ class MainActivity : Activity() {
                 globalIdx++
             }
         }
-
-        val assignHeader = TextView(this)
-        assignHeader.text = "ASSIGNATION AXES"
-        assignHeader.setTextColor(amber)
-        assignHeader.textSize = 11f
-        assignHeader.typeface = markerFont(this)
-        assignHeader.setPadding(0, (10 * d).toInt(), 0, (4 * d).toInt())
-        list.addView(assignHeader)
-
-        val assignRow = LinearLayout(this)
-        val bax = makeButton("X : CUTOFF", yellow)
-        bax.setOnClickListener {
-            assignXIdx = (assignXIdx + 1) % assignNames.size
-            if (!(snapHold && snapTransp)) engine.nativeSetAssign(0, assignXIdx)
-            refreshAssignLabels()
-        }
-        val bay = makeButton("Y : RESO", pink)
-        bay.setOnClickListener {
-            assignYIdx = (assignYIdx + 1) % assignNames.size
-            if (!(snapHold && snapTransp)) engine.nativeSetAssign(1, assignYIdx)
-            refreshAssignLabels()
-        }
-        btnAssignX = bax
-        btnAssignY = bay
-        assignRow.addView(bax, wrapParams((4 * d).toInt()))
-        assignRow.addView(bay, wrapParams((4 * d).toInt()))
-        list.addView(assignRow)
 
         val hint = TextView(this)
         hint.text = "TAP = ON/OFF \u00b7 SHIFT+TAP = R\u00c9GLAGES \u00b7 SYNTH = JOUER SUR LE PAD"
@@ -2361,7 +2448,7 @@ class MainActivity : Activity() {
                             val a = o.optJSONArray("fxOn")
                             a != null && f < a.length() && a.optInt(f, 0) == 1
                         },
-                        fxParams = Array(46) { f ->
+                        fxParams = Array(62) { f ->
                             val a = o.optJSONArray("fxP")
                             FloatArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -2369,7 +2456,7 @@ class MainActivity : Activity() {
                                 else 0f
                             }
                         },
-                        fxAssign = Array(46) { f ->
+                        fxAssign = Array(62) { f ->
                             val a = o.optJSONArray("fxA")
                             IntArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -2811,8 +2898,8 @@ class MainActivity : Activity() {
             assignX = assignXIdx,
             assignY = assignYIdx,
             fxOn = fxActive.copyOf(),
-            fxParams = Array(46) { fxParamVals[it].copyOf() },
-            fxAssign = Array(46) { fxParamAssign[it].copyOf() },
+            fxParams = Array(62) { fxParamVals[it].copyOf() },
+            fxAssign = Array(62) { fxParamAssign[it].copyOf() },
             lfoTg = lfoTargets.copyOf()
         )
         pad.userPresets[slot] = true
@@ -2837,8 +2924,8 @@ class MainActivity : Activity() {
         assignYIdx = p.assignY
         engine.nativeSetAssign(0, p.assignX)
         engine.nativeSetAssign(1, p.assignY)
-        for (f in 0 until 46) {
-            if (fxActive[f] != p.fxOn[f]) {
+        for (f in 0 until 62) {
+            if (f < 46 && fxActive[f] != p.fxOn[f]) {
                 fxActive[f] = p.fxOn[f]
                 engine.nativeSetFx(f, fxActive[f])
             }
@@ -2847,10 +2934,10 @@ class MainActivity : Activity() {
                 engine.nativeSetFxParam(f, k, fxParamVals[f][k])
             }
         }
-        for (f in 0 until 46) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
+        for (f in 0 until 62) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
         var xT = -1
         val lT = intArrayOf(-1, -1)
-        for (f in 0 until 46) for (k in 0 until 8) {
+        for (f in 0 until 62) for (k in 0 until 8) {
             when (p.fxAssign[f][k]) {
                 1 -> if (xT < 0) xT = 8 + f * 8 + k
                 2 -> if (lT[0] < 0) lT[0] = 8 + f * 8 + k
@@ -3601,6 +3688,30 @@ class MainActivity : Activity() {
         }
         panel.addView(styleRow)
 
+        header("MODE ECO (BATTERIE)")
+        val ecoRow = LinearLayout(this)
+        for ((i, lbl) in listOf("OFF", "ON").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                ecoOpt = i == 1
+                engine.nativeSetEco(ecoOpt)
+                if (ecoOpt && pad.bgArt != 0) {
+                    bgArtEcoPrev = pad.bgArt
+                    pad.bgArt = 0
+                    bgArtOpt = 0
+                } else if (!ecoOpt && bgArtEcoPrev > 0) {
+                    pad.bgArt = bgArtEcoPrev
+                    bgArtOpt = bgArtEcoPrev
+                    bgArtEcoPrev = 0
+                }
+                pad.invalidate()
+                refreshMenu()
+            }
+            menuEcoButtons.add(b)
+            ecoRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(ecoRow)
+
         header("DRUM PADS")
         val drumRow = LinearLayout(this)
         for ((i, lbl) in listOf("12", "16").withIndex()) {
@@ -4028,11 +4139,8 @@ class MainActivity : Activity() {
 
     private fun arpTap() {
         if (shiftActive()) {
-            arpOn = !arpOn
-            pushArp()
-            pad.arpOn = arpOn
-            pad.invalidate()
-            Toast.makeText(this, "ARP " + (if (arpOn) "ON" else "OFF"), Toast.LENGTH_SHORT).show()
+            toolPage = if (toolPage == 2) 0 else 2
+            showToolPage()
         } else {
             toolPage = (toolPage + 1) % 3
             showToolPage()
@@ -4284,6 +4392,9 @@ class MainActivity : Activity() {
         }
         for ((i, b) in menuStyleButtons.withIndex()) {
             b.setTextColor(if ((i == 1) == ZuluTheme.retro) amber else silk)
+        }
+        for ((i, b) in menuEcoButtons.withIndex()) {
+            b.setTextColor(if ((i == 1) == ecoOpt) amber else silk)
         }
         for ((i, b) in menuLofiButtons.withIndex()) {
             b.setTextColor(if (i == recFlavor) amber else silk)

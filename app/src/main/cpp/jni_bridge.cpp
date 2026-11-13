@@ -229,4 +229,13 @@ Java_com_zulu_AudioEngine_nativeGetLevels(JNIEnv* env, jobject, jfloatArray arr)
     env->SetFloatArrayRegion(arr, 0, 2, tmp);
 }
 
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetGenTouch(JNIEnv*, jobject, jboolean t) { if (g) g->setGenTouch(t == JNI_TRUE); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeGenHit(JNIEnv*, jobject, jint type, jfloat x, jfloat y) { if (g) g->genHit(type, x, y); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetEco(JNIEnv*, jobject, jboolean e) { if (g) g->setEco(e == JNI_TRUE); }
+
 }

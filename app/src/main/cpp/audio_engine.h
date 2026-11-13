@@ -76,6 +76,9 @@ public:
     void setMute(bool m) { mute.store(m); }
     void setFly(float v) { fly.store(v); }
     void setStutter(bool s) { stutter.store(s); }
+    void setGenTouch(bool t) { genTouch.store(t); }
+    void setEco(bool e) { ecoMode.store(e); }
+    void genHit(int type, float x, float y);
     void setBpm(float b) { bpm.store(b); }
     void setArp(bool on, int mode, int rate, int oct, int gate, bool octJump) {
         arpOn.store(on); arpMode.store(mode); arpRate.store(rate);
@@ -159,6 +162,7 @@ private:
     std::atomic<bool> mute{false};
     std::atomic<float> fly{0.0f};
     std::atomic<bool> stutter{false};
+    std::atomic<bool> genTouch{false};
     std::atomic<float> bpm{120.0f};
     std::atomic<bool> arpOn{false};
     std::atomic<int> arpMode{0};
@@ -265,12 +269,25 @@ private:
     int freezePos = 0;
     bool freezeFull = false;
     bool prevFreeze = false;
+    int freezeLen = kFreezeMax;
     float compEnv = 0.f;
     static constexpr int kNumFx = 46;
-    std::atomic<float> fxParam[kNumFx][8] = {};
-    float fxMod[kNumFx][8] = {};
-    float fxAxisVal[kNumFx][8] = {};
-    unsigned char fxAxisMask[kNumFx] = {};
+    static constexpr int kNumSlots = 63;
+    std::atomic<float> fxParam[kNumSlots][8] = {};
+    float fxMod[kNumSlots][8] = {};
+    float fxAxisVal[kNumSlots][8] = {};
+    unsigned char fxAxisMask[kNumSlots] = {};
+    float genGate = 0.f;
+    float genHitEnv = 1.f;
+    int genHitType = -1;
+    int genHitVar = 4;
+    float genKickF = 55.f, genF1 = 185.f, genF2 = 330.f;
+    float genNoiseLp = 0.f, genMetLp = 0.f;
+    float hatPh[6] = {0.f};
+    float genNoteF = 110.f, genNoteLp = 0.f;
+    float gen303Lp = 0.f, gen303Lp2 = 0.f, gen303Res = 0.f;
+    float stutMix = 0.f, freezePosF = 0.f, bouncePosF = 0.f, sprLfoPh = 0.f;
+    std::atomic<bool> ecoMode{false};
     std::atomic<int> playerBank{0};
     float plyPhase = 0.f;
     float granPos = 0.f, granT = 0.f, granStart = 0.f;

@@ -268,9 +268,80 @@ l'étiquette** (6 couleurs). Les noms et couleurs sont mémorisés.
 - **MENU · NOMS DES SAMPLES** : nommer chaque banque B1-B8 (le « coin-coin »,
   le « magnifique violon… »). Les noms partent dans les sauvegardes de projet.
 
-## À venir (v0.27+)
+## Porte de sortie FX (v0.33)
 
-- Routage ARP et snapshots des tirettes (voyants rose/ambre).
-- Drums/synthés enregistrés en événements (MIDI-like, paramètres retouchables,
-  option dans le MENU complet) ; audio uniquement au resampling.
-- 2 arpégiateurs routables, capture du son interne, MIDI inter-app, carte son USB.
+Rappuyer sur le bouton **FX** ferme TOUT : page EDIT, fenêtre FX, punch-ins,
+tout se referme d'un coup et on retrouve le pad XY. Plus de blocage dans les
+pages.
+
+## OUTILS : tap direct + GRID (v0.33)
+
+- **Tap sur OUTILS** (ARP/LFO/sampleur) : ouvre direct le **programme**
+  (sections LFO / arpégiateur / sampleur). Pas besoin de SHIFT.
+- **SHIFT + tap sur OUTILS** : ouvre/ferme direct la **GRID** (drum pad sur
+  les samples : 12 pads, pitch ±12 façon MPC, modes slicé et random).
+- Sur la GRID : **SHIFT + tap sur OUTILS** = fermer la grille.
+
+## Tirettes EDIT universelles (v0.33)
+
+**TOUS** les effets (y compris punch-ins), **tous** les synthés (SAW, SQUARE,
+FM, NOISE, 303) et **tous** les drum engines (KICK, SNARE, HAT, PERC) ont
+leur page **EDIT** avec 4 tirettes verticales (k0-k3, la 4e = NIVEAU).
+- Dans la fenêtre FX : **EDIT** puis tap sur un effet → ses tirettes.
+- **SHIFT + tap** sur une zone punch-in → ses tirettes (1-2 réglages pour
+  nuancer : plus dur, couleur différente…).
+- Toutes les tirettes sont exposées aux **axes X/Y**, aux **LFO**, à
+  l'**arpégiateur** et aux **snapshots** (voyants de couleur au-dessus).
+- Le bloc « ASSIGNATION AXES » a été **supprimé** : l'assignation se fait
+  **uniquement depuis les tirettes** de la page EDIT.
+
+## Kaossilator sur le pad XY (v0.33)
+
+Les slots synthé **SAW / SQUARE / FM / NOISE / 303** se jouent directement
+sur le pad XY, comme le Kaossilator de Korg :
+- **X = notes de la gamme** : graves à gauche → aigus à droite (2 octaves,
+  quantifié sur la gamme choisie).
+- **Y = filtre** : fermé en bas → ouvert en haut (120 Hz → 12 kHz).
+- Le son ne joue que doigt posé (gate), pas de motif automatique — les
+  motifs, c'est le boulot de l'arp/LFO (mappés sur les tirettes).
+- Tirettes : **TUNE / ATTAQUE / RELEASE / NIVEAU**.
+- Le **303** ajoute le slide (GLIDE) et un filtre résonant acide :
+  **CUT / GLIDE / RESO / NIVEAU**.
+
+## Drums percussifs : 9 zones (v0.33)
+
+Les slots **KICK / SNARE / HAT / PERC** ne jouent **aucun motif tout seul** :
+le pad devient 9 zones (3×3), chaque zone = un son one-shot, **glissés
+possibles** (les hits se déclenchent en cascade en glissant le doigt).
+- **Colonne = modèle**, **rangée du bas = le plus dur/sec** :
+  - KICK : **808 / 909 / HARD**, TUNE / DECAY / CLICK / NIVEAU.
+  - SNARE : 3 variantes sèches, TON / DECAY / GRAIN / NIVEAU.
+  - HAT : fermé / mi / ouvert, TON / DECAY / BRIGHT / NIVEAU.
+  - **PERC** : toms grave/medium/aigu, tabla bayan/dayan/tin, cowbell,
+    bells grave/aigu — TON / DECAY / MORDANT / NIVEAU.
+- Si tu veux des motifs : mappe l'**arpégiateur** ou un **LFO** sur les
+  tirettes du slot.
+
+## Stutter FLY réparé (v0.33)
+
+Le stutter du fader FLY ne craque plus : sortie en **fondu** (crossfade
+lissé) au lieu d'une coupure sèche.
+
+## MODE ÉCO (v0.33)
+
+**MENU · MODE ECO (BATTERIE)** : OFF/ON. Mode « économie de carburant » :
+- drums et synthés en **bitrate réduit** (96 pas) compensé par un
+  **loudness** (grain chaud) ;
+- **voix granulaires réduites** (4 → 2) ;
+- **fond animé coupé** (mandala/kaléidoscope) pour économiser la batterie.
+Un peu dégradé, mais ça tourne et ça sonne.
+
+## À venir (v0.33+)
+
+- Vendoring réel de Plaits (Mutable Instruments, MIT) — cette passe utilise
+  des engines « inspirés MI » écrits à la main.
+- Drums/synthés enregistrés en événements (MIDI-like, paramètres
+  retouchables, option dans le MENU complet) ; audio uniquement au
+  resampling.
+- 2 arpégiateurs routables, capture du son interne, MIDI inter-app, carte
+  son USB, export/import Koala Sampler.

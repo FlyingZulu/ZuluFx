@@ -55,6 +55,9 @@ class AudioEngine {
     external fun nativeIsLoopRecording(): Boolean
     external fun nativeGetLevels(out: FloatArray)
     external fun nativeSetCustomLfo(idx: Int, shape: FloatArray, on: Boolean, rateIdx: Int, depth: Float, amount: Float, target: Int, wave: Int)
+    external fun nativeSetGenTouch(t: Boolean)
+    external fun nativeGenHit(type: Int, x: Float, y: Float)
+    external fun nativeSetEco(e: Boolean)
 
     companion object {
         init { System.loadLibrary("zulu") }
