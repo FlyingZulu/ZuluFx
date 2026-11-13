@@ -842,3 +842,175 @@ class LfoDrawView(context: Context) : View(context) {
         if (isShown) postInvalidateOnAnimation()
     }
 }
+
+class PunchPadView(context: Context) : View(context) {
+    private val marker = markerFont(context)
+    var onPunchDown: ((Int) -> Unit)? = null
+    var onPunchUp: ((Int) -> Unit)? = null
+    var onExit: (() -> Unit)? = null
+    var shiftCheck: (() -> Boolean)? = null
+
+    private var labels = listOf("REV", "DLY", "ECH", "RPT", "STP", "FRZ", "SCR", "TDO", "CRS")
+    private val colNames = listOf("ZULU", "APHX", "HGTN", "SKRX", "DOOM", "WAIT", "RHED", "BOC", "DAFT", "W/Y")
+    var collectionIndex = 0
+    var onCollectionChange: ((Int) -> Unit)? = null
+    private var headerH = 0f
+    private val active = BooleanArray(9)
+    private val pointers = android.util.SparseArray<Int>()
+    private val pChip = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = silk
+        typeface = marker
+        textAlign = Paint.Align.CENTER
+    }
+
+    private val pBg = Paint().apply { color = Color.rgb(14, 15, 20) }
+    private val pScrew = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(60, 64, 76) }
+    private val pGrid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(75, 82, 98)
+        strokeWidth = 2f
+    }
+    private val pLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = silk
+        typeface = marker
+        textAlign = Paint.Align.CENTER
+    }
+    private val pOnFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(60, 255, 176, 0)
+    }
+    private val pOnBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = amber
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+    }
+
+    fun setActive(zone: Int, on: Boolean) {
+        if (zone in 0 until 9) {
+            active[zone] = on
+            invalidate()
+        }
+    }
+
+    fun setLabels(l: List<String>) {
+        labels = l
+        invalidate()
+    }
+
+    fun setCollectionIndex(i: Int) {
+        collectionIndex = i
+        invalidate()
+    }
+
+    fun releaseAll() {
+        for (z in 0 until 9) {
+            if (active[z]) {
+                active[z] = false
+                onPunchUp?.invoke(z)
+            }
+        }
+        pointers.clear()
+        invalidate()
+    }
+
+    private fun zoneOf(x: Float, y: Float): Int {
+        val gy = (y - headerH).coerceIn(0f, height - headerH - 1f)
+        val c = (x / (width / 3f)).toInt().coerceIn(0, 2)
+        val r = (gy / ((height - headerH) / 3f)).toInt().coerceIn(0, 2)
+        return r * 3 + c
+    }
+
+    private fun press(id: Int, z: Int) {
+        pointers.put(id, z)
+        if (!active[z]) {
+            active[z] = true
+            onPunchDown?.invoke(z)
+        }
+        invalidate()
+    }
+
+    private fun release(id: Int) {
+        val z = pointers.get(id, -1)
+        if (z >= 0) {
+            active[z] = false
+            onPunchUp?.invoke(z)
+            pointers.delete(id)
+            invalidate()
+        }
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                if (shiftCheck?.invoke() == true) {
+                    onExit?.invoke()
+                    return true
+                }
+                val i = e.actionIndex
+                if (e.getY(i) < headerH) {
+                    if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                        val chip = (e.getX(i) / (width / colNames.size.toFloat())).toInt()
+                            .coerceIn(0, colNames.size - 1)
+                        if (chip != collectionIndex) onCollectionChange?.invoke(chip)
+                    }
+                    return true
+                }
+                press(e.getPointerId(i), zoneOf(e.getX(i), e.getY(i)))
+            }
+            MotionEvent.ACTION_MOVE -> {
+                for (i in 0 until e.pointerCount) {
+                    val id = e.getPointerId(i)
+                    val z = zoneOf(e.getX(i), e.getY(i))
+                    val old = pointers.get(id, -1)
+                    if (old >= 0 && old != z) {
+                        release(id)
+                        press(id, z)
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                release(e.getPointerId(e.actionIndex))
+                if (e.pointerCount <= 1) releaseAll()
+            }
+            MotionEvent.ACTION_POINTER_UP -> release(e.getPointerId(e.actionIndex))
+            MotionEvent.ACTION_CANCEL -> releaseAll()
+        }
+        return true
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        headerH = h / 7f
+        c.drawRect(0f, 0f, w, h, pBg)
+        drawScrews(c, pScrew, 0f, 0f, w, h, context.resources.displayMetrics.density)
+        val cw = w / 3f
+        val gh = h - headerH
+        val ch = gh / 3f
+        for (i in 1 until 3) {
+            c.drawLine(cw * i, headerH, cw * i, h, pGrid)
+            c.drawLine(0f, headerH + ch * i, w, h, pGrid)
+        }
+        c.drawLine(0f, headerH, w, headerH, pGrid)
+        val chw = w / colNames.size
+        for (i in colNames.indices) {
+            pChip.color = if (i == collectionIndex) amber else Color.rgb(105, 111, 128)
+            pChip.textSize = minOf(headerH * 0.45f, chw / (colNames[i].length * 0.85f))
+            c.drawText(colNames[i], chw * i + chw / 2f, headerH * 0.68f, pChip)
+        }
+        if (collectionIndex in colNames.indices) {
+            c.drawLine(chw * collectionIndex + chw * 0.15f, headerH - 4f,
+                chw * (collectionIndex + 1) - chw * 0.15f, headerH - 4f, pOnBorder)
+        }
+        pLabel.textSize = ch / 3.6f
+        for (z in 0 until 9) {
+            val cx = cw * (z % 3) + cw / 2f
+            val cy = headerH + ch * (z / 3) + ch / 2f
+            if (active[z]) {
+                c.drawRect(cw * (z % 3) + 3f, headerH + ch * (z / 3) + 3f,
+                    cw * (z % 3 + 1) - 3f, headerH + ch * (z / 3 + 1) - 3f, pOnFill)
+                c.drawRect(cw * (z % 3) + 3f, headerH + ch * (z / 3) + 3f,
+                    cw * (z % 3 + 1) - 3f, headerH + ch * (z / 3 + 1) - 3f, pOnBorder)
+            }
+            c.drawText(labels[z], cx, cy + pLabel.textSize / 3f, pLabel)
+        }
+    }
+}

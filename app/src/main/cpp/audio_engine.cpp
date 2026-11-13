@@ -117,10 +117,13 @@ float AudioEngine::genSample(float fsr, float bpm) {
         if (p && p[seqStep] >= 0) {
             env = 1.f;
             fmPhase = 0.f;
+            float gx = ax.load(std::memory_order_relaxed);
+            float gy = ay.load(std::memory_order_relaxed);
             switch (t) {
-                case 5: kickF = 130.f; envRate = 1.f / (0.26f * fs); break;
-                case 6: envRate = 1.f / (0.13f * fs); break;
-                case 7: envRate = 1.f / (0.045f * fs); break;
+                case 5: kickF = 50.f + gx * 130.f; drumA = gx; drumB = gy;
+                    envRate = 1.f / ((0.1f + gy * 0.55f) * fs); break;
+                case 6: drumA = gx; drumB = gy; envRate = 1.f / ((0.06f + gy * 0.18f) * fs); break;
+                case 7: drumA = gx; drumB = gy; envRate = 1.f / ((0.02f + gy * 0.35f) * fs); break;
                 case 8: envRate = 1.f / (0.16f * fs); break;
                 case 9: zapF = 900.f; envRate = 1.f / (0.15f * fs); break;
                 default: envRate = 1.f / (0.28f * fs); break;
@@ -172,7 +175,7 @@ float AudioEngine::genSample(float fsr, float bpm) {
             return (oscPhase * 2.f - 1.f) * 0.5f * env;
         }
         case 5: {
-            kickF += (45.f - kickF) * 0.0025f;
+            kickF += (kickF * 0.35f - kickF) * 0.0025f;
             oscPhase += kickF * fsr;
             if (oscPhase >= 1.f) oscPhase -= 1.f;
             return sinf(2.f * 3.14159265f * oscPhase) * env * 0.9f;
@@ -180,16 +183,18 @@ float AudioEngine::genSample(float fsr, float bpm) {
         case 6: {
             noiseState = noiseState * 1103515245u + 12345u;
             float n = (float)(noiseState >> 16) / 32768.f - 1.f;
-            oscPhase += 185.f * fsr;
+            oscPhase += (140.f + drumA * 160.f) * fsr;
             if (oscPhase >= 1.f) oscPhase -= 1.f;
-            return (n * 0.55f + sinf(2.f * 3.14159265f * oscPhase) * 0.35f) * env;
+            return (n * (0.3f + 0.45f * drumB) +
+                sinf(2.f * 3.14159265f * oscPhase) * (0.5f - 0.3f * drumB)) * env;
         }
         case 7: {
             noiseState = noiseState * 1103515245u + 12345u;
             float n = (float)(noiseState >> 16) / 32768.f - 1.f;
             float hp = n - prevNoise;
             prevNoise = n;
-            return hp * env * 0.45f;
+            float bright = 0.35f + 0.65f * drumA;
+            return (hp * bright + n * (1.f - bright) * 0.3f) * env * 0.45f;
         }
         case 8: {
             oscPhase += 214.f * fsr;
@@ -410,7 +415,8 @@ void AudioEngine::setFx(int fx, bool on) {
     static const float defWet[kNumFx] = {
         0.4f, 0.45f, 0.6f, 0.5f, 0.6f, 0.5f, 0.5f, 0.4f, 0.7f, 0.8f, 1.0f, 0.6f, 1.0f,
         0.7f, 0.7f, 0.6f, 0.5f, 0.5f, 0.8f, 0.6f, 0.65f, 0.8f, 0.5f, 0.75f,
-        0.8f, 1.0f, 0.7f
+        0.8f, 1.0f, 0.7f,
+        0.7f, 0.8f, 0.7f, 0.7f, 0.65f, 0.6f
     };
     fxWet[fx].store(on ? defWet[fx] : 0.f);
 }
@@ -1503,6 +1509,177 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 float t = (float)ph / (float)per;
                 float g = 1.f - w * 0.8f * expf(-t * 7.f);
                 outL *= g; outR *= g;
+            }
+        }
+        {
+            float w = fxWet[27].load();
+            if (w > 0.001f) {
+                float b = fmaxf(bpm.load(), 40.f);
+                int d = (int)(1.5f * (60.f / b) * fs);
+                if (d < 64) d = 64;
+                if (d > kDubMax - 2) d = kDubMax - 2;
+                int i0 = (dubPos - d + kDubMax) % kDubMax;
+                float dl = dubBuf[2 * i0];
+                float dr = dubBuf[2 * i0 + 1];
+                dubLpL += 0.15f * (dl - dubLpL);
+                dubLpR += 0.15f * (dr - dubLpR);
+                dubBuf[2 * dubPos] = outL + tanhf(dubLpL * 1.3f) * 0.82f;
+                dubBuf[2 * dubPos + 1] = outR + tanhf(dubLpR * 1.3f) * 0.82f;
+                dubPos = (dubPos + 1) % kDubMax;
+                outL = outL * (1.f - w) + tanhf(dubLpL * 1.4f) * w;
+                outR = outR * (1.f - w) + tanhf(dubLpR * 1.4f) * w;
+            }
+        }
+        {
+            float w = fxWet[28].load();
+            if (w > 0.001f) {
+                megaLp1L += 0.04f * (outL - megaLp1L);
+                megaLp1R += 0.04f * (outR - megaLp1R);
+                float hpl = outL - megaLp1L;
+                float hpr = outR - megaLp1R;
+                megaLp2L += 0.35f * (hpl - megaLp2L);
+                megaLp2R += 0.35f * (hpr - megaLp2R);
+                megaPh += 120.f * fsr;
+                if (megaPh >= 1.f) megaPh -= 1.f;
+                float hum = 0.02f * sinf(2.f * 3.14159265f * megaPh);
+                float yl = tanhf((megaLp2L + hum) * 4.5f) * 0.8f;
+                float yr = tanhf((megaLp2R + hum) * 4.5f) * 0.8f;
+                outL = outL * (1.f - w) + yl * w;
+                outR = outR * (1.f - w) + yr * w;
+            }
+        }
+        {
+            float w = fxWet[29].load();
+            if (w > 0.001f) {
+                tapeBuf[2 * tapePos] = outL;
+                tapeBuf[2 * tapePos + 1] = outR;
+                tapePos = (tapePos + 1) % kTapeMax;
+                tapePhase += 0.4f * fsr;
+                if (tapePhase >= 1.f) tapePhase -= 1.f;
+                float lag = 900.f + 90.f * sinf(2.f * 3.14159265f * tapePhase);
+                float rp = (float)tapePos - lag;
+                while (rp < 0.f) rp += (float)kTapeMax;
+                int i0 = (int)rp;
+                float fr = rp - (float)i0;
+                int i1 = (i0 + 1) % kTapeMax;
+                float dl = tapeBuf[2 * i0] * (1.f - fr) + tapeBuf[2 * i1] * fr;
+                float dr = tapeBuf[2 * i0 + 1] * (1.f - fr) + tapeBuf[2 * i1 + 1] * fr;
+                if (tapeDropLen > 0) {
+                    tapeDropLen--;
+                    tapeGain += 0.01f * (0.25f - tapeGain);
+                } else {
+                    tapeGain += 0.02f * (1.f - tapeGain);
+                    tapeDropClock++;
+                    if (tapeDropClock > 33600) {
+                        tapeDropClock = 0;
+                        noiseState = noiseState * 1103515245u + 12345u;
+                        if (((noiseState >> 16) % 100u) < 45u)
+                            tapeDropLen = 2400 + (int)((noiseState >> 20) % 4800u);
+                    }
+                }
+                float yl = tanhf(dl * tapeGain * 1.15f);
+                float yr = tanhf(dr * tapeGain * 1.15f);
+                noiseState = noiseState * 1103515245u + 12345u;
+                float nz = ((float)((noiseState >> 16) % 65536u) / 32768.f - 1.f) * 0.004f;
+                outL = outL * (1.f - w) + (yl + nz) * w;
+                outR = outR * (1.f - w) + (yr + nz) * w;
+            }
+        }
+        {
+            float w = fxWet[30].load();
+            if (w > 0.001f) {
+                if (!prevWarp) {
+                    warpRead = (float)((warpWrite - 12000 + kWarpMax) % kWarpMax);
+                    warpRate = 1.f;
+                    warpTarget = 1.f;
+                }
+                warpBuf[2 * warpWrite] = outL;
+                warpBuf[2 * warpWrite + 1] = outR;
+                warpWrite = (warpWrite + 1) % kWarpMax;
+                float b = fmaxf(bpm.load(), 40.f);
+                int per = (int)((60.f / b) * fs * 0.5f);
+                if (per < 64) per = 64;
+                warpClock = (warpClock + 1) % per;
+                if (warpClock == 0) {
+                    noiseState = noiseState * 1103515245u + 12345u;
+                    int r = (int)((noiseState >> 16) % 7u) - 3;
+                    warpTarget = powf(2.f, (float)r * 0.25f);
+                }
+                warpRate += 0.002f * (warpTarget - warpRate);
+                warpRead += warpRate;
+                while (warpRead >= (float)kWarpMax) warpRead -= (float)kWarpMax;
+                while (warpRead < 0.f) warpRead += (float)kWarpMax;
+                int i0 = (int)warpRead;
+                float fr = warpRead - (float)i0;
+                int i1 = (i0 + 1) % kWarpMax;
+                float dl = warpBuf[2 * i0] * (1.f - fr) + warpBuf[2 * i1] * fr;
+                float dr = warpBuf[2 * i0 + 1] * (1.f - fr) + warpBuf[2 * i1 + 1] * fr;
+                outL = outL * (1.f - w) + dl * w * 0.8f;
+                outR = outR * (1.f - w) + dr * w * 0.8f;
+            }
+            prevWarp = w > 0.001f;
+        }
+        {
+            float w = fxWet[31].load();
+            if (w > 0.001f) {
+                static const float vwF1[5] = {800.f, 400.f, 300.f, 500.f, 320.f};
+                static const float vwF2[5] = {1200.f, 1900.f, 2700.f, 900.f, 800.f};
+                float b = fmaxf(bpm.load(), 40.f);
+                int per = (int)((60.f / b) * fs);
+                if (per < 64) per = 64;
+                tkClock = (tkClock + 1) % (per * 4);
+                if (tkClock % per == 0) tkVowel = (tkVowel + 1) % 5;
+                tkF1 += 0.0015f * (vwF1[tkVowel] - tkF1);
+                tkF2 += 0.0015f * (vwF2[tkVowel] - tkF2);
+                float k1 = 1.f - expf(-2.f * 3.14159265f * tkF1 * fsr);
+                float k2 = 1.f - expf(-2.f * 3.14159265f * tkF2 * fsr);
+                tkLp1L += k1 * (outL - tkLp1L);
+                tkLp2L += k1 * (tkLp1L - tkLp2L);
+                float b1l = tkLp1L - tkLp2L;
+                tkLp3L += k2 * (outL - tkLp3L);
+                tkLp4L += k2 * (tkLp3L - tkLp4L);
+                float b2l = tkLp3L - tkLp4L;
+                tkLp1R += k1 * (outR - tkLp1R);
+                tkLp2R += k1 * (tkLp1R - tkLp2R);
+                float b1r = tkLp1R - tkLp2R;
+                tkLp3R += k2 * (outR - tkLp3R);
+                tkLp4R += k2 * (tkLp3R - tkLp4R);
+                float b2r = tkLp3R - tkLp4R;
+                float yl = tanhf((b1l * 3.5f + b2l * 2.5f) * 1.2f);
+                float yr = tanhf((b1r * 3.5f + b2r * 2.5f) * 1.2f);
+                outL = outL * (1.f - w) + yl * w;
+                outR = outR * (1.f - w) + yr * w;
+            }
+        }
+        {
+            float w = fxWet[32].load();
+            if (w > 0.001f) {
+                float f0 = 55.f * powf(2.f, (float)rootNote.load() / 12.f) * 2.f;
+                int len = (int)(fs / f0);
+                if (len < 8) len = 8;
+                if (len > kRinMax) len = kRinMax;
+                if (len != rinLen) {
+                    rinLen = len;
+                    if (rinPos >= rinLen) rinPos = 0;
+                }
+                float s = 0.5f * (outL + outR);
+                float a = fabsf(s);
+                rinEnv += 0.002f * (a - rinEnv);
+                if (rinDebounce > 0) rinDebounce--;
+                if (a > rinEnv * 2.5f + 0.04f && rinDebounce == 0) {
+                    rinDebounce = 2400;
+                    for (int i = 0; i < rinLen; i++) {
+                        noiseState = noiseState * 1103515245u + 12345u;
+                        rinBuf[i] = s * (0.6f + 0.4f * ((float)((noiseState >> 16) % 2000u) / 1000.f - 1.f));
+                    }
+                    rinPos = 0;
+                }
+                float y = rinBuf[rinPos];
+                rinPrev = 0.996f * 0.5f * (y + rinPrev);
+                rinBuf[rinPos] = rinPrev;
+                rinPos = (rinPos + 1) % rinLen;
+                outL = outL * (1.f - w) + y * w * 0.9f;
+                outR = outR * (1.f - w) + y * w * 0.9f;
             }
         }
 

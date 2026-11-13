@@ -135,6 +135,10 @@ class MainActivity : Activity() {
     private val menuBillardButtons = ArrayList<Button>()
     private val menuLofiButtons = ArrayList<Button>()
     private var recFlavor = 0
+    private var menuPunchBtn: Button? = null
+    private var punchMode = false
+    private var punchView: PunchPadView? = null
+    private var punchCol = 0
     private val menuProjButtons = ArrayList<Button>()
     private var morphCurve = 0
     private var fingerModeOpt = 0
@@ -175,26 +179,26 @@ class MainActivity : Activity() {
 
     private val fxSections = listOf(
         "FILTRE" to listOf("LPF", "HPF", "BPF", "NOTCH", "PHASER"),
-        "MODULATION" to listOf("TREMOLO", "AUTOPAN", "FLANGER", "CHORUS", "RING"),
-        "TEMPS" to listOf("DELAY", "ECHO", "REVERB", "FREEZE", "STOP", "REPEAT", "REVERSE", "SCRATCH"),
-        "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "GATER", "FOLD"),
-        "RESONANCE" to listOf("RESO", "SPRING"),
+        "MODULATION" to listOf("TREMOLO", "AUTOPAN", "FLANGER", "CHORUS", "RING", "TALK", "WARP"),
+        "TEMPS" to listOf("DELAY", "ECHO", "DUB", "REVERB", "FREEZE", "STOP", "REPEAT", "REVERSE", "SCRATCH"),
+        "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "TAPE", "GATER", "FOLD", "MEGA"),
+        "RESONANCE" to listOf("RESO", "SPRING", "RINGS"),
         "GRANULAIRE" to listOf("GRAIN", "JUNGLE"),
         "TRANSITIONS" to listOf("TRANSIT", "COMBUSTOR", "TURNADO", "FALL", "SWELL", "PUMP"),
-        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE")
+        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "KICK", "SNARE", "HAT")
     )
 
     private val fxCodes = listOf(
         "F0", "F1", "F2", "F3", "X2",
-        "X3", "X4", "X5", "X6", "X7",
-        "X0", "X1", "P2", "X10", "X12", "X13", "X14", "X18",
-        "P3", "P7", "X8", "X9", "X17",
-        "X15", "X16",
+        "X3", "X4", "X5", "X6", "X7", "X31", "X30",
+        "X0", "X1", "X27", "P2", "X10", "X12", "X13", "X14", "X18",
+        "P3", "P7", "X8", "X29", "X9", "X17", "X28",
+        "X15", "X16", "X32",
         "X19", "X20",
         "X21", "X22", "X23", "X24", "X25", "X26",
-        "G0", "G13", "G14", "G12"
+        "G0", "G13", "G14", "G12", "G5", "G6", "G7"
     )
-    private val fxActive = BooleanArray(27)
+    private val fxActive = BooleanArray(33)
     private val paramActive = BooleanArray(8)
     private val paramDefaults = floatArrayOf(0f, 0f, 0.35f, 0.3f, 0f, 0f, 0f, 0.4f)
     private var genIdx = 0
@@ -659,6 +663,27 @@ class MainActivity : Activity() {
         )
         scopeParams.setMargins(0, (26 * d).toInt(), (10 * d).toInt(), 0)
         padPane.addView(glitchScope, scopeParams)
+
+        val punch = PunchPadView(this)
+        punch.visibility = View.GONE
+        punch.onPunchDown = { z -> punchApply(z, true) }
+        punch.onPunchUp = { z -> punchApply(z, false) }
+        punch.onExit = { setPunchMode(false) }
+        punch.shiftCheck = { shiftActive() }
+        punch.onCollectionChange = { c ->
+            punch.releaseAll()
+            punchCol = c
+            punch.setCollectionIndex(c)
+            punch.setLabels(punchLabels[c])
+        }
+        punchView = punch
+        padPane.addView(
+            punch,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         content.addView(leftColumn, padParams)
         content.addView(
@@ -1391,6 +1416,7 @@ class MainActivity : Activity() {
             json.put("activeZu", activeZu)
             json.put("activeLu", activeLu)
             json.put("recFlavor", recFlavor)
+            json.put("punchCol", punchCol)
             projFile(slot).writeText(json.toString())
             refreshProjSlots()
         } catch (e: Exception) {
@@ -1415,6 +1441,9 @@ class MainActivity : Activity() {
             engine.nativeSetRoot(activeRoot)
             recFlavor = json.optInt("recFlavor", 0)
             engine.nativeSetRecFlavor(recFlavor)
+            punchCol = json.optInt("punchCol", 0).coerceIn(0, punchLabels.size - 1)
+            punchView?.setCollectionIndex(punchCol)
+            punchView?.setLabels(punchLabels[punchCol])
             assignXIdx = json.optInt("assignX", 0)
             assignYIdx = json.optInt("assignY", 1)
             engine.nativeSetAssign(0, assignXIdx)
@@ -2127,9 +2156,18 @@ class MainActivity : Activity() {
             refreshMenu()
         }
         menuMirrorBtn = bMirror
+        val bPunch = makeButton("PUNCH 9", silk)
+        bPunch.setOnClickListener {
+            setPunchMode(!punchMode)
+            menuOverlay.visibility = View.GONE
+        }
+        menuPunchBtn = bPunch
         liveRow.addView(bScale, wrapParams((4 * d).toInt()))
         liveRow.addView(bMirror, wrapParams((4 * d).toInt()))
+        liveRow.addView(bPunch, wrapParams((4 * d).toInt()))
         panel.addView(liveRow)
+
+        header("PUNCH 9 \u00b7 MAINTENIR = EFFET \u00b7 SHIFT+TAP = SORTIR")
 
         header("PADS")
         val padsRow = LinearLayout(this)
@@ -2218,6 +2256,70 @@ class MainActivity : Activity() {
                 Gravity.CENTER
             )
         )
+    }
+
+    private val punchLabels = listOf(
+        listOf("REV", "DLY", "ECH", "RPT", "STP", "FRZ", "SCR", "TDO", "CRS"),
+        listOf("RES", "RNG", "GRN", "JGL", "WRP", "FLD", "GAT", "TDO", "WOB"),
+        listOf("ECH", "DUB", "SPG", "STP", "LPF", "WOB", "TRM", "PAN", "DRV"),
+        listOf("CMB", "DRV", "BIT", "FLD", "GAT", "PMP", "RNG", "TDO", "JGL"),
+        listOf("LOF", "CMP", "REV", "SCR", "STP", "GRN", "CHO", "GAT", "WET"),
+        listOf("MEG", "DRV", "SPG", "K7", "CRK", "GRN", "STP", "TRM", "BIT"),
+        listOf("FRZ", "GRN", "REV", "SWL", "TRS", "CHO", "FLG", "LPF", "WET"),
+        listOf("K7", "CMP", "CHO", "TRM", "REV", "STP", "GAT", "BIT", "WET"),
+        listOf("PHS", "FLG", "PMP", "GAT", "PAN", "TLK", "DRV", "DLY", "LPF"),
+        listOf("MEG", "K7", "SPG", "FRZ", "GRN", "CRK", "TRS", "DRV", "WET")
+    )
+    private val punchFx = arrayOf(
+        intArrayOf(-1, 0, 1, 13, 12, 10, 18, 23, -1),
+        intArrayOf(15, 7, 19, 20, 30, 17, 9, 23, -1),
+        intArrayOf(1, 27, 16, 12, -1, -1, 3, 4, -1),
+        intArrayOf(22, -1, -1, 17, 9, 26, 7, 23, 20),
+        intArrayOf(8, 11, 14, 18, 12, 19, 6, 9, -1),
+        intArrayOf(28, -1, 16, 29, 17, 19, 12, 3, -1),
+        intArrayOf(10, 19, 14, 25, 21, 6, 5, -1, -1),
+        intArrayOf(29, 11, 6, 3, 14, 12, 9, -1, -1),
+        intArrayOf(2, 5, 26, 9, 4, 31, -1, 0, -1),
+        intArrayOf(28, 29, 16, 10, 19, 17, 21, -1, -1)
+    )
+    private val punchParam = arrayOf(
+        intArrayOf(2, -1, -1, -1, -1, -1, -1, -1, 3),
+        intArrayOf(-1, -1, -1, -1, -1, -1, -1, -1, 1),
+        intArrayOf(-1, -1, -1, -1, 0, 1, -1, -1, 7),
+        intArrayOf(-1, 7, 3, -1, -1, -1, -1, -1, -1),
+        intArrayOf(-1, -1, -1, -1, -1, -1, -1, -1, 2),
+        intArrayOf(-1, 7, -1, -1, -1, -1, -1, -1, 3),
+        intArrayOf(-1, -1, -1, -1, -1, -1, -1, 0, 2),
+        intArrayOf(-1, -1, -1, -1, -1, -1, -1, 3, 2),
+        intArrayOf(-1, -1, -1, -1, -1, -1, 7, -1, 0),
+        intArrayOf(-1, -1, -1, -1, -1, -1, -1, 7, 2)
+    )
+    private val punchVal = arrayOf(
+        floatArrayOf(0.85f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.5f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.85f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0.12f, 0.85f, 0f, 0f, 0.6f),
+        floatArrayOf(0f, 0.9f, 0.75f, 0f, 0f, 0f, 0f, 0f, 0f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.6f),
+        floatArrayOf(0f, 0.9f, 0f, 0f, 0f, 0f, 0f, 0f, 0.6f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.15f, 0.7f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.45f, 0.5f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0.5f, 0f, 0.6f),
+        floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.8f, 0.7f)
+    )
+
+    private fun punchApply(zone: Int, on: Boolean) {
+        val fx = punchFx[punchCol][zone]
+        val pr = punchParam[punchCol][zone]
+        if (fx >= 0) engine.nativeSetFx(fx, on)
+        else if (pr >= 0) engine.nativeSetParam(pr, punchVal[punchCol][zone], on)
+        punchView?.setActive(zone, on)
+    }
+
+    private fun setPunchMode(on: Boolean) {
+        punchMode = on
+        if (!on) punchView?.releaseAll()
+        punchView?.visibility = if (on) View.VISIBLE else View.GONE
+        menuPunchBtn?.setTextColor(if (on) amber else silk)
     }
 
     private fun refreshMenu() {
