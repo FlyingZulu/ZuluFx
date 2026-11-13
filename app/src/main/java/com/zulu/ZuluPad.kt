@@ -9,6 +9,7 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.abs
 
 class ZuluPad(context: Context) : View(context) {
 
@@ -371,8 +372,10 @@ class ZuluPad(context: Context) : View(context) {
                     val near = minOf(
                         Math.hypot((tx - caX).toDouble(), (ty - caY).toDouble()),
                         Math.hypot((tx - cbX).toDouble(), (ty - cbY).toDouble())
-                    ) < 26f * d
-                    if (now - lastMergeTap < 300 && near) {
+                    ) < 44f * d ||
+                        (abs(caX - cbX) < 60f * d && abs(caY - cbY) < 60f * d &&
+                            Math.hypot((tx - (caX + cbX) / 2.0).toDouble(), (ty - (caY + cbY) / 2.0).toDouble()) < 70f * d)
+                    if (now - lastMergeTap < 450 && near) {
                         if (merged) unfuse() else fuse()
                         lastMergeTap = 0L
                     } else {
@@ -502,14 +505,14 @@ class ZuluPad(context: Context) : View(context) {
     private fun unfuse() {
         merged = false
         val ang = rnd.nextFloat() * 2f * Math.PI.toFloat()
-        val dist = 0.12f + rnd.nextFloat() * 0.22f
+        val dist = 0.16f + rnd.nextFloat() * 0.30f
         val ca = Math.cos(ang.toDouble()).toFloat()
         val sa = Math.sin(ang.toDouble()).toFloat()
         targetAx = (ax + ca * dist).coerceIn(0f, 1f)
         targetAy = (ay + sa * dist).coerceIn(0f, 1f)
         targetBx = (ax - ca * dist).coerceIn(0f, 1f)
         targetBy = (ay - sa * dist).coerceIn(0f, 1f)
-        val speed = 0.012f + rnd.nextFloat() * 0.02f
+        val speed = 0.024f + rnd.nextFloat() * 0.036f
         velAx = ca * speed * (0.7f + rnd.nextFloat() * 0.6f)
         velAy = sa * speed * (0.7f + rnd.nextFloat() * 0.6f)
         velBx = -ca * speed * (0.7f + rnd.nextFloat() * 0.6f)
