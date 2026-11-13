@@ -154,7 +154,7 @@ class ZuluPad(context: Context) : View(context) {
         val col = acidCol(mandalaAggr.coerceIn(0f, 1f))
         val sp = Math.sqrt(((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).toDouble()).toFloat()
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f * d
+        paint.strokeWidth = if (ZuluTheme.retro) 3.5f * d else 2f * d
         paint.color = col
         paint.alpha = (50 + sp * 3f).toInt().coerceIn(50, 190)
         val dist2 = (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)
@@ -438,7 +438,21 @@ class ZuluPad(context: Context) : View(context) {
             paint.alpha = 255
         }
 
+        if (ZuluTheme.retro) drawScanlines(canvas, w, h)
+
         postInvalidateOnAnimation()
+    }
+
+    private fun drawScanlines(c: Canvas, w: Float, h: Float) {
+        paint.style = Paint.Style.FILL
+        paint.color = Color.BLACK
+        paint.alpha = 26
+        var y = 0f
+        while (y < h) {
+            c.drawRect(0f, y, w, y + 1.5f * d, paint)
+            y += 4f * d
+        }
+        paint.alpha = 255
     }
 
     private fun drawCursor(

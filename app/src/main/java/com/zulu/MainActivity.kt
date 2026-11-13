@@ -144,6 +144,7 @@ class MainActivity : Activity() {
     private val menuCurveButtons = ArrayList<Button>()
     private val menuFingerButtons = ArrayList<Button>()
     private val menuArtButtons = ArrayList<Button>()
+    private val menuStyleButtons = ArrayList<Button>()
     private var bgArtOpt = 1
     private var menuFreezeBtn: Button? = null
     private val menuBillardButtons = ArrayList<Button>()
@@ -2587,6 +2588,20 @@ class MainActivity : Activity() {
         }
         panel.addView(artRow)
 
+        header("STYLE")
+        val styleRow = LinearLayout(this)
+        for ((i, lbl) in listOf("84", "RETRO").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                ZuluTheme.retro = i == 1
+                pad.invalidate()
+                refreshMenu()
+            }
+            menuStyleButtons.add(b)
+            styleRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(styleRow)
+
         header("FINITIONS")
         val curveRow = LinearLayout(this)
         for ((i, lbl) in listOf("LIN", "D\u00c9BUT", "FIN", "S").withIndex()) {
@@ -2875,6 +2890,9 @@ class MainActivity : Activity() {
         }
         for ((i, b) in menuArtButtons.withIndex()) {
             b.setTextColor(if (i == bgArtOpt) amber else silk)
+        }
+        for ((i, b) in menuStyleButtons.withIndex()) {
+            b.setTextColor(if ((i == 1) == ZuluTheme.retro) amber else silk)
         }
         for ((i, b) in menuLofiButtons.withIndex()) {
             b.setTextColor(if (i == recFlavor) amber else silk)

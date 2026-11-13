@@ -21,6 +21,10 @@ private val needleRed = Color.rgb(200, 60, 40)
 private val amber = Color.rgb(255, 190, 0)
 private val silk = Color.rgb(165, 172, 185)
 
+object ZuluTheme {
+    var retro = false
+}
+
 internal fun drawSketchyLine(
     canvas: Canvas,
     paint: Paint,
@@ -63,6 +67,18 @@ internal fun drawRelief(c: Canvas, l: Float, t: Float, r: Float, b: Float, d: Fl
 internal fun drawZebra(c: Canvas, w: Float, h: Float, d: Float) {
     val p = Paint()
     p.style = Paint.Style.STROKE
+    if (ZuluTheme.retro) {
+        p.strokeWidth = 5f * d
+        p.color = Color.WHITE
+        p.alpha = 9
+        var x = -h
+        while (x < w + h) {
+            c.drawLine(x, 0f, x + h, h, p)
+            x += 12f * d
+        }
+        p.alpha = 255
+        return
+    }
     p.strokeWidth = 3.5f * d
     p.color = Color.WHITE
     p.alpha = 6
@@ -506,16 +522,17 @@ class PadGridView(context: Context) : View(context) {
                     else -> Color.rgb(196, 108, 20)
                 }
             )
-            canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
+            val rad = if (ZuluTheme.retro) 0f else 5f * d
+            canvas.drawRoundRect(l, t, l + padW, t + padH, rad, rad, paint)
             paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-            drawSketchyRoundRect(canvas, paint, l, t, l + padW, t + padH, 5f * d, 100 + i)
+            drawSketchyRoundRect(canvas, paint, l, t, l + padW, t + padH, rad, 100 + i)
 
             if (side != 0 && !soloPad && !shiftMode) {
                 val isActive = (side == 1 && activeSnap[0] == i) ||
                     (side == 2 && activeSnap[1] == i)
                 paint.stroke(if (side == 1) zuColor else luColor, if (isActive) 2f * d else 1f * d)
                 paint.alpha = if (isActive) 255 else 130
-                canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
+                canvas.drawRoundRect(l, t, l + padW, t + padH, rad, rad, paint)
                 paint.alpha = 255
                 if (isActive) {
                     paint.fill(if (side == 1) zuColor else luColor)

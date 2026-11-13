@@ -1,4 +1,4 @@
-# ZULU — MODE D'EMPLOI (mémo v0.30)
+# ZULU — MODE D'EMPLOI (mémo v0.31)
 
 Aide-mémoire des gestes et fonctions principales. Tout se joue au doigt, pensé pour le LIVE.
 
@@ -72,6 +72,8 @@ sélectionnée (tap sur un pad banque = banque du player).
 | SHIFT + double-tap sur le pad | cycle d'INERTIE des curseurs (∞ / 0,5 / 1 / 2 / 4 s) |
 | Banques basses (mode 12 pads) | SOLO par paires de colonnes (aucun solo = silence) |
 | ZU / LU maintenu ≥ 400 ms | capture snapshot |
+| MENU · STYLE | 84 (classique) ou RETRO (jeu vidéo d'époque : scanlines, pixels,
+  pads carrés) |
 | Pincer à 3 doigts sur le pad | fusion des 2 curseurs |
 | Double-tap sur les curseurs fusionnés | défusion billard (rebonds aléatoires) |
 | SHIFT + écran (pad) | BEND : 4 ambiances aux 4 coins (doux / blip / anarchie / tempête) |
