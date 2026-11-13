@@ -163,10 +163,6 @@ class ZuluPad(context: Context) : View(context) {
     private var fingerA = -1
     private var fingerB = -1
 
-    private var restAx = ax
-    private var restAy = ay
-    private var restBx = bx
-    private var restBy = by
 
     private var merged = false
     private var lastMergeTap = 0L
@@ -248,10 +244,12 @@ class ZuluPad(context: Context) : View(context) {
         ghostZu?.let { drawGhost(canvas, it[0], it[1], turquoiseC) }
         ghostLu?.let { drawGhost(canvas, it[0], it[1], luC) }
 
-        ax += (targetAx - ax) * 0.18f
-        ay += (targetAy - ay) * 0.18f
-        bx += (targetBx - bx) * 0.18f
-        by += (targetBy - by) * 0.18f
+        val fA = if (fingerA != -1) 1f else 0.4f
+        val fB = if (fingerB != -1) 1f else 0.4f
+        ax += (targetAx - ax) * fA
+        ay += (targetAy - ay) * fA
+        bx += (targetBx - bx) * fB
+        by += (targetBy - by) * fB
 
         var jax = 0f
         var jay = 0f
@@ -396,27 +394,22 @@ class ZuluPad(context: Context) : View(context) {
                         (px - bx * width).toDouble(),
                         (py - (1f - by) * height).toDouble()
                     )
-                    val grab = (30f * d).toDouble()
-                    val nearA = dA < grab
-                    val nearB = dB < grab
+                    val candA = stateA == AxisState.MOM && fingerA == -1
+                    val candB = stateB == AxisState.MOM && fingerB == -1
                     fun takeA() {
-                        if (stateA == AxisState.MOM && fingerA == -1) {
-                            restAx = targetAx; restAy = targetAy
-                            fingerA = id
-                        }
+                        if (candA) fingerA = id
                     }
                     fun takeB() {
-                        if (stateB == AxisState.MOM && fingerB == -1) {
-                            restBx = targetBx; restBy = targetBy
-                            fingerB = id
-                        }
+                        if (candB) fingerB = id
                     }
                     when {
-                        nearA && stateA == AxisState.MOM && fingerA == -1 &&
-                            (!nearB || dA <= dB) -> takeA()
-                        nearB && stateB == AxisState.MOM && fingerB == -1 -> takeB()
-                        nearA && stateA == AxisState.HOLD -> {}
-                        nearB && stateB == AxisState.HOLD -> {}
+                        candA && candB -> when (fingerMode) {
+                            1 -> if (dA <= dB) takeB() else takeA()
+                            2 -> if (px < width / 2f) takeA() else takeB()
+                            else -> if (dA <= dB) takeA() else takeB()
+                        }
+                        candA -> takeA()
+                        candB -> takeB()
                     }
                 }
                 if (event.pointerCount >= 3 && !pinchFused) {
@@ -444,17 +437,9 @@ class ZuluPad(context: Context) : View(context) {
                 val id = event.getPointerId(event.actionIndex)
                 if (id == fingerA) {
                     fingerA = -1
-                    if (stateA == AxisState.MOM) {
-                        targetAx = restAx
-                        targetAy = restAy
-                    }
                 }
                 if (id == fingerB) {
                     fingerB = -1
-                    if (stateB == AxisState.MOM) {
-                        targetBx = restBx
-                        targetBy = restBy
-                    }
                 }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(false)
                 if (event.pointerCount <= 1) {
@@ -465,14 +450,6 @@ class ZuluPad(context: Context) : View(context) {
             MotionEvent.ACTION_CANCEL -> {
                 fingerA = -1
                 fingerB = -1
-                if (stateA == AxisState.MOM) {
-                    targetAx = restAx
-                    targetAy = restAy
-                }
-                if (stateB == AxisState.MOM) {
-                    targetBx = restBx
-                    targetBy = restBy
-                }
                 onBendTouch?.invoke(false)
                 pinchInitSpread = 0f
                 pinchFused = false
@@ -489,6 +466,10 @@ class ZuluPad(context: Context) : View(context) {
         if (idxB >= 0) {
             targetBx = (event.getX(idxB) / width).coerceIn(0f, 1f)
             targetBy = (1f - event.getY(idxB) / height).coerceIn(0f, 1f)
+        }
+        if (merged) {
+            targetBx = targetAx
+            targetBy = targetAy
         }
         if (bendActive) onBendPos?.invoke(targetAx, targetAy)
         onAxisChange?.invoke(targetAx, targetAy, targetBx, targetBy)

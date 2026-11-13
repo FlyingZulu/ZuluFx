@@ -21,7 +21,10 @@ relance le moteur (un message MOTEUR ON/OFF s'affiche).
   affiche toujours le mode : **SCÈNE** (ambre) / **MOTION** (turquoise) / **SAMPLES**
   (vert, quand SHIFT est enfoncé).
   Boutons **ZU / LU**, grand fader **ZU/LU**, puis faders **FLY** et **MIX**.
-- Les curseurs ne se posent que si on les touche (rayon ~30dp) : pas de saut intempestif.
+- **Curseurs façon Kaoss Pad** : on touche n'importe où sur le pad → le curseur libre
+  le plus proche vient sous le doigt et suit exactement ; au relâchement il **reste sur
+  place** (pas de retour fantôme). F OFF = axe désactivé, F HOLD = axe figé
+  (le doigt prend alors l'autre curseur).
 
 ## Fenêtre FX · SYNTH
 
