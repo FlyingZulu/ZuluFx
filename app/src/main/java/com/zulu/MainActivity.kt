@@ -125,6 +125,7 @@ class MainActivity : Activity() {
     private val menuFingerButtons = ArrayList<Button>()
     private var menuFreezeBtn: Button? = null
     private val menuBillardButtons = ArrayList<Button>()
+    private val menuProjButtons = ArrayList<Button>()
     private var morphCurve = 0
     private var fingerModeOpt = 0
     private var bendFreezeOpt = false
@@ -2018,10 +2019,34 @@ class MainActivity : Activity() {
             panel.addView(h)
         }
 
+        header("PROJETS \u00b7 TAP = CHARGER \u00b7 LONG = SAUVER")
+        for (r in 0 until 2) {
+            val projRow = LinearLayout(this)
+            for (c in 0 until 4) {
+                val s = r * 4 + c + 1
+                val b = makeButton("$s", silk)
+                b.setOnClickListener {
+                    loadProject(s)
+                    refreshProjSlots()
+                    refreshMenu()
+                }
+                b.setOnLongClickListener {
+                    saveProject(s)
+                    refreshMenu()
+                    true
+                }
+                menuProjButtons.add(b)
+                projRow.addView(
+                    b,
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        .apply { marginStart = (4 * d).toInt() }
+                )
+            }
+            panel.addView(projRow)
+        }
+
         header("LIVE")
         val liveRow = LinearLayout(this)
-        val bProj = makeButton("PROJET", silk)
-        bProj.setOnClickListener { menuOverlay.visibility = View.GONE; openProjPanel() }
         val bScale = makeButton("GAMME", silk)
         bScale.setOnClickListener { menuOverlay.visibility = View.GONE; openScalePanel() }
         val bMirror = makeButton("MIROIR", silk)
@@ -2032,7 +2057,6 @@ class MainActivity : Activity() {
             refreshMenu()
         }
         menuMirrorBtn = bMirror
-        liveRow.addView(bProj, wrapParams((4 * d).toInt()))
         liveRow.addView(bScale, wrapParams((4 * d).toInt()))
         liveRow.addView(bMirror, wrapParams((4 * d).toInt()))
         panel.addView(liveRow)
@@ -2127,6 +2151,9 @@ class MainActivity : Activity() {
         menuFreezeBtn?.setTextColor(if (bendFreezeOpt) amber else silk)
         for ((i, b) in menuBillardButtons.withIndex()) {
             b.setTextColor(if (i == pad.billardFriction) amber else silk)
+        }
+        for (s in 1..8) {
+            menuProjButtons[s - 1].setTextColor(if (projFile(s).exists()) amber else silk)
         }
     }
 
