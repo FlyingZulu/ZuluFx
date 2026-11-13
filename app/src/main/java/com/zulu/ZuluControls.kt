@@ -520,6 +520,8 @@ class JitterFaderView(context: Context) : View(context) {
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+        paint.stroke(graffitiOrange, 1.5f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 71)
 
         val cx = w / 2f
         paint.stroke(Color.rgb(18, 20, 25), 5f * d)

@@ -27,7 +27,7 @@ class MainActivity : Activity() {
     private lateinit var padGrid: PadGridView
     private lateinit var zuLu: ZuLuSelector
     private lateinit var diagFader: DiagFaderView
-    private lateinit var jitterDial: JitterDialView
+    private lateinit var jitterFader: JitterFaderView
     private lateinit var btnStart: Button
     private lateinit var btnMute: Button
     private lateinit var btnShift: Button
@@ -76,7 +76,7 @@ class MainActivity : Activity() {
         padGrid = PadGridView(this)
         zuLu = ZuLuSelector(this)
         diagFader = DiagFaderView(this)
-        jitterDial = JitterDialView(this)
+        jitterFader = JitterFaderView(this)
 
         btnStart = makeButton("START", green)
         btnMute = makeButton("MUTE", silk)
@@ -199,7 +199,7 @@ class MainActivity : Activity() {
         )
         muteParams.setMargins((8 * d).toInt(), 0, (8 * d).toInt(), 0)
         row5.addView(btnMute, muteParams)
-        row5.addView(jitterDial, LinearLayout.LayoutParams((76 * d).toInt(), (76 * d).toInt()))
+        row5.addView(jitterFader, LinearLayout.LayoutParams((34 * d).toInt(), (84 * d).toInt()))
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
