@@ -127,6 +127,11 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeCancelRec(JNIEnv*, jobject) { if (g) g->cancelRec(); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetPlayerBank(JNIEnv*, jobject, jint b) {
+    if (g) g->setPlayerBank(b);
+}
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeRecordBank(JNIEnv*, jobject, jint bank, jint steps, jboolean wet) { if (g) g->recordBank(bank, steps, wet); }
 
 JNIEXPORT void JNICALL

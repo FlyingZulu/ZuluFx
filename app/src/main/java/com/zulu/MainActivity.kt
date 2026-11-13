@@ -153,16 +153,20 @@ class MainActivity : Activity() {
     private var punchCol = 0
     private var paramView: ParamPageView? = null
     private var paramFx = -1
-    private val fxParamInit = BooleanArray(33)
-    private val fxParamVals = Array(33) { FloatArray(8) }
-    private val fxParamAssign = Array(33) { IntArray(8) }
+    private val fxParamInit = BooleanArray(37)
+    private val fxParamVals = Array(37) { FloatArray(8) }
+    private val fxParamAssign = Array(37) { IntArray(8) }
     private val fxParamDefs = mapOf(
         27 to listOf("TEMPS", "FB", "TONAL", "SAT"),
         28 to listOf("GRAVE", "AIGU", "DRIVE", "HUM"),
         29 to listOf("WOW", "DROP", "SAT", "SOUFFLE"),
         30 to listOf("PLAGE", "VITESSE", "LISSAGE", "NIVEAU"),
         31 to listOf("VITESSE", "GRAVE", "AIGU", "RESO"),
-        32 to listOf("ACCORD", "AMORTI", "EXCIT", "NIVEAU")
+        32 to listOf("ACCORD", "AMORTI", "EXCIT", "NIVEAU"),
+        33 to listOf("POSITION", "PITCH", "MODE", "NIVEAU"),
+        34 to listOf("GRAIN", "PITCH", "SPRAY", "NIVEAU"),
+        35 to listOf("DENSITE", "FOLIE", "REVERSE", "NIVEAU"),
+        36 to listOf("SLICES", "RANDOM", "PITCH", "NIVEAU")
     )
     private val fxParamDefaults = mapOf(
         27 to floatArrayOf(0.45f, 0.8f, 0.22f, 0.2f),
@@ -170,11 +174,19 @@ class MainActivity : Activity() {
         29 to floatArrayOf(0.5f, 0.56f, 0.15f, 0.33f),
         30 to floatArrayOf(0.5f, 0.14f, 0.16f, 0.71f),
         31 to floatArrayOf(0f, 0.5f, 0.4f, 0.5f),
-        32 to floatArrayOf(0.33f, 0.76f, 0.33f, 0.63f)
+        32 to floatArrayOf(0.33f, 0.76f, 0.33f, 0.63f),
+        33 to floatArrayOf(0f, 0.5f, 0f, 0.6f),
+        34 to floatArrayOf(0.3f, 0.55f, 0.2f, 0.6f),
+        35 to floatArrayOf(0.4f, 0.4f, 0.3f, 0.6f),
+        36 to floatArrayOf(0.4f, 0.5f, 0.5f, 0.6f)
     )
     private var sendPadBank = -1
     private var sendPadAt = 0L
     private var sendComboStart = true
+    private var muteHeld = false
+    private var muteComboAt = 0L
+    private var globalSaveArmed = false
+    private var globalSaveAt = 0L
     private val presetBtns = ArrayList<Button>()
     private var arpBtn: Button? = null
     private val bankFxSend = BooleanArray(8) { true }
@@ -231,7 +243,8 @@ class MainActivity : Activity() {
         Color.rgb(255, 70, 205),
         Color.rgb(236, 224, 196),
         Color.rgb(235, 255, 40),
-        Color.rgb(255, 120, 80)
+        Color.rgb(255, 120, 80),
+        Color.rgb(0, 255, 170)
     )
 
     private val fxSections = listOf(
@@ -242,7 +255,8 @@ class MainActivity : Activity() {
         "RESONANCE" to listOf("RESO", "SPRING", "RINGS"),
         "GRANULAIRE" to listOf("GRAIN", "JUNGLE"),
         "TRANSITIONS" to listOf("TRANSIT", "COMBUSTOR", "TURNADO", "FALL", "SWELL", "PUMP"),
-        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "KICK", "SNARE", "HAT")
+        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE", "KICK", "SNARE", "HAT"),
+        "LECTURE SAMPLE" to listOf("SPLY", "GRAN", "JGL", "RND")
     )
 
     private val fxCodes = listOf(
@@ -253,9 +267,10 @@ class MainActivity : Activity() {
         "X15", "X16", "X32",
         "X19", "X20",
         "X21", "X22", "X23", "X24", "X25", "X26",
-        "G0", "G13", "G14", "G12", "G5", "G6", "G7"
+        "G0", "G13", "G14", "G12", "G5", "G6", "G7",
+        "X33", "X34", "X35", "X36"
     )
-    private val fxActive = BooleanArray(33)
+    private val fxActive = BooleanArray(37)
     private val paramActive = BooleanArray(8)
     private val paramDefaults = floatArrayOf(0f, 0f, 0.35f, 0.3f, 0f, 0f, 0f, 0.4f)
     private var genIdx = 0
@@ -442,7 +457,7 @@ class MainActivity : Activity() {
                     fxConsumed = false
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
-                    blinkHandler.postDelayed(fxHeldClear, 900)
+                    blinkHandler.postDelayed(fxHeldClear, 1500)
             }
             false
         }
@@ -479,8 +494,19 @@ class MainActivity : Activity() {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     if (shiftActive()) {
-                        resampling = true
-                        startResampleUI()
+                        val now = System.currentTimeMillis()
+                        if (now - muteComboAt < 700) {
+                            globalSaveArmed = true
+                            globalSaveAt = now
+                            resampling = false
+                            engine.nativeCancelRec()
+                            Toast.makeText(this, "SAVE GLOBAL : PAD 1-4", Toast.LENGTH_SHORT).show()
+                        } else {
+                            resampling = true
+                            startResampleUI()
+                        }
+                        muteComboAt = now
+                        muteHeld = true
                     } else {
                         muteOn = true
                         btnMute.text = "MUTE \u25cf"
@@ -488,6 +514,7 @@ class MainActivity : Activity() {
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    muteHeld = false
                     if (resampling) {
                         resampling = false
                     } else {
@@ -572,7 +599,20 @@ class MainActivity : Activity() {
         }
 
         padGrid.onPadTouch = { n ->
+            val bottom = padGrid.padCount - 3
             when {
+                globalSaveArmed && System.currentTimeMillis() - globalSaveAt < 1500 &&
+                    n in bottom..(bottom + 3) -> {
+                    globalSaveArmed = false
+                    val g = n - bottom + 1
+                    saveProject(g, true)
+                    Toast.makeText(this, "GLOBAL $g SAUV\u00c9", Toast.LENGTH_SHORT).show()
+                }
+                shiftActive() && muteHeld && n in bottom..(bottom + 3) -> {
+                    val g = n - bottom + 1
+                    loadProject(g, true)
+                    Toast.makeText(this, "GLOBAL $g CHARG\u00c9", Toast.LENGTH_SHORT).show()
+                }
                 fxHeld -> {
                     fxConsumed = true
                     loopLenSteps = n
@@ -590,6 +630,7 @@ class MainActivity : Activity() {
                 n <= 8 -> {
                     if (engine.nativeBankHasLoop(n - 1)) {
                         engine.nativeToggleBank(n - 1)
+                        engine.nativeSetPlayerBank(n - 1)
                     } else {
                         startLoopRecording(n)
                     }
@@ -1424,8 +1465,13 @@ class MainActivity : Activity() {
 
     private fun projFile(slot: Int): File = File(projDir(), "proj_$slot.json")
 
-    private fun bankFile(slot: Int, bank: Int): File =
-        File(projDir(), "proj_${slot}_b$bank.pcm")
+    private fun globalFile(i: Int): File = File(projDir(), "global_$i.json")
+
+    private fun stateFile(slot: Int, global: Boolean): File =
+        if (global) globalFile(slot) else projFile(slot)
+
+    private fun bankFile(slot: Int, bank: Int, global: Boolean = false): File =
+        File(projDir(), if (global) "global_${slot}_b$bank.pcm" else "proj_${slot}_b$bank.pcm")
 
     private fun buildProjPanel(d: Float) {
         projOverlay = FrameLayout(this)
@@ -1519,7 +1565,7 @@ class MainActivity : Activity() {
         projOverlay.visibility = View.GONE
     }
 
-    private fun saveProject(slot: Int) {
+    private fun saveProject(slot: Int, global: Boolean = false) {
         val dir = projDir()
         dir.mkdirs()
         try {
@@ -1567,13 +1613,13 @@ class MainActivity : Activity() {
             for (b in 0 until 8) {
                 val frames = engine.nativeBankFrames(b)
                 banks.put(frames)
-                bankFile(slot, b).delete()
+                bankFile(slot, b, global).delete()
                 if (frames > 0) {
                     val data = FloatArray(frames * 2)
                     if (engine.nativeCopyBank(b, data) > 0) {
                         val bb = ByteBuffer.allocate(frames * 8).order(ByteOrder.LITTLE_ENDIAN)
                         for (f in data) bb.putFloat(f)
-                        bankFile(slot, b).writeBytes(bb.array())
+                        bankFile(slot, b, global).writeBytes(bb.array())
                     }
                 }
             }
@@ -1633,8 +1679,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun loadProject(slot: Int) {
-        val f = projFile(slot)
+    private fun loadProject(slot: Int, global: Boolean = false) {
+        val f = stateFile(slot, global)
         if (!f.exists()) return
         try {
             val json = JSONObject(f.readText())
@@ -1694,11 +1740,11 @@ class MainActivity : Activity() {
                         arpSlices = o.optInt("arpSlices", 2),
                         assignX = o.optInt("assignX", 0),
                         assignY = o.optInt("assignY", 1),
-                        fxOn = BooleanArray(33) { f ->
+                        fxOn = BooleanArray(37) { f ->
                             val a = o.optJSONArray("fxOn")
                             a != null && f < a.length() && a.optInt(f, 0) == 1
                         },
-                        fxParams = Array(33) { f ->
+                        fxParams = Array(37) { f ->
                             val a = o.optJSONArray("fxP")
                             FloatArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -1706,7 +1752,7 @@ class MainActivity : Activity() {
                                 else 0f
                             }
                         },
-                        fxAssign = Array(33) { f ->
+                        fxAssign = Array(37) { f ->
                             val a = o.optJSONArray("fxA")
                             IntArray(8) { k ->
                                 if (a != null && f < a.length())
@@ -1729,7 +1775,7 @@ class MainActivity : Activity() {
             for (b in 0 until min(8, banks.length())) {
                 val frames = banks.getInt(b)
                 if (frames <= 0) continue
-                val bf = bankFile(slot, b)
+                val bf = bankFile(slot, b, global)
                 if (!bf.exists() || bf.length() < frames * 8L) continue
                 val bytes = bf.readBytes()
                 val bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
@@ -2124,8 +2170,8 @@ class MainActivity : Activity() {
             assignX = assignXIdx,
             assignY = assignYIdx,
             fxOn = fxActive.copyOf(),
-            fxParams = Array(33) { fxParamVals[it].copyOf() },
-            fxAssign = Array(33) { fxParamAssign[it].copyOf() },
+            fxParams = Array(37) { fxParamVals[it].copyOf() },
+            fxAssign = Array(37) { fxParamAssign[it].copyOf() },
             lfoTg = lfoTargets.copyOf()
         )
         pad.userPresets[slot] = true
@@ -2150,7 +2196,7 @@ class MainActivity : Activity() {
         assignYIdx = p.assignY
         engine.nativeSetAssign(0, p.assignX)
         engine.nativeSetAssign(1, p.assignY)
-        for (f in 0 until 33) {
+        for (f in 0 until 37) {
             if (fxActive[f] != p.fxOn[f]) {
                 fxActive[f] = p.fxOn[f]
                 engine.nativeSetFx(f, fxActive[f])
@@ -2160,10 +2206,10 @@ class MainActivity : Activity() {
                 engine.nativeSetFxParam(f, k, fxParamVals[f][k])
             }
         }
-        for (f in 0 until 33) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
+        for (f in 0 until 37) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
         var xT = -1
         val lT = intArrayOf(-1, -1)
-        for (f in 0 until 33) for (k in 0 until 8) {
+        for (f in 0 until 37) for (k in 0 until 8) {
             when (p.fxAssign[f][k]) {
                 1 -> if (xT < 0) xT = 8 + f * 8 + k
                 2 -> if (lT[0] < 0) lT[0] = 8 + f * 8 + k

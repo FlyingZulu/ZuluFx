@@ -1,4 +1,4 @@
-# ZULU — MODE D'EMPLOI (mémo v0.28)
+# ZULU — MODE D'EMPLOI (mémo v0.29)
 
 Aide-mémoire des gestes et fonctions principales. Tout se joue au doigt, pensé pour le LIVE.
 
@@ -31,7 +31,10 @@ relance le moteur (un message MOTEUR ON/OFF s'affiche).
 
 Le bouton **FX** ouvre une fenêtre avec **toutes les catégories en grille de pads
 colorés** : FILTRE (turquoise), MODULATION (violet), TEMPS (vert), TEXTURE (ambre),
-RESONANCE (rose), GRANULAIRE (cream), TRANSITIONS (jaune), SYNTH (orange).
+RESONANCE (rose), GRANULAIRE (cream), TRANSITIONS (jaune), SYNTH (orange),
+**LECTURE SAMPLE** (menthe) : SPLY (lecteur), GRAN (granulaire), JGL (jungle rétro),
+RND (slices aléatoires BPM) — ces moteurs jouent la banque sélectionnée
+(tap sur un pad banque = banque du player).
 - **Tap** = ON/OFF (le bouton passe ambre quand il est actif) ; pour un SYNTH, tap =
   le charger, puis **jouer sur le pad XY**.
 - **SHIFT + tap** ou **EDIT** (bouton dans la fenêtre, puis tap sur l'effet) = page de
@@ -56,6 +59,10 @@ RESONANCE (rose), GRANULAIRE (cream), TRANSITIONS (jaune), SYNTH (orange).
   (aussi dans le MENU, rangée BILLARD) |
 | Appui long pad banque | éditeur de pas (pitch/vélocité par pas) |
 | SHIFT + MUTE | resampling (réenregistre la sortie en banque) |
+| SHIFT + MUTE + pad bas 1-4 | CHARGER une sauvegarde GLOBALE (tout bascule :
+  BPM, effets, presets, banques audio — façon parts Octatrack) |
+| SHIFT + MUTE double-tap, puis pad bas 1-4 | SAUVEGARDER la GLOBALE 1-4 (armé 1,5 s) |
+| SHIFT + double-tap sur le pad | cycle d'INERTIE des curseurs (∞ / 0,5 / 1 / 2 / 4 s) |
 | Banques basses (mode 12 pads) | SOLO par paires de colonnes (aucun solo = silence) |
 | ZU / LU maintenu ≥ 400 ms | capture snapshot |
 | Pincer à 3 doigts sur le pad | fusion des 2 curseurs |

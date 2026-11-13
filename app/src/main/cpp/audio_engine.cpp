@@ -416,7 +416,9 @@ void AudioEngine::setFx(int fx, bool on) {
         0.4f, 0.45f, 0.6f, 0.5f, 0.6f, 0.5f, 0.5f, 0.4f, 0.7f, 0.8f, 1.0f, 0.6f, 1.0f,
         0.7f, 0.7f, 0.6f, 0.5f, 0.5f, 0.8f, 0.6f, 0.65f, 0.8f, 0.5f, 0.75f,
         0.8f, 1.0f, 0.7f,
-        0.7f, 0.8f, 0.7f, 0.7f, 0.65f, 0.6f
+        0.7f, 0.8f, 0.7f, 0.7f, 0.65f, 0.6f,
+        0.6f,
+        0.8f, 0.8f, 0.8f, 0.8f
     };
     fxWet[fx].store(on ? defWet[fx] : 0.f);
 }
@@ -1805,6 +1807,145 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 float gl = 0.4f + fxP(32, 3) * 0.8f;
                 outL = outL * (1.f - w) + y * w * gl;
                 outR = outR * (1.f - w) + y * w * gl;
+            }
+        }
+
+        {
+            float w = fxWet[33].load();
+            if (w > 0.001f) {
+                LoopBank& lb = banks[playerBank.load(std::memory_order_relaxed)];
+                if (lb.buf && lb.samples > 4) {
+                    if (fxAxisMask[33] & 1u) {
+                        plyPhase = fxAxisVal[33][0] * (float)(lb.samples - 1);
+                    } else {
+                        float rate = powf(2.f, (fxP(33, 1) - 0.5f) * 4.f);
+                        plyPhase += rate;
+                        if (plyPhase >= (float)lb.samples) plyPhase -= (float)lb.samples;
+                        if (plyPhase < 0.f) plyPhase += (float)lb.samples;
+                    }
+                    int ip = (int)plyPhase;
+                    float fr = plyPhase - (float)ip;
+                    int ip2 = (ip + 1) % lb.samples;
+                    float sl = lb.buf[2 * ip] * (1.f - fr) + lb.buf[2 * ip2] * fr;
+                    float sr = lb.buf[2 * ip + 1] * (1.f - fr) + lb.buf[2 * ip2 + 1] * fr;
+                    float gl = 0.6f + fxP(33, 3) * 0.8f;
+                    outL = outL * (1.f - w) + sl * w * gl;
+                    outR = outR * (1.f - w) + sr * w * gl;
+                }
+            } else {
+                plyPhase = 0.f;
+            }
+        }
+        {
+            float w = fxWet[34].load();
+            if (w > 0.001f) {
+                LoopBank& lb = banks[playerBank.load(std::memory_order_relaxed)];
+                if (lb.buf && lb.samples > 4) {
+                    float gsz = (0.02f + fxP(34, 0) * 0.38f) * fs;
+                    if (gsz < 64.f) gsz = 64.f;
+                    float rate = powf(2.f, (fxP(34, 1) - 0.5f) * 4.f);
+                    granPos += rate * 0.25f;
+                    if (granPos >= (float)lb.samples) granPos -= (float)lb.samples;
+                    if (granPos < 0.f) granPos += (float)lb.samples;
+                    granT += 1.f;
+                    if (granT >= gsz) {
+                        granT = 0.f;
+                        granStart = granPos;
+                        if (fxP(34, 2) > 0.001f) {
+                            noiseState = noiseState * 1103515245u + 12345u;
+                            float spr = fxP(34, 2) * (float)lb.samples * 0.5f;
+                            granStart += ((float)(noiseState >> 16) / 65536.f - 0.5f) * spr;
+                            if (granStart >= (float)lb.samples) granStart -= (float)lb.samples;
+                            if (granStart < 0.f) granStart += (float)lb.samples;
+                        }
+                    }
+                    float rp = granStart + granT * rate;
+                    if (rp >= (float)lb.samples) rp -= (float)lb.samples;
+                    if (rp < 0.f) rp += (float)lb.samples;
+                    int ip = (int)rp;
+                    float fr = rp - (float)ip;
+                    int ip2 = (ip + 1) % lb.samples;
+                    float env = sinf(3.14159265f * (granT / gsz));
+                    float gl = 0.6f + fxP(34, 3) * 0.8f;
+                    float sl = (lb.buf[2 * ip] * (1.f - fr) + lb.buf[2 * ip2] * fr) * env * gl;
+                    float sr = (lb.buf[2 * ip + 1] * (1.f - fr) + lb.buf[2 * ip2 + 1] * fr) * env * gl;
+                    outL = outL * (1.f - w) + sl * w;
+                    outR = outR * (1.f - w) + sr * w;
+                }
+            } else {
+                granT = 0.f;
+            }
+        }
+        {
+            float w = fxWet[35].load();
+            if (w > 0.001f) {
+                LoopBank& lb = banks[playerBank.load(std::memory_order_relaxed)];
+                if (lb.buf && lb.samples > 4) {
+                    float gsz = (0.005f + fxP(35, 0) * 0.055f) * fs;
+                    if (gsz < 32.f) gsz = 32.f;
+                    jglT += 1.f;
+                    if (jglT >= gsz) {
+                        jglT = 0.f;
+                        noiseState = noiseState * 1103515245u + 12345u;
+                        float r1 = (float)(noiseState >> 16) / 65536.f;
+                        jglStart = (float)((noiseState >> 8) % (unsigned)lb.samples);
+                        jglRev = r1 < fxP(35, 2) ? -1.f : 1.f;
+                        jglRate = powf(2.f, (r1 - 0.5f) * 2.f * fxP(35, 1) * 2.f);
+                    }
+                    float rp = jglStart + jglT * jglRate * jglRev;
+                    if (rp >= (float)lb.samples) rp -= (float)lb.samples;
+                    if (rp < 0.f) rp += (float)lb.samples;
+                    int ip = (int)rp;
+                    float fr = rp - (float)ip;
+                    int ip2 = (ip + 1) % lb.samples;
+                    float env = sinf(3.14159265f * (jglT / gsz));
+                    float gl = 0.6f + fxP(35, 3) * 0.8f;
+                    float sl = (lb.buf[2 * ip] * (1.f - fr) + lb.buf[2 * ip2] * fr) * env * gl;
+                    float sr = (lb.buf[2 * ip + 1] * (1.f - fr) + lb.buf[2 * ip2 + 1] * fr) * env * gl;
+                    outL = outL * (1.f - w) + sl * w;
+                    outR = outR * (1.f - w) + sr * w;
+                }
+            } else {
+                jglT = 0.f;
+            }
+        }
+        {
+            float w = fxWet[36].load();
+            if (w > 0.001f) {
+                LoopBank& lb = banks[playerBank.load(std::memory_order_relaxed)];
+                if (lb.buf && lb.samples > 4) {
+                    float b = fmaxf(bpm.load(), 40.f);
+                    float stepLen = (60.f / b) * 0.25f * fs;
+                    int ns = 2 + (int)(fxP(36, 0) * 14.f);
+                    if (ns > 16) ns = 16;
+                    if (rndLen != lb.samples / ns || rndOff >= lb.samples) {
+                        rndLen = lb.samples / ns;
+                        rndOff = rndCur * rndLen;
+                        rndRead = 0.f;
+                    }
+                    rndPhase += 1.f;
+                    if (rndPhase >= stepLen) {
+                        rndPhase -= stepLen;
+                        noiseState = noiseState * 1103515245u + 12345u;
+                        float r = (float)(noiseState >> 16) / 65536.f;
+                        if (r < fxP(36, 1)) rndCur = (int)(r * 997.f) % ns;
+                        else rndCur = (rndCur + 1) % ns;
+                        rndOff = rndCur * rndLen;
+                        rndRead = 0.f;
+                    }
+                    float rate = powf(2.f, (fxP(36, 2) - 0.5f) * 3.f);
+                    rndRead += rate;
+                    if (rndRead >= (float)rndLen) rndRead = 0.f;
+                    int rp = rndOff + (int)rndRead;
+                    if (rp >= lb.samples) rp = lb.samples - 1;
+                    float gl = 0.6f + fxP(36, 3) * 0.8f;
+                    float sl = lb.buf[2 * rp] * gl;
+                    float sr = lb.buf[2 * rp + 1] * gl;
+                    outL = outL * (1.f - w) + sl * w;
+                    outR = outR * (1.f - w) + sr * w;
+                }
+            } else {
+                rndPhase = 0.f; rndRead = 0.f;
             }
         }
 

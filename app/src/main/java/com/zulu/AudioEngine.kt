@@ -28,6 +28,7 @@ class AudioEngine {
     external fun nativeSetParam(p: Int, v: Float, on: Boolean)
     external fun nativeSetFxParam(fx: Int, k: Int, v: Float)
     external fun nativeSetBankFxSend(bank: Int, on: Boolean)
+    external fun nativeSetPlayerBank(bank: Int)
     external fun nativeUndo()
     external fun nativeCancelRec()
     external fun nativeBankFrames(bank: Int): Int
