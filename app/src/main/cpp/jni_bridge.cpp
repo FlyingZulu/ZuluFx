@@ -49,7 +49,7 @@ Java_com_zulu_AudioEngine_nativeSetBpm(JNIEnv*, jobject, jfloat b) { if (g) g->s
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeGetLevels(JNIEnv* env, jobject, jfloatArray arr) {
     if (!g || !arr) return;
-    float tmp[2] = { g->levelL.load(), g->levelR.load() };
+    float tmp[2] = { g->getLevelL(), g->getLevelR() };
     env->SetFloatArrayRegion(arr, 0, 2, tmp);
 }
 

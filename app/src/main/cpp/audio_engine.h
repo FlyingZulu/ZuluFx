@@ -21,6 +21,9 @@ public:
     void setStutter(bool s) { stutter.store(s); }
     void setBpm(float b) { bpm.store(b); }
 
+    float getLevelL() const { return levelL.load(); }
+    float getLevelR() const { return levelR.load(); }
+
     oboe::DataCallbackResult onAudioReady(
         oboe::AudioStream* stream, void* audioData, int32_t numFrames) override;
 
