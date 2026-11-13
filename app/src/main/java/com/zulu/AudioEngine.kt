@@ -26,6 +26,8 @@ class AudioEngine {
     external fun nativeLoadBank(bank: Int, src: FloatArray, frames: Int)
     external fun nativeRecordBank(bank: Int, steps: Int, wet: Boolean)
     external fun nativeResample(bank: Int, steps: Int)
+    external fun nativeSetStep(bank: Int, step: Int, pitch: Float, vel: Float)
+    external fun nativeSetStepCount(bank: Int, n: Int)
     external fun nativeToggleBank(bank: Int)
     external fun nativeBankHasLoop(bank: Int): Boolean
     external fun nativeJumpSlice(slice: Int, total: Int)

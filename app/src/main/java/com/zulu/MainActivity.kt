@@ -91,6 +91,32 @@ class MainActivity : Activity() {
     private var padAxisX = 0.5f
     private val userPresets = arrayOfNulls<UserPreset>(9)
 
+    private data class Snap(
+        val ax: Float,
+        val ay: Float,
+        val bx: Float,
+        val by: Float,
+        val mix: Float,
+        val fly: Float,
+        val filter: Int,
+        val assignX: Int,
+        val assignY: Int
+    )
+    private val snapPads = arrayOfNulls<Snap>(14)
+    private var activeZu = -1
+    private var activeLu = -1
+    private var autoZu: Snap? = null
+    private var autoLu: Snap? = null
+    private val stepPitch = Array(8) { FloatArray(14) }
+    private val stepVel = Array(8) { FloatArray(14) { 1f } }
+    private val bankSteps = IntArray(8)
+    private var stepEditBank = -1
+    private var stepEditor: StepEditorView? = null
+    private var stepTitle: TextView? = null
+    private lateinit var stepOverlay: FrameLayout
+    private var zuDownAt = 0L
+    private var luDownAt = 0L
+
     private data class UserPreset(
         val filter: Int,
         val scale: Int,
@@ -248,6 +274,43 @@ class MainActivity : Activity() {
         btnZu = makeButton("ZU", turquoise)
         btnLu = makeButton("LU", violet)
 
+        btnZu.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    zuDownAt = System.currentTimeMillis()
+                    btnZu.text = "ZU\u00b7CAP"
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    btnZu.text = "ZU"
+                    if (System.currentTimeMillis() - zuDownAt >= 400) {
+                        captureSnap(0)
+                    } else if (e.actionMasked == MotionEvent.ACTION_UP) {
+                        zuLuFader.value = 0f
+                        applyMorph(0f)
+                    }
+                }
+            }
+            true
+        }
+        btnLu.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    luDownAt = System.currentTimeMillis()
+                    btnLu.text = "LU\u00b7CAP"
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    btnLu.text = "LU"
+                    if (System.currentTimeMillis() - luDownAt >= 400) {
+                        captureSnap(1)
+                    } else if (e.actionMasked == MotionEvent.ACTION_UP) {
+                        zuLuFader.value = 1f
+                        applyMorph(1f)
+                    }
+                }
+            }
+            true
+        }
+
         btnFx.setOnClickListener {
             if (fxConsumed) {
                 fxConsumed = false
@@ -390,6 +453,7 @@ class MainActivity : Activity() {
                     startLoopRecording(n)
                 }
                 padGrid.padCount == 12 && n in 9..12 -> toggleSolo(n - 9)
+                n - 1 < 14 && snapPads[n - 1] != null -> recallSnap(n - 1)
                 n <= 8 -> {
                     if (engine.nativeBankHasLoop(n - 1)) {
                         engine.nativeToggleBank(n - 1)
@@ -398,6 +462,12 @@ class MainActivity : Activity() {
                     }
                 }
                 else -> engine.nativeJumpSlice(n, padGrid.padCount)
+            }
+        }
+
+        padGrid.onPadLongTouch = { n ->
+            if (!shiftActive() && !fxHeld && n in 1..8 && engine.nativeBankHasLoop(n - 1)) {
+                openStepEditor(n - 1)
             }
         }
 
@@ -554,8 +624,16 @@ class MainActivity : Activity() {
         buildScalePanel(d)
         buildArpPanel(d)
         buildProjPanel(d)
+        buildStepPanel(d)
         padPane.addView(
             arpOverlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        padPane.addView(
+            stepOverlay,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -734,6 +812,7 @@ class MainActivity : Activity() {
     private fun startResampleUI() {
         val bank = (0 until 8).firstOrNull { !engine.nativeBankHasLoop(it) } ?: return
         engine.nativeResample(bank, loopLenSteps)
+        resetSteps(bank)
         padGrid.recPad = bank
         val ms = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
         recEndHandler.removeCallbacksAndMessages(null)
@@ -1166,6 +1245,38 @@ class MainActivity : Activity() {
                 }
             }
             json.put("banks", banks)
+            val stepsArr = JSONArray()
+            for (b in 0 until 8) {
+                stepsArr.put(
+                    JSONObject()
+                        .put("count", bankSteps[b])
+                        .put("pitch", JSONArray(stepPitch[b].toList()))
+                        .put("vel", JSONArray(stepVel[b].toList()))
+                )
+            }
+            json.put("steps", stepsArr)
+            val snaps = JSONArray()
+            for (s in snapPads) {
+                if (s == null) {
+                    snaps.put(JSONObject.NULL)
+                } else {
+                    snaps.put(
+                        JSONObject()
+                            .put("ax", s.ax.toDouble())
+                            .put("ay", s.ay.toDouble())
+                            .put("bx", s.bx.toDouble())
+                            .put("by", s.by.toDouble())
+                            .put("mix", s.mix.toDouble())
+                            .put("fly", s.fly.toDouble())
+                            .put("filter", s.filter)
+                            .put("assignX", s.assignX)
+                            .put("assignY", s.assignY)
+                    )
+                }
+            }
+            json.put("snaps", snaps)
+            json.put("activeZu", activeZu)
+            json.put("activeLu", activeLu)
             projFile(slot).writeText(json.toString())
             refreshProjSlots()
         } catch (e: Exception) {
@@ -1240,6 +1351,50 @@ class MainActivity : Activity() {
                 for (i in data.indices) data[i] = bb.float
                 engine.nativeLoadBank(b, data, frames)
             }
+            val stepsArr = json.optJSONArray("steps")
+            if (stepsArr != null) {
+                for (b in 0 until min(8, stepsArr.length())) {
+                    val o = stepsArr.getJSONObject(b)
+                    bankSteps[b] = o.optInt("count", 0)
+                    val pa = o.optJSONArray("pitch")
+                    val va = o.optJSONArray("vel")
+                    for (s in 0 until 14) {
+                        if (pa != null && s < pa.length()) stepPitch[b][s] = pa.getDouble(s).toFloat()
+                        if (va != null && s < va.length()) stepVel[b][s] = va.getDouble(s).toFloat()
+                    }
+                    if (bankSteps[b] > 0) {
+                        engine.nativeSetStepCount(b, bankSteps[b])
+                        for (s in 0 until 14) {
+                            engine.nativeSetStep(b, s, stepPitch[b][s], stepVel[b][s])
+                        }
+                    }
+                }
+            }
+            val snaps = json.optJSONArray("snaps")
+            if (snaps != null) {
+                for (i in 0 until min(14, snaps.length())) {
+                    if (snaps.isNull(i)) {
+                        snapPads[i] = null
+                    } else {
+                        val o = snaps.getJSONObject(i)
+                        snapPads[i] = Snap(
+                            ax = o.getDouble("ax").toFloat(),
+                            ay = o.getDouble("ay").toFloat(),
+                            bx = o.getDouble("bx").toFloat(),
+                            by = o.getDouble("by").toFloat(),
+                            mix = o.getDouble("mix").toFloat(),
+                            fly = o.getDouble("fly").toFloat(),
+                            filter = o.getInt("filter"),
+                            assignX = o.optInt("assignX", 0),
+                            assignY = o.optInt("assignY", 1)
+                        )
+                    }
+                }
+            }
+            activeZu = json.optInt("activeZu", -1)
+            activeLu = json.optInt("activeLu", -1)
+            refreshSnapGrid()
+            applyMorph(zuLuFader.value)
             closeProjPanel()
         } catch (e: Exception) {
         }
@@ -1467,6 +1622,7 @@ class MainActivity : Activity() {
     private fun startLoopRecording(bank: Int) {
         val wet = loopWetA || loopWetB
         engine.nativeRecordBank(bank - 1, loopLenSteps, wet)
+        resetSteps(bank - 1)
         padGrid.recPad = bank - 1
         val ms = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
         recEndHandler.removeCallbacksAndMessages(null)
@@ -1503,5 +1659,162 @@ class MainActivity : Activity() {
             engine.nativeSetFly(v)
             engine.nativeSetStutter(st)
         }
+        zuLuFader.onValueChange = { v -> applyMorph(v) }
+    }
+
+    private fun resetSteps(b: Int) {
+        if (b < 0 || b > 7) return
+        bankSteps[b] = loopLenSteps
+        stepPitch[b] = FloatArray(14)
+        stepVel[b] = FloatArray(14) { 1f }
+        engine.nativeSetStepCount(b, loopLenSteps)
+    }
+
+    private fun liveSnap() = Snap(
+        ax = pad.ax, ay = pad.ay, bx = pad.bx, by = pad.by,
+        mix = mixFader.value, fly = flyFader.value,
+        filter = activeFilter, assignX = assignXIdx, assignY = assignYIdx
+    )
+
+    private fun captureSnap(side: Int) {
+        if (side == 0 && activeZu < 0 && autoZu == null) autoLu = liveSnap()
+        if (side == 1 && activeLu < 0 && autoLu == null) autoZu = liveSnap()
+        val s = liveSnap()
+        val n = min(padGrid.padCount, 14)
+        val zone = if (side == 0) 0 until n / 2 else n / 2 until n
+        val free = zone.firstOrNull { snapPads[it] == null }
+        val idx = free
+            ?: (if (side == 0) activeZu.takeIf { it >= 0 } ?: zone.last()
+                else activeLu.takeIf { it >= 0 } ?: zone.first())
+        snapPads[idx] = s
+        if (side == 0) activeZu = idx else activeLu = idx
+        refreshSnapGrid()
+        applyMorph(zuLuFader.value)
+    }
+
+    private fun recallSnap(idx: Int) {
+        val isZu = idx < min(padGrid.padCount, 14) / 2
+        if (isZu) activeZu = idx else activeLu = idx
+        refreshSnapGrid()
+        applyMorph(zuLuFader.value)
+    }
+
+    private fun refreshSnapGrid() {
+        val n = min(padGrid.padCount, 14)
+        val sides = IntArray(14)
+        for (i in 0 until n) {
+            if (snapPads[i] != null) sides[i] = if (i < n / 2) 1 else 2
+        }
+        padGrid.snapSides = sides
+        padGrid.activeSnap = intArrayOf(activeZu, activeLu)
+    }
+
+    private fun applyMorph(tIn: Float) {
+        val t = tIn.coerceIn(0f, 1f)
+        val zu = activeZu.takeIf { it >= 0 }?.let { snapPads[it] } ?: autoZu ?: return
+        val lu = activeLu.takeIf { it >= 0 }?.let { snapPads[it] } ?: autoLu ?: return
+        fun l(a: Float, b: Float) = a + (b - a) * t
+        val ax = l(zu.ax, lu.ax)
+        val ay = l(zu.ay, lu.ay)
+        val bx = l(zu.bx, lu.bx)
+        val by = l(zu.by, lu.by)
+        val mx = l(zu.mix, lu.mix)
+        val fy = l(zu.fly, lu.fly)
+        engine.nativeSetAx(ax)
+        engine.nativeSetAy(ay)
+        engine.nativeSetBx(bx)
+        engine.nativeSetBy(by)
+        engine.nativeSetMix(mx)
+        engine.nativeSetFly(fy)
+        engine.nativeSetStutter(fy >= 0.75f)
+        pad.setCursor(ax, ay, bx, by)
+        mixFader.value = mx
+        flyFader.setValue(fy)
+        val src = if (t >= 0.5f) lu else zu
+        activeFilter = src.filter
+        engine.nativeSetFilterType(activeFilter)
+        assignXIdx = src.assignX
+        assignYIdx = src.assignY
+        engine.nativeSetAssign(0, assignXIdx)
+        engine.nativeSetAssign(1, assignYIdx)
+        refreshAssignLabels()
+        refreshFxHighlight()
+    }
+
+    private fun buildStepPanel(d: Float) {
+        stepOverlay = FrameLayout(this)
+        stepOverlay.setBackgroundColor(Color.argb(225, 8, 9, 12))
+        stepOverlay.visibility = View.GONE
+
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        val panelBg = GradientDrawable()
+        panelBg.setColor(Color.rgb(24, 26, 32))
+        panelBg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
+        panelBg.cornerRadius = 8 * d
+        panel.background = panelBg
+        panel.setPadding((14 * d).toInt(), (10 * d).toInt(), (14 * d).toInt(), (12 * d).toInt())
+
+        val titleRow = LinearLayout(this)
+        titleRow.gravity = Gravity.CENTER_VERTICAL
+        val title = TextView(this)
+        title.text = "PAS"
+        title.setTextColor(Color.rgb(236, 224, 196))
+        title.textSize = 16f
+        title.typeface = markerFont(this)
+        stepTitle = title
+        titleRow.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val close = Button(this)
+        close.text = "\u00d7"
+        close.setTextColor(silk)
+        close.textSize = 16f
+        close.minHeight = 0
+        close.minimumHeight = 0
+        close.minimumWidth = 0
+        close.setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        close.typeface = markerFont(this)
+        close.background = buttonBackground(false)
+        close.setOnClickListener { stepOverlay.visibility = View.GONE }
+        titleRow.addView(close)
+        panel.addView(titleRow)
+
+        val hint = TextView(this)
+        hint.text = "HAUT = PITCH \u00b7 BAS = VELOCITE"
+        hint.setTextColor(Color.rgb(120, 128, 146))
+        hint.textSize = 10f
+        panel.addView(hint)
+
+        val editor = StepEditorView(this)
+        editor.onStepChange = { s, p, v ->
+            if (stepEditBank >= 0) engine.nativeSetStep(stepEditBank, s, p, v)
+        }
+        stepEditor = editor
+        panel.addView(
+            editor,
+            LinearLayout.LayoutParams((320 * d).toInt(), (230 * d).toInt()).apply {
+                topMargin = (8 * d).toInt()
+            }
+        )
+
+        stepOverlay.addView(
+            panel,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
+        )
+    }
+
+    private fun openStepEditor(bank: Int) {
+        val e = stepEditor ?: return
+        stepEditBank = bank
+        e.bank = bank
+        e.stepCount = bankSteps[bank].coerceAtLeast(1)
+        e.pitch = stepPitch[bank]
+        e.vel = stepVel[bank]
+        e.invalidate()
+        stepTitle?.text = "PAS \u00b7 BANQUE ${bank + 1}"
+        stepOverlay.visibility = View.VISIBLE
     }
 }

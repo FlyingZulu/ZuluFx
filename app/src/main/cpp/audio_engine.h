@@ -91,6 +91,8 @@ public:
 
     void recordBank(int bank, int steps, bool wet);
     void startResample(int bank, int steps);
+    void setStep(int bank, int step, float pitch, float vel);
+    void setStepCount(int bank, int n);
     void toggleBank(int bank);
     bool bankHasLoop(int bank) const;
     void jumpSlice(int slice, int total);
@@ -184,15 +186,22 @@ private:
     bool prevStutter = false;
     int stutterWrite = 0;
 
+    static constexpr int kNumBanks = 8;
+    static constexpr int kMaxSteps = 14;
     struct LoopBank {
         float* buf = nullptr;
         int cap = 0;
         int samples = 0;
         int pos = 0;
         bool playing = false;
+        int steps = 0;
+        float stepPitch[kMaxSteps];
+        float stepVel[kMaxSteps];
+        float acc = 0.f;
+        LoopBank() {
+            for (int s = 0; s < kMaxSteps; s++) { stepPitch[s] = 0.f; stepVel[s] = 1.f; }
+        }
     };
-    static constexpr int kNumBanks = 8;
-    static constexpr int kMaxSteps = 14;
     static constexpr int kTotalFrameBudget = 6553600;
     LoopBank banks[kNumBanks];
     int totalFrames = 0;

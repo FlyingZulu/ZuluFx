@@ -338,6 +338,9 @@ void AudioEngine::recordBank(int bank, int steps, bool wet) {
     lb.samples = n;
     lb.pos = 0;
     lb.playing = false;
+    lb.steps = steps;
+    for (int s = 0; s < kMaxSteps; s++) { lb.stepPitch[s] = 0.f; lb.stepVel[s] = 1.f; }
+    lb.acc = 0.f;
     recBank = bank;
     recWet = wet;
 }
@@ -362,8 +365,30 @@ void AudioEngine::startResample(int bank, int steps) {
     lb.samples = n;
     lb.pos = 0;
     lb.playing = false;
+    lb.steps = steps;
+    for (int s = 0; s < kMaxSteps; s++) { lb.stepPitch[s] = 0.f; lb.stepVel[s] = 1.f; }
+    lb.acc = 0.f;
     resBank = bank;
     resPos = 0;
+}
+
+void AudioEngine::setStep(int bank, int step, float pitch, float vel) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    if (step < 0 || step >= kMaxSteps) return;
+    LoopBank& lb = banks[bank];
+    if (lb.steps <= step) lb.steps = step + 1;
+    lb.stepPitch[step] = pitch;
+    lb.stepVel[step] = vel;
+}
+
+void AudioEngine::setStepCount(int bank, int n) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    if (n < 0) n = 0;
+    if (n > kMaxSteps) n = kMaxSteps;
+    LoopBank& lb = banks[bank];
+    lb.steps = n;
+    for (int s = 0; s < kMaxSteps; s++) { lb.stepPitch[s] = 0.f; lb.stepVel[s] = 1.f; }
+    lb.acc = 0.f;
 }
 
 void AudioEngine::toggleBank(int bank) {
@@ -527,13 +552,14 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 default: filter.mCoeffs.setSOLP(k, q); break;
             }
         }
-        lfo.cycle();
-
-        float wet = runFilter(inS);
-        wet = tanhf(wet * 1.5f) * 0.8f;
-
         float m = clamp01(mix.load());
-        float smp = inS * (1.f - m) + wet * m;
+        float smp = inS;
+        if (m > 0.001f) {
+            if (lfoDepthSmoothed > 0.001f) lfo.cycle();
+            float wet = runFilter(inS);
+            wet = tanhf(wet * 1.5f) * 0.8f;
+            smp = inS * (1.f - m) + wet * m;
+        }
 
         if (bendDriveS > 1.01f) smp = tanhf(smp * bendDriveS) * 0.8f;
 
@@ -610,14 +636,28 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 if (sEnd <= sStart) sEnd = sStart + 1;
                 if (lb.pos < sStart || lb.pos >= sEnd) lb.pos = sStart;
             }
-            loopL += lb.buf[2 * lb.pos];
-            loopR += lb.buf[2 * lb.pos + 1];
-            if (rate != 1.f) {
-                xyAcc += rate;
-                lb.pos += (int)xyAcc;
-                xyAcc -= (int)xyAcc;
+            int si = -1;
+            if (!xyT && lb.steps > 0) {
+                si = (int)((float)lb.pos / lb.samples * lb.steps);
+                if (si >= lb.steps) si = lb.steps - 1;
+            }
+            float vel = si >= 0 ? lb.stepVel[si] : 1.f;
+            float prate = 1.f;
+            if (si >= 0 && lb.stepPitch[si] != 0.f) prate = powf(2.f, lb.stepPitch[si] / 12.f);
+            loopL += lb.buf[2 * lb.pos] * vel;
+            loopR += lb.buf[2 * lb.pos + 1] * vel;
+            if (xyT) {
+                if (rate != 1.f) {
+                    xyAcc += rate;
+                    lb.pos += (int)xyAcc;
+                    xyAcc -= (int)xyAcc;
+                } else {
+                    lb.pos += 1;
+                }
             } else {
-                lb.pos += 1;
+                lb.acc += prate;
+                lb.pos += (int)lb.acc;
+                lb.acc -= (int)lb.acc;
             }
             if (xyT) {
                 if (lb.pos >= sEnd) lb.pos = sStart + ((lb.pos - sStart) % (sEnd - sStart));

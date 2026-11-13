@@ -80,6 +80,12 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeResample(JNIEnv*, jobject, jint bank, jint steps) { if (g) g->startResample(bank, steps); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetStep(JNIEnv*, jobject, jint bank, jint step, jfloat pitch, jfloat vel) { if (g) g->setStep(bank, step, pitch, vel); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetStepCount(JNIEnv*, jobject, jint bank, jint n) { if (g) g->setStepCount(bank, n); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeToggleBank(JNIEnv*, jobject, jint bank) { if (g) g->toggleBank(bank); }
 
 JNIEXPORT jboolean JNICALL

@@ -41,6 +41,16 @@ class ZuluPad(context: Context) : View(context) {
 
     var waveform: FloatArray? = null
 
+    fun setCursor(nax: Float, nay: Float, nbx: Float, nby: Float) {
+        targetAx = nax.coerceIn(0f, 1f)
+        targetAy = nay.coerceIn(0f, 1f)
+        if (!merged) {
+            targetBx = nbx.coerceIn(0f, 1f)
+            targetBy = nby.coerceIn(0f, 1f)
+        }
+        invalidate()
+    }
+
     var activePreset = -1
     var arpOn = false
         set(value) {

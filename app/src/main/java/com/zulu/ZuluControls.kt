@@ -266,9 +266,21 @@ class PadGridView(context: Context) : View(context) {
     var soloMask = 0
         set(value) { field = value; invalidate() }
 
+    var snapSides = IntArray(14)
+        set(value) { field = value; invalidate() }
+
+    var activeSnap = intArrayOf(-1, -1)
+        set(value) { field = value; invalidate() }
+
     var onPadTouch: ((Int) -> Unit)? = null
+    var onPadLongTouch: ((Int) -> Unit)? = null
 
     private var flash = -1
+    private var longPad = -1
+    private var longRunnable: Runnable? = null
+
+    private val zuColor = Color.rgb(0, 229, 255)
+    private val luColor = Color.rgb(190, 120, 255)
 
     private val rows: Int get() = (padCount + 3) / 4
 
@@ -289,6 +301,7 @@ class PadGridView(context: Context) : View(context) {
             val soloOn = soloPad && (soloMask and (1 shl (i - 8))) != 0
             val lit = (shiftMode && activeBank == i + 1) || flash == i
             val rec = shiftMode && recPad == i
+            val side = if (i < snapSides.size) snapSides[i] else 0
 
             paint.fill(
                 when {
@@ -296,12 +309,27 @@ class PadGridView(context: Context) : View(context) {
                     rec -> Color.rgb(120, 40, 34)
                     soloOn -> Color.rgb(0, 229, 255)
                     lit -> Color.rgb(255, 176, 0)
+                    side == 1 -> Color.rgb(18, 58, 60)
+                    side == 2 -> Color.rgb(56, 38, 78)
                     else -> Color.rgb(40, 44, 54)
                 }
             )
             canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
             paint.stroke(Color.rgb(75, 82, 98), 1f * d)
             drawSketchyRoundRect(canvas, paint, l, t, l + padW, t + padH, 5f * d, 100 + i)
+
+            if (side != 0 && !soloPad && !shiftMode) {
+                val isActive = (side == 1 && activeSnap[0] == i) ||
+                    (side == 2 && activeSnap[1] == i)
+                paint.stroke(if (side == 1) zuColor else luColor, if (isActive) 2f * d else 1f * d)
+                paint.alpha = if (isActive) 255 else 130
+                canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
+                paint.alpha = 255
+                if (isActive) {
+                    paint.fill(if (side == 1) zuColor else luColor)
+                    canvas.drawCircle(l + padW / 2f, t + padH / 2f, 3f * d, paint)
+                }
+            }
 
             if (shiftMode) {
                 paint.fill(if (lit) ink else silk)
@@ -329,9 +357,18 @@ class PadGridView(context: Context) : View(context) {
                 if (i >= 0) {
                     flash = i
                     onPadTouch?.invoke(i + 1)
+                    longPad = i
+                    longRunnable = Runnable {
+                        if (longPad == i) onPadLongTouch?.invoke(i + 1)
+                    }.also { postDelayed(it, 600) }
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> flash = -1
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                flash = -1
+                longRunnable?.let { removeCallbacks(it) }
+                longRunnable = null
+                longPad = -1
+            }
         }
         invalidate()
         return true
@@ -572,6 +609,109 @@ class VFaderView(
                 val m = 8f * d
                 value = ((event.x - m) / (w - 2f * m)).coerceIn(0f, 1f)
                 onValueChange?.invoke(value)
+            }
+        }
+        invalidate()
+        return true
+    }
+}
+
+class StepEditorView(context: Context) : View(context) {
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
+    var bank = 0
+    var stepCount = 8
+    var pitch = FloatArray(14)
+    var vel = FloatArray(14) { 1f }
+
+    var onStepChange: ((Int, Float, Float) -> Unit)? = null
+
+    private val pitchMax = 12f
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val m = 10f * d
+        val n = stepCount.coerceIn(1, 14)
+        val colW = (w - 2f * m) / n
+        val split = m + (h - 2f * m) * 0.58f
+
+        paint.fill(Color.rgb(16, 18, 24))
+        canvas.drawRoundRect(0f, 0f, w, h, 6f * d, 6f * d, paint)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 23)
+
+        paint.textSize = 8f * d
+        paint.typeface = marker
+        paint.textAlign = Paint.Align.LEFT
+        paint.fill(Color.rgb(120, 128, 144))
+        canvas.drawText("PITCH", m, m + 8f * d, paint)
+        canvas.drawText("VEL", m, split + 10f * d, paint)
+
+        for (s in 0 until n) {
+            val l = m + s * colW
+
+            val pt = m + 12f * d
+            val pb = split - 4f * d
+            paint.fill(Color.rgb(26, 30, 38))
+            canvas.drawRect(l + 1f, pt, l + colW - 2f, pb, paint)
+            val cy = (pt + pb) / 2f
+            paint.stroke(Color.rgb(60, 66, 80), 1f * d)
+            canvas.drawLine(l + 1f, cy, l + colW - 2f, cy, paint)
+            val p = pitch[s].coerceIn(-pitchMax, pitchMax)
+            val half = (pb - pt) / 2f
+            val barY = cy - (p / pitchMax) * half
+            paint.fill(Color.rgb(0, 229, 255))
+            if (p >= 0) canvas.drawRect(l + 2f, barY, l + colW - 3f, cy, paint)
+            else canvas.drawRect(l + 2f, cy, l + colW - 3f, barY, paint)
+            paint.fill(Color.rgb(236, 224, 196))
+            paint.textAlign = Paint.Align.CENTER
+            canvas.drawText(
+                if (p > 0.5f) "+${p.toInt()}" else "${p.toInt()}",
+                l + colW / 2f, pt + 9f * d, paint
+            )
+
+            val vt = split + 14f * d
+            val vb = h - m
+            paint.fill(Color.rgb(26, 30, 38))
+            canvas.drawRect(l + 1f, vt, l + colW - 2f, vb, paint)
+            val v = vel[s].coerceIn(0f, 1f)
+            val vy = vb - v * (vb - vt)
+            paint.fill(Color.rgb(255, 176, 0))
+            canvas.drawRect(l + 2f, vy, l + colW - 3f, vb, paint)
+            paint.fill(Color.rgb(120, 128, 144))
+            canvas.drawText("${(v * 99).toInt()}", l + colW / 2f, vt + 9f * d, paint)
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
+                val w = width.toFloat()
+                val h = height.toFloat()
+                val m = 10f * d
+                val n = stepCount.coerceIn(1, 14)
+                val colW = (w - 2f * m) / n
+                val split = m + (h - 2f * m) * 0.58f
+                val s = (((event.x - m) / colW).toInt()).coerceIn(0, n - 1)
+                if (event.y < split) {
+                    val pt = m + 12f * d
+                    val pb = split - 4f * d
+                    val cy = (pt + pb) / 2f
+                    val half = (pb - pt) / 2f
+                    val p = if (half > 0f) ((cy - event.y) / half * pitchMax) else 0f
+                    pitch[s] = p.coerceIn(-pitchMax, pitchMax).toInt().toFloat()
+                    onStepChange?.invoke(s, pitch[s], vel[s])
+                } else {
+                    val vt = split + 14f * d
+                    val vb = h - m
+                    val v = if (vb > vt) 1f - (event.y - vt) / (vb - vt) else 1f
+                    vel[s] = v.coerceIn(0f, 1f)
+                    onStepChange?.invoke(s, pitch[s], vel[s])
+                }
             }
         }
         invalidate()
