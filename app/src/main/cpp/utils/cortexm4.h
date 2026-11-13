@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define __SIMD32_TYPE int32_t
+#define simd32_t __SIMD32_TYPE
 
 static inline int32_t qadd(int32_t a, int32_t b) {
     int64_t r = (int64_t)a + (int64_t)b;
