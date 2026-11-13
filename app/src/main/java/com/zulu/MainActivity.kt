@@ -52,6 +52,9 @@ class MainActivity : Activity() {
     private lateinit var btnTap: Button
     private lateinit var btnFx: Button
     private lateinit var fxOverlay: FrameLayout
+    private lateinit var scaleOverlay: FrameLayout
+    private lateinit var arpOverlay: FrameLayout
+    private lateinit var padPane: FrameLayout
 
     private var fxOpen = false
     private var fxHeld = false
@@ -60,6 +63,16 @@ class MainActivity : Activity() {
     private var loopLenSteps = 8
     private var loopWetA = false
     private var loopWetB = false
+    private var activeScale = 0
+    private var activeRoot = 9
+    private var arpOn = false
+    private var arpMode = 0
+    private var arpRateIdx = 1
+    private var arpOctIdx = 0
+    private var arpGateIdx = 1
+    private var arpOctJump = false
+    private var arpSlicesIdx = 2
+    private val arpButtons = ArrayList<Button>()
     private val fxButtons = ArrayList<Button>()
 
     private val fxSections = listOf(
@@ -125,6 +138,16 @@ class MainActivity : Activity() {
             engine.nativeSetBy(by)
         }
         pad.onPresetTouch = { i -> engine.nativeSetFilterType(i % 4) }
+        pad.onArpTouch = {
+            if (shiftActive()) {
+                openArpPanel()
+            } else {
+                arpOn = !arpOn
+                pushArp()
+                pad.arpOn = arpOn
+                pad.invalidate()
+            }
+        }
         pad.onBendTouch = { down ->
             val bend = down && shiftLocked
             pad.bendActive = bend
@@ -302,6 +325,10 @@ class MainActivity : Activity() {
         row3.addView(padGrid, row3Params)
 
         btnMenu.setOnClickListener {
+            if (shiftActive()) {
+                openScalePanel()
+                return@setOnClickListener
+            }
             padGrid.padCount = when (padGrid.padCount) {
                 8 -> 10
                 10 -> 12
@@ -373,7 +400,7 @@ class MainActivity : Activity() {
         content.setBackgroundColor(Color.rgb(18, 20, 25))
         val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT)
 
-        val padPane = FrameLayout(this)
+        padPane = FrameLayout(this)
         padPane.addView(
             pad,
             FrameLayout.LayoutParams(
@@ -403,6 +430,15 @@ class MainActivity : Activity() {
         }
 
         buildFxPanel(d)
+        buildScalePanel(d)
+        buildArpPanel(d)
+        padPane.addView(
+            arpOverlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         val root = FrameLayout(this)
         root.addView(
@@ -414,6 +450,13 @@ class MainActivity : Activity() {
         )
         root.addView(
             fxOverlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        root.addView(
+            scaleOverlay,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -634,6 +677,268 @@ class MainActivity : Activity() {
     private fun closeFx() {
         fxOpen = false
         fxOverlay.visibility = View.GONE
+    }
+
+    private fun buildScalePanel(d: Float) {
+        scaleOverlay = FrameLayout(this)
+        scaleOverlay.setBackgroundColor(Color.argb(190, 8, 9, 12))
+        scaleOverlay.visibility = View.GONE
+        scaleOverlay.setOnClickListener { closeScalePanel() }
+
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        val panelBg = GradientDrawable()
+        panelBg.setColor(Color.rgb(24, 26, 32))
+        panelBg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
+        panelBg.cornerRadius = 8 * d
+        panel.background = panelBg
+        panel.setPadding((14 * d).toInt(), (10 * d).toInt(), (14 * d).toInt(), (12 * d).toInt())
+
+        val titleRow = LinearLayout(this)
+        titleRow.gravity = Gravity.CENTER_VERTICAL
+        val title = TextView(this)
+        title.text = "GAMME"
+        title.setTextColor(Color.rgb(236, 224, 196))
+        title.textSize = 16f
+        title.typeface = markerFont(this)
+        titleRow.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val close = Button(this)
+        close.text = "\u00d7"
+        close.setTextColor(silk)
+        close.textSize = 16f
+        close.minHeight = 0
+        close.minimumHeight = 0
+        close.minimumWidth = 0
+        close.setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        close.typeface = markerFont(this)
+        close.background = buttonBackground(false)
+        close.setOnClickListener { closeScalePanel() }
+        titleRow.addView(close)
+        panel.addView(titleRow)
+
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        panel.addView(list)
+
+        val scales = listOf("MIN PENTA", "MAJ PENTA", "HIRAJOSHI", "IN SEN", "IWATO", "CHROM")
+        val scaleHeader = TextView(this)
+        scaleHeader.text = "GAMME"
+        scaleHeader.setTextColor(amber)
+        scaleHeader.textSize = 11f
+        scaleHeader.typeface = markerFont(this)
+        scaleHeader.setPadding(0, (10 * d).toInt(), 0, (4 * d).toInt())
+        list.addView(scaleHeader)
+        var row: LinearLayout? = null
+        for ((i, name) in scales.withIndex()) {
+            if (row == null || row.childCount == 3) {
+                row = LinearLayout(this)
+                list.addView(row)
+            }
+            val b = makeButton(name, silk)
+            b.setOnClickListener {
+                activeScale = i
+                engine.nativeSetScale(i)
+                refreshScaleHighlight()
+            }
+            row.addView(b, wrapParams((4 * d).toInt()))
+        }
+
+        val roots = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+        val rootHeader = TextView(this)
+        rootHeader.text = "FONDAMENTALE"
+        rootHeader.setTextColor(amber)
+        rootHeader.textSize = 11f
+        rootHeader.typeface = markerFont(this)
+        rootHeader.setPadding(0, (12 * d).toInt(), 0, (4 * d).toInt())
+        list.addView(rootHeader)
+        var rootRow: LinearLayout? = null
+        for ((i, name) in roots.withIndex()) {
+            if (rootRow == null || rootRow.childCount == 4) {
+                rootRow = LinearLayout(this)
+                list.addView(rootRow)
+            }
+            val b = makeButton(name, silk)
+            b.setOnClickListener {
+                activeRoot = i
+                engine.nativeSetRoot(i)
+                refreshScaleHighlight()
+            }
+            rootRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+
+        val panelParams = FrameLayout.LayoutParams(
+            (430 * d).toInt(), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+        )
+        scaleOverlay.addView(panel, panelParams)
+    }
+
+    private fun refreshScaleHighlight() {
+        val panel = scaleOverlay.getChildAt(0) as? LinearLayout ?: return
+        val list = panel.getChildAt(1) as? LinearLayout ?: return
+        var scaleBtnIdx = 0
+        var rootBtnIdx = 0
+        for (r in 0 until list.childCount) {
+            val rowView = list.getChildAt(r) as? LinearLayout ?: continue
+            for (c in 0 until rowView.childCount) {
+                val b = rowView.getChildAt(c) as? Button ?: continue
+                if (r < 2) {
+                    b.setTextColor(if (scaleBtnIdx == activeScale) amber else silk)
+                    scaleBtnIdx++
+                } else {
+                    b.setTextColor(if (rootBtnIdx == activeRoot) amber else silk)
+                    rootBtnIdx++
+                }
+            }
+        }
+    }
+
+    private fun openScalePanel() {
+        refreshScaleHighlight()
+        scaleOverlay.visibility = View.VISIBLE
+    }
+
+    private fun closeScalePanel() {
+        scaleOverlay.visibility = View.GONE
+    }
+
+    private fun buildArpPanel(d: Float) {
+        arpOverlay = FrameLayout(this)
+        arpOverlay.setBackgroundColor(Color.argb(225, 8, 9, 12))
+        arpOverlay.visibility = View.GONE
+
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        val panelBg = GradientDrawable()
+        panelBg.setColor(Color.rgb(24, 26, 32))
+        panelBg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
+        panelBg.cornerRadius = 8 * d
+        panel.background = panelBg
+        panel.setPadding((14 * d).toInt(), (10 * d).toInt(), (14 * d).toInt(), (12 * d).toInt())
+
+        val titleRow = LinearLayout(this)
+        titleRow.gravity = Gravity.CENTER_VERTICAL
+        val title = TextView(this)
+        title.text = "ARPEGGIATEUR"
+        title.setTextColor(Color.rgb(236, 224, 196))
+        title.textSize = 16f
+        title.typeface = markerFont(this)
+        titleRow.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val close = Button(this)
+        close.text = "\u00d7"
+        close.setTextColor(silk)
+        close.textSize = 16f
+        close.minHeight = 0
+        close.minimumHeight = 0
+        close.minimumWidth = 0
+        close.setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        close.typeface = markerFont(this)
+        close.background = buttonBackground(false)
+        close.setOnClickListener { closeArpPanel() }
+        titleRow.addView(close)
+        panel.addView(titleRow)
+
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        panel.addView(list)
+
+        fun header(t: String) {
+            val h = TextView(this)
+            h.text = t
+            h.setTextColor(amber)
+            h.textSize = 11f
+            h.typeface = markerFont(this)
+            h.setPadding(0, (10 * d).toInt(), 0, (4 * d).toInt())
+            list.addView(h)
+        }
+
+        fun row(labels: List<String>, kind: String, onClick: (Int) -> Unit) {
+            val r = LinearLayout(this)
+            for ((i, l) in labels.withIndex()) {
+                val b = makeButton(l, silk)
+                b.tag = kind to i
+                b.setOnClickListener { onClick(i) }
+                arpButtons.add(b)
+                r.addView(b, wrapParams((4 * d).toInt()))
+            }
+            list.addView(r)
+        }
+
+        row(listOf("ON"), "on") { _ ->
+            arpOn = !arpOn
+            pad.arpOn = arpOn
+            pad.invalidate()
+            pushArp()
+        }
+        header("MODE")
+        row(listOf("UP", "DOWN", "UP-DN", "RND"), "mode") { i ->
+            arpMode = i
+            pushArp()
+        }
+        header("VITESSE")
+        row(listOf("1/4", "1/8", "1/16", "1/32"), "rate") { i ->
+            arpRateIdx = i
+            pushArp()
+        }
+        header("OCTAVES")
+        row(listOf("x1", "x2", "x3", "x4"), "oct") { i ->
+            arpOctIdx = i
+            pushArp()
+        }
+        header("GATE")
+        row(listOf("25%", "50%", "75%", "100%"), "gate") { i ->
+            arpGateIdx = i
+            pushArp()
+        }
+        header("SLICES (BOUCLES)")
+        row(listOf("2", "4", "8", "12", "16"), "slices") { i ->
+            arpSlicesIdx = i
+            pushArp()
+        }
+        header("BONUS")
+        row(listOf("OCT JUMP"), "jump") { _ ->
+            arpOctJump = !arpOctJump
+            pushArp()
+        }
+
+        val panelParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+        )
+        panelParams.setMargins((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        arpOverlay.addView(panel, panelParams)
+    }
+
+    private fun pushArp() {
+        engine.nativeSetArp(arpOn, arpMode, arpRateIdx, arpOctIdx + 1, arpGateIdx, arpOctJump)
+        engine.nativeSetArpSlices(intArrayOf(2, 4, 8, 12, 16)[arpSlicesIdx])
+        refreshArpHighlight()
+    }
+
+    private fun refreshArpHighlight() {
+        for (b in arpButtons) {
+            val tag = b.tag as? Pair<*, *> ?: continue
+            val kind = tag.first as? String ?: continue
+            val idx = (tag.second as? Int) ?: continue
+            val lit = when (kind) {
+                "on" -> arpOn
+                "mode" -> arpOn && idx == arpMode
+                "rate" -> idx == arpRateIdx
+                "oct" -> idx == arpOctIdx
+                "gate" -> idx == arpGateIdx
+                "slices" -> idx == arpSlicesIdx
+                "jump" -> arpOctJump
+                else -> false
+            }
+            b.setTextColor(if (lit) amber else silk)
+        }
+    }
+
+    private fun openArpPanel() {
+        refreshArpHighlight()
+        arpOverlay.visibility = View.VISIBLE
+    }
+
+    private fun closeArpPanel() {
+        arpOverlay.visibility = View.GONE
     }
 
     private fun versionLabel(): String = try {

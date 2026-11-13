@@ -47,6 +47,21 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetBpm(JNIEnv*, jobject, jfloat b) { if (g) g->setBpm(b); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetScale(JNIEnv*, jobject, jint s) { if (g) g->setScale(s); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetRoot(JNIEnv*, jobject, jint r) { if (g) g->setRoot(r); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetArp(JNIEnv*, jobject, jboolean on, jint mode, jint rate,
+        jint oct, jint gate, jboolean octJump) {
+    if (g) g->setArp(on, mode, rate, oct, gate, octJump);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetArpSlices(JNIEnv*, jobject, jint n) { if (g) g->setArpSlices(n); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeRecordBank(JNIEnv*, jobject, jint bank, jint steps, jboolean wet) { if (g) g->recordBank(bank, steps, wet); }
 
 JNIEXPORT void JNICALL

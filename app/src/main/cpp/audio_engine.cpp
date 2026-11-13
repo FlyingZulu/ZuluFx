@@ -4,6 +4,247 @@
 
 static inline float clamp01(float v) { return v < 0.f ? 0.f : (v > 1.f ? 1.f : v); }
 
+float AudioEngine::degreeToSemi(int deg) const {
+    int s = scale.load();
+    if (s < 0 || s > 5) s = 0;
+    int len = 0;
+    while (len < 12 && scaleTable[s][len] >= 0) len++;
+    if (len == 0) len = 12;
+    int oct = 0;
+    while (deg < 0) { deg += len; oct--; }
+    oct += deg / len;
+    deg %= len;
+    return (float)(scaleTable[s][deg] + 12 * oct + rootNote.load());
+}
+
+static const int8_t scaleTable[6][12] = {
+    {0,3,5,7,10,-1,-1,-1,-1,-1,-1,-1},
+    {0,2,4,7,9,-1,-1,-1,-1,-1,-1,-1},
+    {0,2,3,7,8,-1,-1,-1,-1,-1,-1,-1},
+    {0,1,5,7,10,-1,-1,-1,-1,-1,-1,-1},
+    {0,1,4,7,8,-1,-1,-1,-1,-1,-1,-1},
+    {0,1,2,3,4,5,6,7,8,9,10,11},
+};
+
+static const int8_t patBass1[16] = {0,-1,0,-1, 2,-1,0,-1, 0,-1,1,-1, 0,-1,3,-1};
+static const int8_t patBass2[16] = {0,0,-1,0, -1,-1,1,-1, 2,-1,2,-1, 1,-1,-1,-1};
+static const int8_t patBass3[16] = {0,-1,-1,-1, 0,-1,-1,-1, 0,-1,-1,-1, 0,-1,1,-1};
+static const int8_t patAcid[16]  = {0,-1,2,-1, 0,-1,1,-1, 0,-1,3,-1, 2,-1,4,-1};
+static const int8_t patKick[16]  = {1,-1,-1,-1, -1,-1,-1,-1, 1,-1,-1,-1, -1,-1,1,-1};
+static const int8_t patSnr[16]   = {-1,-1,-1,-1, 1,-1,-1,-1, -1,-1,-1,-1, 1,-1,-1,1};
+static const int8_t patHat[16]   = {1,-1,1,-1, 1,-1,1,1, 1,-1,1,-1, 1,1,1,-1};
+static const int8_t patClk[16]   = {-1,-1,1,-1, -1,-1,-1,-1, -1,-1,1,-1, -1,1,-1,-1};
+static const int8_t patZap[16]   = {1,-1,-1,-1, -1,-1,-1,1, -1,-1,-1,-1, 1,-1,-1,-1};
+
+float AudioEngine::genSample(float fsr, float bpm) {
+    int t = genType.load();
+    if (t == 0) {
+        float s = (sawPhase * 2.f - 1.f) * 0.4f;
+        sawPhase += 110.f * fsr;
+        if (sawPhase >= 1.f) sawPhase -= 1.f;
+        return s;
+    }
+
+    if (t == 10 || t == 11) {
+        float rate = (t == 10) ? 0.9f : 5.f;
+        sirenPhase += rate * fsr;
+        if (sirenPhase >= 1.f) sirenPhase -= 1.f;
+        float tri = sirenPhase < 0.5f ? sirenPhase * 4.f - 1.f : 3.f - 4.f * sirenPhase;
+        float f = 55.f * powf(2.f, (float)rootNote.load() / 12.f) * 4.f * powf(2.f, tri * 0.6f);
+        oscPhase += f * fsr;
+        if (oscPhase >= 1.f) oscPhase -= 1.f;
+        return (oscPhase < 0.5f ? 1.f : -1.f) * 0.2f;
+    }
+
+    if (t == 12) {
+        noiseState = noiseState * 1103515245u + 12345u;
+        return ((float)(noiseState >> 16) / 32768.f - 1.f) * 0.22f;
+    }
+
+    bool tonal = (t >= 1 && t <= 4);
+    if (tonal && arpOn.load()) {
+        return synthSample(t, fsr);
+    }
+
+    float stepDur = (60.f / bpm) / 4.f;
+    stepClock += fsr;
+    if (stepClock >= stepDur) {
+        stepClock -= stepDur;
+        seqStep = (seqStep + 1) & 15;
+        const int8_t* p = nullptr;
+        switch (t) {
+            case 1: p = patBass1; break;
+            case 2: p = patBass2; break;
+            case 3: p = patBass3; break;
+            case 4: p = patAcid; break;
+            case 5: p = patKick; break;
+            case 6: p = patSnr; break;
+            case 7: p = patHat; break;
+            case 8: p = patClk; break;
+            case 9: p = patZap; break;
+        }
+        if (p && p[seqStep] >= 0) {
+            env = 1.f;
+            fmPhase = 0.f;
+            switch (t) {
+                case 5: kickF = 130.f; envRate = 1.f / (0.26f * fs); break;
+                case 6: envRate = 1.f / (0.13f * fs); break;
+                case 7: envRate = 1.f / (0.045f * fs); break;
+                case 8: envRate = 1.f / (0.16f * fs); break;
+                case 9: zapF = 900.f; envRate = 1.f / (0.15f * fs); break;
+                default: envRate = 1.f / (0.28f * fs); break;
+            }
+            baseF = 55.f * powf(2.f, degreeToSemi(p[seqStep]) / 12.f);
+        }
+    }
+
+    if (env > 0.f) env -= envRate * fsr;
+    if (env < 0.f) env = 0.f;
+
+    switch (t) {
+        case 1: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return (oscPhase * 2.f - 1.f) * 0.45f * env;
+        }
+        case 2: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return (oscPhase < 0.5f ? 1.f : -1.f) * 0.32f * env;
+        }
+        case 3: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return sinf(2.f * 3.14159265f * oscPhase) * 0.55f * env;
+        }
+        case 4: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return (oscPhase * 2.f - 1.f) * 0.5f * env;
+        }
+        case 5: {
+            kickF += (45.f - kickF) * 0.0025f;
+            oscPhase += kickF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return sinf(2.f * 3.14159265f * oscPhase) * env * 0.9f;
+        }
+        case 6: {
+            noiseState = noiseState * 1103515245u + 12345u;
+            float n = (float)(noiseState >> 16) / 32768.f - 1.f;
+            oscPhase += 185.f * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return (n * 0.55f + sinf(2.f * 3.14159265f * oscPhase) * 0.35f) * env;
+        }
+        case 7: {
+            noiseState = noiseState * 1103515245u + 12345u;
+            float n = (float)(noiseState >> 16) / 32768.f - 1.f;
+            float hp = n - prevNoise;
+            prevNoise = n;
+            return hp * env * 0.45f;
+        }
+        case 8: {
+            oscPhase += 214.f * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            fmPhase += 637.f * fsr;
+            if (fmPhase >= 1.f) fmPhase -= 1.f;
+            return sinf(2.f * 3.14159265f * oscPhase +
+                2.6f * sinf(2.f * 3.14159265f * fmPhase)) * env * 0.55f;
+        }
+        case 9: {
+            zapF += (70.f - zapF) * 0.004f;
+            oscPhase += zapF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return sinf(2.f * 3.14159265f * oscPhase) * env * 0.7f;
+        }
+    }
+    return 0.f;
+}
+
+float AudioEngine::synthSample(int t, float fsr) {
+    if (env > 0.f) env -= envRate * fsr;
+    if (env < 0.f) env = 0.f;
+    switch (t) {
+        case 1: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return (oscPhase * 2.f - 1.f) * 0.45f * env;
+        }
+        case 2: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return (oscPhase < 0.5f ? 1.f : -1.f) * 0.32f * env;
+        }
+        case 3: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return sinf(2.f * 3.14159265f * oscPhase) * 0.55f * env;
+        }
+        default: {
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            return (oscPhase * 2.f - 1.f) * 0.5f * env;
+        }
+    }
+}
+
+void AudioEngine::arpFire() {
+    int mode = arpMode.load(); if (mode < 0 || mode > 3) mode = 0;
+    int oct = arpOct.load(); if (oct < 1) oct = 1; if (oct > 4) oct = 4;
+    int s = scale.load(); if (s < 0 || s > 5) s = 0;
+    int len = 0;
+    while (len < 12 && scaleTable[s][len] >= 0) len++;
+    if (len == 0) len = 12;
+    int count = len * oct;
+
+    switch (mode) {
+        case 0: arpIdx = (arpIdx + 1) % count; break;
+        case 1: arpIdx = (arpIdx - 1 + count) % count; break;
+        case 2:
+            if (count > 1) {
+                arpIdx += arpDir;
+                if (arpIdx >= count) { arpIdx = count - 2; arpDir = -1; }
+                else if (arpIdx < 0) { arpIdx = 1; arpDir = 1; }
+            } else arpIdx = 0;
+            break;
+        default:
+            noiseState = noiseState * 1103515245u + 12345u;
+            arpIdx = (int)((noiseState >> 16) % (unsigned)count);
+            break;
+    }
+
+    int t = genType.load();
+    if (t >= 1 && t <= 4) {
+        int deg = arpIdx;
+        if (arpOctJump.load()) {
+            noiseState = noiseState * 1103515245u + 12345u;
+            if ((noiseState >> 16) % 4u == 0u) deg += len;
+        }
+        baseF = 55.f * powf(2.f, degreeToSemi(deg) / 12.f);
+        env = 1.f;
+        fmPhase = 0.f;
+        static const float gates[4] = {0.25f, 0.5f, 0.75f, 1.f};
+        int gi = arpGate.load();
+        if (gi < 0 || gi > 3) gi = 1;
+        static const float divs[4] = {1.f, 2.f, 4.f, 8.f};
+        int ri = arpRate.load();
+        if (ri < 0 || ri > 3) ri = 1;
+        float stepDur = (60.f / fmaxf(bpm.load(), 40.f)) / divs[ri];
+        envRate = 1.f / (gates[gi] * stepDur * fs);
+    }
+
+    int slices = arpSlices.load();
+    if (slices < 2) slices = 2;
+    if (slices > 16) slices = 16;
+    int sIdx = arpIdx % slices;
+    for (int k = 0; k < kNumBanks; k++) {
+        LoopBank& lb = banks[k];
+        if (!lb.playing || lb.samples <= 0) continue;
+        int target = (int)((float)sIdx / slices * lb.samples);
+        if (target >= lb.samples) target = lb.samples - 1;
+        lb.pos = target;
+    }
+}
+
 bool AudioEngine::start(bool useMic) {
     mic = useMic;
 
@@ -107,14 +348,25 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
     const float fsr = 1.f / fs;
     const int fType = filterType.load();
 
+    if (arpOn.load()) {
+        float b = fmaxf(bpm.load(), 40.f);
+        static const float divs[4] = {1.f, 2.f, 4.f, 8.f};
+        int r = arpRate.load();
+        if (r < 0 || r > 3) r = 1;
+        float stepDur = (60.f / b) / divs[r];
+        arpClock += fsr;
+        if (arpClock >= stepDur) {
+            arpClock -= stepDur;
+            arpFire();
+        }
+    }
+
     for (int i = 0; i < numFrames; i++) {
         float inS;
         if (mic) {
             inS = src[i];
         } else {
-            inS = (sawPhase * 2.f - 1.f) * 0.4f;
-            sawPhase += 110.f * fsr;
-            if (sawPhase >= 1.f) sawPhase -= 1.f;
+            inS = genSample(fsr, fmaxf(bpm.load(), 40.f));
         }
 
         if ((coeffClock++ & 31) == 0) {

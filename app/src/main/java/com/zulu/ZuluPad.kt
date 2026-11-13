@@ -42,12 +42,14 @@ class ZuluPad(context: Context) : View(context) {
     var waveform: FloatArray? = null
 
     var activePreset = -1
+    var arpOn = false
         set(value) {
             field = value
             invalidate()
         }
 
     var onPresetTouch: ((Int) -> Unit)? = null
+    var onArpTouch: (() -> Unit)? = null
 
     var onAxisChange: ((Float, Float, Float, Float) -> Unit)? = null
 
@@ -124,17 +126,19 @@ class ZuluPad(context: Context) : View(context) {
         paint.strokeWidth = 1f * d
         paint.color = Color.rgb(60, 66, 80)
         canvas.drawLine(0f, strip, w, strip, paint)
-        val cellW = w / presetSlots
+        val cells = presetSlots + 1
+        val cellW = w / cells
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = marker
         paint.textSize = 10f * d
-        for (i in 0 until presetSlots) {
+        for (i in 0 until cells) {
             val cx = cellW * (i + 0.5f)
             if (i > 0) canvas.drawLine(cellW * i, 2f * d, cellW * i, strip - 2f * d, paint)
             paint.style = Paint.Style.FILL
-            paint.color = if (i == activePreset) amber else Color.rgb(120, 128, 144)
-            canvas.drawText((i + 1).toString(), cx, strip - 6f * d, paint)
-            if (i == activePreset) {
+            val lit = (i < presetSlots && i == activePreset) || (i == presetSlots && arpOn)
+            paint.color = if (lit) amber else Color.rgb(120, 128, 144)
+            canvas.drawText(if (i == presetSlots) "ARP" else (i + 1).toString(), cx, strip - 6f * d, paint)
+            if (lit) {
                 paint.color = amber
                 paint.alpha = 40
                 canvas.drawRect(cellW * i + 1f, 1f, cellW * (i + 1) - 1f, strip - 1f, paint)
@@ -225,9 +229,15 @@ class ZuluPad(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val id = event.getPointerId(event.actionIndex)
                 if (event.getY(event.actionIndex) < presetStripHeight()) {
-                    activePreset = (event.getX(event.actionIndex) / width * presetSlots)
-                        .toInt().coerceIn(0, presetSlots - 1)
-                    onPresetTouch?.invoke(activePreset)
+                    val cells = presetSlots + 1
+                    val cell = (event.getX(event.actionIndex) / width * cells)
+                        .toInt().coerceIn(0, cells - 1)
+                    if (cell == presetSlots) {
+                        onArpTouch?.invoke()
+                    } else {
+                        activePreset = cell
+                        onPresetTouch?.invoke(activePreset)
+                    }
                     invalidate()
                     return true
                 }
