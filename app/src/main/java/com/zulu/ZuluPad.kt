@@ -31,10 +31,10 @@ class ZuluPad(context: Context) : View(context) {
     private var fOrder = 1L
     private var zOrder = 2L
 
-    private var fx = 0.35f
-    private var fy = 0.50f
-    private var zx = 0.65f
-    private var zy = 0.50f
+    var fx = 0.35f
+    var fy = 0.50f
+    var zx = 0.65f
+    var zy = 0.50f
 
     private var targetFx = fx
     private var targetFy = fy

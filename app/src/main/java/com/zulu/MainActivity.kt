@@ -1,11 +1,11 @@
 package com.zulu
 
+import android.app.Activity
 import android.os.Bundle
 import android.widget.Button
-import androidx.appcompat.app.AppCompatActivity
 import android.widget.TextView
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
 
     private lateinit var pad: ZuluPad
     private lateinit var btnF: Button
@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTexts() {
+        if (isDestroyed || isFinishing) return
         // Rafraîchit les valeurs affichées
         runOnUiThread {
             tvFx.text = "Fx: ${pad.fx.toInt()}"
