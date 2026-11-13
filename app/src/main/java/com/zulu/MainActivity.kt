@@ -25,6 +25,7 @@ class MainActivity : Activity() {
     private val engine = AudioEngine()
     private val levels = FloatArray(2)
     private val vuHandler = Handler(Looper.getMainLooper())
+    private val recEndHandler = Handler(Looper.getMainLooper())
     private val vuRunnable = object : Runnable {
         override fun run() {
             engine.nativeGetLevels(levels)
@@ -53,6 +54,8 @@ class MainActivity : Activity() {
     private lateinit var fxOverlay: FrameLayout
 
     private var fxOpen = false
+    private var fxHeld = false
+    private var fxConsumed = false
     private var activeFx = -1
     private val fxButtons = ArrayList<Button>()
 
@@ -138,7 +141,23 @@ class MainActivity : Activity() {
         btnFx = makeRoundButton("FX", amber, 12f)
 
         btnFx.setOnClickListener {
-            if (fxOpen) closeFx() else openFx()
+            if (fxConsumed) {
+                fxConsumed = false
+            } else if (fxOpen) {
+                closeFx()
+            } else {
+                openFx()
+            }
+        }
+        btnFx.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    fxHeld = true
+                    fxConsumed = false
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> fxHeld = false
+            }
+            false
         }
 
         btnStart.setOnClickListener {
@@ -221,21 +240,28 @@ class MainActivity : Activity() {
         }
 
         padGrid.onPadTouch = { n ->
-            if (shiftActive()) padGrid.activeBank = n
+            if (shiftActive() || fxHeld) {
+                fxConsumed = true
+                padGrid.activeBank = n
+                startLoopRecording(n)
+            } else {
+                engine.nativeJumpSlice(n, padGrid.padCount)
+            }
         }
 
         val row1 = LinearLayout(this)
         row1.orientation = LinearLayout.HORIZONTAL
         row1.gravity = Gravity.CENTER_VERTICAL
-        row1.addView(vuMeter, LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f))
+        row1.addView(btnFx, LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt()))
+        row1.addView(
+            vuMeter,
+            LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
+        )
         val dialParams = LinearLayout.LayoutParams((64 * d).toInt(), (46 * d).toInt())
         dialParams.setMargins((6 * d).toInt(), 0, 0, 0)
         row1.addView(bpmDial, dialParams)
         row1.addView(btnTap, wrapParams((4 * d).toInt()))
         row1.addView(btnStart, wrapParams((4 * d).toInt()))
-        val fxParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
-        fxParams.setMargins((6 * d).toInt(), 0, 0, 0)
-        row1.addView(btnFx, fxParams)
         val menuParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
         menuParams.setMargins((6 * d).toInt(), 0, 0, 0)
         row1.addView(btnMenu, menuParams)
@@ -609,7 +635,16 @@ class MainActivity : Activity() {
     private fun refreshBlink() {
         segAB.blinkOn = blinkOn
         segAB.recHeld = recHeld
+        padGrid.blinkOn = blinkOn
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
+    }
+
+    private fun startLoopRecording(steps: Int) {
+        engine.nativeRecordLoop(steps)
+        padGrid.recPad = steps - 1
+        val ms = (steps * 60000f / bpmDial.bpm.coerceAtLeast(40f)).toLong()
+        recEndHandler.removeCallbacksAndMessages(null)
+        recEndHandler.postDelayed({ padGrid.recPad = -1 }, ms + 200)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -629,6 +664,7 @@ class MainActivity : Activity() {
         super.onDestroy()
         blinkHandler.removeCallbacks(blinkRunnable)
         vuHandler.removeCallbacks(vuRunnable)
+        recEndHandler.removeCallbacksAndMessages(null)
         if (playing) {
             engine.nativeStop()
             playing = false

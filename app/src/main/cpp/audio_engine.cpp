@@ -51,6 +51,28 @@ float AudioEngine::runFilter(float xn) {
     return filter.process(xn);
 }
 
+void AudioEngine::recordLoop(int steps) {
+    float b = fmaxf(bpm.load(), 40.f);
+    int n = (int)((60.f / b) * steps * fs);
+    if (n < 4800) n = 4800;
+    if (!loopBuf || loopCap < n) {
+        delete[] loopBuf;
+        loopCap = n;
+        loopBuf = new float[(size_t)n * 2];
+    }
+    loopSamples = n;
+    loopRecPos = 0;
+    loopPos = 0;
+    loopPlaying.store(false);
+    loopRecording.store(true);
+}
+
+void AudioEngine::jumpSlice(int slice, int total) {
+    if (total <= 0) return;
+    loopSliceTotal.store(total);
+    loopSliceReq.store(slice - 1);
+}
+
 oboe::DataCallbackResult AudioEngine::onAudioReady(
         oboe::AudioStream*, void* audioData, int32_t numFrames) {
     float* o = static_cast<float*>(audioData);
@@ -110,9 +132,33 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         float m = clamp01(mix.load());
         float smp = inS * (1.f - m) + wet * m;
 
-        float outL = smp, outR = smp;
+        float liveL = smp, liveR = smp;
 
-        float history = outL;
+        if (loopRecording.load()) {
+            loopBuf[2 * loopRecPos] = liveL;
+            loopBuf[2 * loopRecPos + 1] = liveR;
+            loopRecPos++;
+            if (loopRecPos >= loopSamples) {
+                loopRecording.store(false);
+                loopPlaying.store(true);
+                loopPos = 0;
+            }
+        }
+
+        float loopL = 0.f, loopR = 0.f;
+        if (loopPlaying.load()) {
+            int req = loopSliceReq.exchange(-1);
+            if (req >= 0) {
+                int tot = loopSliceTotal.load();
+                if (tot > 0) loopPos = (int)((float)req / tot * loopSamples);
+                if (loopPos >= loopSamples) loopPos = 0;
+            }
+            loopL = loopBuf[2 * loopPos];
+            loopR = loopBuf[2 * loopPos + 1];
+            loopPos = (loopPos + 1) % loopSamples;
+        }
+
+        float history = liveL;
         stutterBuf[stutterWrite] = history;
         stutterWrite = (stutterWrite + 1) % kStutterMax;
 
@@ -136,13 +182,18 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             else if (stutterPos > stutterWindow - fade)
                 g = (float)(stutterWindow - stutterPos) / fade;
             float loop = stutterBuf[idx] * g;
-            outL = loop; outR = loop;
+            liveL = loop; liveR = loop;
             stutterPos = (stutterPos + 1) % stutterWindow;
         }
 
         float mTarget = mute.load() ? 0.f : 1.f;
         muteGain += 0.0025f * (mTarget - muteGain);
-        outL *= muteGain; outR *= muteGain;
+        liveL *= muteGain; liveR *= muteGain;
+
+        float outL = liveL + loopL * kLoopGain;
+        float outR = liveR + loopR * kLoopGain;
+        if (outL > 1.f) outL = 1.f; if (outL < -1.f) outL = -1.f;
+        if (outR > 1.f) outR = 1.f; if (outR < -1.f) outR = -1.f;
 
         float pL = fabsf(outL), pR = fabsf(outR);
         float cl = levelL.load(), cr = levelR.load();

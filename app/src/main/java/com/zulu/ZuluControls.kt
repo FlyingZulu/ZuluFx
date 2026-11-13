@@ -205,6 +205,12 @@ class PadGridView(context: Context) : View(context) {
     var padCount = 8
         set(value) { field = value; invalidate() }
 
+    var blinkOn = true
+        set(value) { field = value; invalidate() }
+
+    var recPad = -1
+        set(value) { field = value; invalidate() }
+
     var onPadTouch: ((Int) -> Unit)? = null
 
     private var flash = -1
@@ -225,8 +231,16 @@ class PadGridView(context: Context) : View(context) {
             val l = gap + col * (padW + gap)
             val t = gap + row * (padH + gap)
             val lit = (shiftMode && activeBank == i + 1) || flash == i
+            val rec = shiftMode && recPad == i
 
-            paint.fill(if (lit) Color.rgb(255, 176, 0) else Color.rgb(40, 44, 54))
+            paint.fill(
+                when {
+                    rec && blinkOn -> Color.rgb(255, 90, 70)
+                    rec -> Color.rgb(120, 40, 34)
+                    lit -> Color.rgb(255, 176, 0)
+                    else -> Color.rgb(40, 44, 54)
+                }
+            )
             canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
             paint.stroke(Color.rgb(75, 82, 98), 1f * d)
             drawSketchyRoundRect(canvas, paint, l, t, l + padW, t + padH, 5f * d, 100 + i)
