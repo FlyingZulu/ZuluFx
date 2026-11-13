@@ -15,6 +15,25 @@ private val ink = Color.rgb(40, 38, 32)
 private val needleRed = Color.rgb(200, 60, 40)
 private val amber = Color.rgb(255, 176, 0)
 private val silk = Color.rgb(165, 172, 185)
+private val graffitiOrange = Color.rgb(255, 120, 30)
+
+internal fun drawSketchyRoundRect(
+    canvas: Canvas,
+    paint: Paint,
+    l: Float,
+    t: Float,
+    r: Float,
+    b: Float,
+    rad: Float,
+    seed: Int
+) {
+    val rnd = java.util.Random(seed.toLong())
+    for (pass in 0..1) {
+        val jx = (rnd.nextFloat() - 0.5f) * 2.4f
+        val jy = (rnd.nextFloat() - 0.5f) * 2.4f
+        canvas.drawRoundRect(l + jx, t + jy, r + jx, b + jy, rad, rad, paint)
+    }
+}
 
 fun markerFont(context: Context): Typeface =
     Typeface.createFromAsset(context.assets, "fonts/PermanentMarker-Regular.ttf")
@@ -42,6 +61,8 @@ open class DialView(context: Context) : View(context) {
         val m = 2.5f * d
         paint.fill(cream)
         canvas.drawRoundRect(m, m, w - m, h - m, 4f * d, 4f * d, paint)
+        paint.stroke(graffitiOrange, 1.5f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 7)
     }
 
     protected fun needleXY(pivotX: Float, pivotY: Float, len: Float, angleDeg: Float): FloatArray {
@@ -203,7 +224,7 @@ class PadGridView(context: Context) : View(context) {
             paint.fill(if (lit) Color.rgb(255, 176, 0) else Color.rgb(40, 44, 54))
             canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
             paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-            canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
+            drawSketchyRoundRect(canvas, paint, l, t, l + padW, t + padH, 5f * d, 100 + i)
 
             if (shiftMode) {
                 paint.fill(if (lit) ink else silk)
@@ -270,7 +291,7 @@ class ZuLuSelector(context: Context) : View(context) {
         paint.fill(if (on) color else Color.rgb(40, 44, 54))
         canvas.drawRoundRect(l, 0f, r, height.toFloat(), 6f * d, 6f * d, paint)
         paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-        canvas.drawRoundRect(l, 0f, r, height.toFloat(), 6f * d, 6f * d, paint)
+        drawSketchyRoundRect(canvas, paint, l, 0f, r, height.toFloat(), 6f * d, if (label == "ZU") 51 else 52)
         paint.fill(if (on) ink else color)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = marker
@@ -310,11 +331,16 @@ class DiagFaderView(context: Context) : View(context) {
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+        paint.stroke(graffitiOrange, 1.5f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 61)
 
+        val groove = android.graphics.Path()
+        groove.moveTo(m, h - m)
+        groove.quadTo(w / 2f + 3f * d, h / 2f + 3f * d, w - m, m)
         paint.stroke(Color.rgb(18, 20, 25), 5f * d)
-        canvas.drawLine(m, h - m, w - m, m, paint)
+        canvas.drawPath(groove, paint)
         paint.stroke(Color.rgb(60, 66, 80), 1f * d)
-        canvas.drawLine(m, h - m, w - m, m, paint)
+        canvas.drawPath(groove, paint)
 
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = marker
@@ -387,6 +413,8 @@ class SegmentedABRecView(context: Context) : View(context) {
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+        paint.stroke(graffitiOrange, 1.5f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 41)
 
         val labels = arrayOf("A", "B", "REC")
         val colors = arrayOf(yellow, pink, red)

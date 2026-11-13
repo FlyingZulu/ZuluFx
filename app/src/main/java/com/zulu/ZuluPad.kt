@@ -68,6 +68,10 @@ class ZuluPad(context: Context) : View(context) {
             canvas.drawLine(0f, h * i / 4f, w, h * i / 4f, paint)
         }
 
+        paint.strokeWidth = 1.5f * d
+        paint.color = Color.rgb(255, 120, 30)
+        drawSketchyRoundRect(canvas, paint, 1f * d, 1f * d, w - 1f * d, h - 1f * d, 6f * d, 99)
+
         ax += (targetAx - ax) * 0.18f
         ay += (targetAy - ay) * 0.18f
         bx += (targetBx - bx) * 0.18f
