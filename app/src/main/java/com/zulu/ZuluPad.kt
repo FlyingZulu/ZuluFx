@@ -91,6 +91,7 @@ class ZuluPad(context: Context) : View(context) {
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 1.2f * d
             paint.color = Color.rgb(88, 100, 118)
+            paint.isAntiAlias = true
             val step = maxOf(1, wf.size / 160)
             var px = 0f
             var py = h / 2f
@@ -117,7 +118,9 @@ class ZuluPad(context: Context) : View(context) {
         paint.style = Paint.Style.FILL
         paint.color = Color.argb(200, 24, 26, 32)
         canvas.drawRect(0f, 0f, w, strip, paint)
-        paint.stroke(Color.rgb(60, 66, 80), 1f * d)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1f * d
+        paint.color = Color.rgb(60, 66, 80)
         canvas.drawLine(0f, strip, w, strip, paint)
         val cellW = w / presetSlots
         paint.textAlign = Paint.Align.CENTER
