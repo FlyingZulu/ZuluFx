@@ -426,7 +426,8 @@ audio loop uniquement.
 
 L'app démarre **sans aucun son** : arpégiateur, générateur et boucles sont
 coupés à l'allumage, même si le template de base en contenait. C'est toi qui
-lances le son quand tu veux.
+lances le son quand tu veux. Les **LFO** aussi sont coupés à l'allumage
+(v0.39) : plus d'effets « rebondissants » tant que tu ne les rallumes pas.
 
 ## Enregistrer une scene : maintenir ZU / LU (v0.38)
 

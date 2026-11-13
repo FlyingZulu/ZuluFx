@@ -1371,6 +1371,7 @@ class MainActivity : Activity() {
         )
 
         if (verticalUi) {
+            content.orientation = LinearLayout.VERTICAL
             content.addView(
                 padPane,
                 LinearLayout.LayoutParams(
@@ -1552,6 +1553,14 @@ class MainActivity : Activity() {
         pad.arpOn = false
         pushArp()
         engine.nativeSetGenTouch(false)
+        for (i in 0 until 2) {
+            lfoOn[i] = false
+            engine.nativeSetCustomLfo(
+                i, lfoShapes[i], false, lfoRateIdxArr[i],
+                lfoDepthIdxArr[i].toFloat(), lfoAmountIdxArr[i].toFloat(),
+                lfoTargets[i], lfoWaves[i]
+            )
+        }
         stopMotionPlayback()
         motionPlaying = -1
         for (b in 0 until 8) {
