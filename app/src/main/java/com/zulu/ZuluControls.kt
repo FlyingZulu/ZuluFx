@@ -327,6 +327,7 @@ class BarVuView(context: Context) : View(context) {
     var onLongPress: (() -> Unit)? = null
     var onVolDelta: ((Float) -> Unit)? = null
     var onInDelta: ((Float) -> Unit)? = null
+    var onInMuteToggle: (() -> Unit)? = null
 
     var pressed = false
         private set
@@ -336,6 +337,10 @@ class BarVuView(context: Context) : View(context) {
     private var lastX = 0f
     private var lastY = 0f
     private var swipeAxis = 0
+    private var strokeStartX = 0f
+    private var strokeStartTime = 0L
+    private var strokeCount = 0
+    private var lastStrokeEnd = 0L
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -401,6 +406,8 @@ class BarVuView(context: Context) : View(context) {
                 swipeAxis = 0
                 lastX = event.x
                 lastY = event.y
+                strokeStartX = event.x
+                strokeStartTime = System.currentTimeMillis()
                 onPressed?.invoke(true)
                 postDelayed({
                     if (longPressPending) {
@@ -425,6 +432,24 @@ class BarVuView(context: Context) : View(context) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 longPressPending = false
+                if (event.actionMasked == MotionEvent.ACTION_UP) {
+                    if (swipeAxis == 2) {
+                        val now = System.currentTimeMillis()
+                        val dxTot = Math.abs(event.x - strokeStartX)
+                        if (now - strokeStartTime < 400 && dxTot > 25f * d) {
+                            strokeCount = if (now - lastStrokeEnd < 900) strokeCount + 1 else 1
+                            lastStrokeEnd = now
+                            if (strokeCount >= 2) {
+                                strokeCount = 0
+                                onInMuteToggle?.invoke()
+                            }
+                        } else {
+                            strokeCount = 0
+                        }
+                    } else {
+                        strokeCount = 0
+                    }
+                }
                 if (pressed) {
                     pressed = false
                     onPressed?.invoke(false)

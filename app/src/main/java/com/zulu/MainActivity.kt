@@ -1,8 +1,14 @@
 package com.zulu
 
 import android.app.Activity
-import android.content.pm.ActivityInfo
+import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
@@ -181,6 +187,26 @@ class MainActivity : Activity() {
     private var shiftRecPending: Runnable? = null
     private val shiftHandler = Handler(Looper.getMainLooper())
     private val bankRev = BooleanArray(8)
+    private var micOn = false
+    private var inMuteSaved = 1f
+    private var pendingMicRequest = false
+    private val menuMicButtons = ArrayList<Button>()
+    private val larsenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) {
+            if (micOn && inVol > 0.01f) {
+                inMuteSaved = inVol
+                inVol = 0f
+                engine.nativeSetInGain(0f)
+                if (::inKnob.isInitialized) inKnob.setVal(0f)
+                showVuOverlay("IN MUET")
+                Toast.makeText(
+                    this@MainActivity,
+                    "CASQUE D\u00c9BRANCH\u00c9 \u00b7 LINE-IN COUP\u00c9",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
     private var recFlavor = 0
     private var menuPunchBtn: Button? = null
     private var punchMode = false
@@ -1175,6 +1201,7 @@ class MainActivity : Activity() {
             inKnob.setVal(inVol)
             showVuOverlay("IN " + ((inVol * 50).toInt().coerceIn(0, 100)).toString() + "%")
         }
+        vuMeter.onInMuteToggle = { toggleInMute() }
 
         val edgeColumn = LinearLayout(this)
         edgeColumn.orientation = LinearLayout.VERTICAL
@@ -1478,6 +1505,7 @@ class MainActivity : Activity() {
         setContentView(root)
         blinkHandler.post(blinkRunnable)
         vuHandler.post(vuRunnable)
+        registerReceiver(larsenReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
 
         playing = engine.nativeStart(false)
         if (!playing) {
@@ -3396,6 +3424,10 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(larsenReceiver)
+        } catch (e: Exception) {
+        }
         blinkHandler.removeCallbacks(blinkRunnable)
         vuHandler.removeCallbacks(vuRunnable)
         recEndHandler.removeCallbacksAndMessages(null)
@@ -3900,6 +3932,18 @@ class MainActivity : Activity() {
         }
         panel.addView(inRow)
 
+        header("MICRO / ANTI-LARSEN")
+        val micRow = LinearLayout(this)
+        for ((i, lbl) in listOf("MIC OFF", "MIC ON").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                if (i == 1) requestMic() else restartEngineMic(false)
+            }
+            menuMicButtons.add(b)
+            micRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(micRow)
+
         header("EQUALISEUR (ENTREE + SORTIE)")
         val eqRow = LinearLayout(this)
         for ((i, lbl) in listOf("OFF", "ON").withIndex()) {
@@ -4352,6 +4396,65 @@ class MainActivity : Activity() {
         btnPunch?.setTextColor(if (punchMode) amber else yellow)
     }
 
+    private fun toggleInMute() {
+        if (inVol > 0.01f) {
+            inMuteSaved = inVol
+            inVol = 0f
+            engine.nativeSetInGain(0f)
+            inKnob.setVal(0f)
+            showVuOverlay("IN MUET")
+            Toast.makeText(this, "LINE-IN MUET (2 swipes pour remettre)", Toast.LENGTH_SHORT).show()
+        } else {
+            inVol = if (inMuteSaved > 0.01f) inMuteSaved else 1f
+            engine.nativeSetInGain(inVol)
+            inKnob.setVal(inVol)
+            showVuOverlay("IN " + ((inVol * 50).toInt().coerceIn(0, 100)).toString() + "%")
+            Toast.makeText(this, "LINE-IN ACTIF", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun requestMic() {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            restartEngineMic(true)
+        } else {
+            pendingMicRequest = true
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 4242)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 4242 && pendingMicRequest) {
+            pendingMicRequest = false
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                restartEngineMic(true)
+            } else {
+                Toast.makeText(this, "PERMISSION MICRO REFUS\u00c9E", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun restartEngineMic(useMic: Boolean) {
+        if (playing) {
+            engine.nativeStop()
+            playing = false
+        }
+        playing = engine.nativeStart(useMic)
+        micOn = useMic && playing
+        Toast.makeText(
+            this,
+            if (micOn) "MIC ON" else if (useMic) "MIC INDISPONIBLE" else "MIC OFF",
+            Toast.LENGTH_SHORT
+        ).show()
+        refreshMenu()
+    }
+
     private fun openSamplePage(bank: Int) {
         val pv = paramView ?: return
         sampleEditBank = bank
@@ -4650,6 +4753,9 @@ class MainActivity : Activity() {
         }
         for ((i, b) in menuInButtons.withIndex()) {
             b.setTextColor(if (i == inProfileSel) amber else silk)
+        }
+        for ((i, b) in menuMicButtons.withIndex()) {
+            b.setTextColor(if ((i == 1) == micOn) amber else silk)
         }
         for ((i, b) in menuEqButtons.withIndex()) {
             b.setTextColor(if ((i == 1) == masterEqOn) amber else silk)

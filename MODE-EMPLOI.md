@@ -422,6 +422,17 @@ SHIFT** : la boucle se lit **à l'envers** (mode reverse). Refais la même
 manip pour revenir en lecture normale. Fonctionne dans tous les modes,
 audio loop uniquement.
 
+## Anti-Larsen (v0.36)
+
+- **MIC ON / MIC OFF** dans le **MENU · MICRO / ANTI-LARSEN** : active la vraie
+  entrée (micro téléphone ou carte son USB). La permission micro est demandée
+  au premier ON.
+- **Protection auto** : si le micro est actif et que le casque se débranche,
+  Zulu **coupe le line-in tout seul** (toast « CASQUE DÉBRANCHÉ ») — pas de
+  Larsen dans les oreilles.
+- **Mute manuel** : **2 swipes horizontaux rapides sur le VU mètre** = line-in
+  muet ; **2 swipes again** = le son revient au niveau d'avant.
+
 ## À venir (v0.34+)
 
 - Vendoring réel de Plaits (Mutable Instruments, MIT) — cette passe utilise
