@@ -33,40 +33,38 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
 
-        val buttonF = Button(this)
-        val buttonZ = Button(this)
+        val buttonA = Button(this)
+        val buttonB = Button(this)
 
         fun updateButtons() {
-            buttonF.text = if (pad.stateF == ZuluPad.AxisState.MOM) {
-                "F MOM"
+            buttonA.text = if (pad.stateA == ZuluPad.AxisState.MOM) {
+                "A MOM"
             } else {
-                "F OFF"
+                "A OFF"
             }
 
-            buttonZ.text = if (pad.stateZ == ZuluPad.AxisState.MOM) {
-                "Z MOM"
+            buttonB.text = if (pad.stateB == ZuluPad.AxisState.MOM) {
+                "B MOM"
             } else {
-                "Z OFF"
+                "B OFF"
             }
         }
 
-        buttonF.setOnClickListener {
-            pad.stateF = if (pad.stateF == ZuluPad.AxisState.MOM) {
+        buttonA.setOnClickListener {
+            pad.stateA = if (pad.stateA == ZuluPad.AxisState.MOM) {
                 ZuluPad.AxisState.OFF
             } else {
                 ZuluPad.AxisState.MOM
             }
-
             updateButtons()
         }
 
-        buttonZ.setOnClickListener {
-            pad.stateZ = if (pad.stateZ == ZuluPad.AxisState.MOM) {
+        buttonB.setOnClickListener {
+            pad.stateB = if (pad.stateB == ZuluPad.AxisState.MOM) {
                 ZuluPad.AxisState.OFF
             } else {
                 ZuluPad.AxisState.MOM
             }
-
             updateButtons()
         }
 
@@ -81,8 +79,8 @@ class MainActivity : Activity() {
         updateButtons()
 
         side.addView(title)
-        side.addView(buttonF)
-        side.addView(buttonZ)
+        side.addView(buttonA)
+        side.addView(buttonB)
         side.addView(start)
         side.addView(mute)
 
