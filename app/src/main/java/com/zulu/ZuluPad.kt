@@ -17,25 +17,19 @@ class ZuluPad(context: Context) : View(context) {
     var stateF = AxisState.MOM
         set(value) {
             field = value
-            if (value == AxisState.MOM) fOrder = nextOrder()
+            if (value == AxisState.OFF && fingerF != -1) fingerF = -1
             invalidate()
         }
 
     var stateZ = AxisState.MOM
         set(value) {
             field = value
-            if (value == AxisState.MOM) zOrder = nextOrder()
+            if (value == AxisState.OFF && fingerZ != -1) fingerZ = -1
             invalidate()
         }
 
     private var fOrder = 1L
     private var zOrder = 2L
-    private var orderCounter = 2L
-
-    private fun nextOrder(): Long {
-        orderCounter += 1L
-        return orderCounter
-    }
 
     private var fx = 0.35f
     private var fy = 0.50f
@@ -76,8 +70,8 @@ class ZuluPad(context: Context) : View(context) {
         zx += (targetZx - zx) * 0.18f
         zy += (targetZy - zy) * 0.18f
 
-        drawCursor(canvas, fx * w, (1f - fy) * h, yellow, "F", stateF)
-        drawCursor(canvas, zx * w, (1f - zy) * h, pink, "Z", stateZ)
+        drawCursor(canvas, fx * w, (1f - fy) * h, yellow, "F")
+        drawCursor(canvas, zx * w, (1f - zy) * h, pink, "Z")
 
         postInvalidateOnAnimation()
     }
@@ -87,12 +81,14 @@ class ZuluPad(context: Context) : View(context) {
         x: Float,
         y: Float,
         color: Int,
-        letter: String,
-        state: AxisState
+        letter: String
     ) {
-        val active = state == AxisState.MOM
+        val active = (letter == "F" && stateF == AxisState.MOM) || 
+                     (letter == "Z" && stateZ == AxisState.MOM)
 
         paint.color = if (active) color else offColor
+        paint.textAlign = Paint.Align.CENTER
+        paint.textSize = 13f * d
 
         if (active) {
             paint.style = Paint.Style.FILL
@@ -100,88 +96,69 @@ class ZuluPad(context: Context) : View(context) {
             canvas.drawCircle(x, y, 42f * d, paint)
             paint.alpha = 255
             canvas.drawCircle(x, y, 17f * d, paint)
+            paint.color = Color.WHITE
+            canvas.drawCircle(x, y, 5f * d, paint)
         } else {
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 2f * d
             paint.alpha = 180
             canvas.drawCircle(x, y, 13f * d, paint)
+            paint.color = offColor
+            canvas.drawCircle(x, y, 5f * d, paint)
         }
 
-        paint.style = Paint.Style.FILL
-        paint.alpha = 255
-        paint.color = if (active) Color.WHITE else offColor
-        canvas.drawCircle(x, y, 5f * d, paint)
-
         paint.color = Color.rgb(20, 22, 28)
-        paint.textSize = 13f * d
-        paint.textAlign = Paint.Align.CENTER
         canvas.drawText(letter, x, y + 5f * d, paint)
     }
 
     private fun hitF(x: Float, y: Float): Boolean {
-        val dx = x - fx * width
-        val dy = y - (1f - fy) * height
-        val r = 54f * d
-        return dx * dx + dy * dy <= r * r
+        val cx = fx * width
+        val cy = (1f - fy) * height
+        val dx = x - cx
+        val dy = y - cy
+        return dx * dx + dy * dy <= (54f * d) * (54f * d)
     }
 
     private fun hitZ(x: Float, y: Float): Boolean {
-        val dx = x - zx * width
-        val dy = y - (1f - zy) * height
-        val r = 54f * d
-        return dx * dx + dy * dy <= r * r
+        val cx = zx * width
+        val cy = (1f - zy) * height
+        val dx = x - cx
+        val dy = y - cy
+        return dx * dx + dy * dy <= (54f * d) * (54f * d)
+    }
+
+    private fun assignFinger(id: Int, x: Float, y: Float) {
+        val fFree = stateF == AxisState.MOM && fingerF == -1
+        val zFree = stateZ == AxisState.MOM && fingerZ == -1
+
+        if (fFree && hitF(x, y)) { fingerF = id; return }
+        if (zFree && hitZ(x, y)) { fingerZ = id; return }
+
+        if (fFree && zFree) {
+            if (fOrder <= zOrder) { fingerF = id } else { fingerZ = id }
+            return
+        }
+
+        if (fFree) { fingerF = id } else if (zFree) { fingerZ = id }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN,
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                val index = event.actionIndex
-                val id = event.getPointerId(index)
-                val x = event.getX(index)
-                val y = event.getY(index)
-
-                // Priorité absolue au toucher direct du curseur
-                if (fingerF == -1 && hitF(x, y)) {
-                    fingerF = id
-                } else if (fingerZ == -1 && hitZ(x, y)) {
-                    fingerZ = id
-                } 
-                // Sinon, attribution aux axes libres selon priorité
-                else {
-                    val fFree = fingerF == -1
-                    val zFree = fingerZ == -1
-                    
-                    if (fFree && zFree) {
-                        if (stateF == AxisState.MOM && stateZ == AxisState.MOM) {
-                            if (fOrder <= zOrder) fingerF = id else fingerZ = id
-                        } else if (stateF == AxisState.MOM) {
-                            fingerF = id
-                        } else if (stateZ == AxisState.MOM) {
-                            fingerZ = id
-                        }
-                    } else if (fFree && stateF == AxisState.MOM) {
-                        fingerF = id
-                    } else if (zFree && stateZ == AxisState.MOM) {
-                        fingerZ = id
-                    }
-                }
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                assignFinger(event.getPointerId(event.actionIndex), 
+                    event.getX(event.actionIndex), event.getY(event.actionIndex))
             }
-
-            MotionEvent.ACTION_UP,
-            MotionEvent.ACTION_POINTER_UP -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val id = event.getPointerId(event.actionIndex)
                 if (id == fingerF) fingerF = -1
                 if (id == fingerZ) fingerZ = -1
             }
-
             MotionEvent.ACTION_CANCEL -> {
                 fingerF = -1
                 fingerZ = -1
             }
         }
 
-        // Mise à jour des positions cibles pour tous les doigts actifs
         val idxF = event.findPointerIndex(fingerF)
         val idxZ = event.findPointerIndex(fingerZ)
 
