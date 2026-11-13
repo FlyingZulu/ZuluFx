@@ -45,8 +45,8 @@ class ZuluPad(context: Context) : View(context) {
     private var fingerA = -1
     private var fingerB = -1
 
-    private val yellow = Color.rgb(255, 245, 0)
-    private val pink = Color.rgb(255, 70, 170)
+    private val yellow = Color.rgb(245, 255, 90)
+    private val pink = Color.rgb(255, 125, 205)
     private val offColor = Color.rgb(90, 96, 108)
 
     override fun onDraw(canvas: Canvas) {
