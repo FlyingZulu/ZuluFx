@@ -188,7 +188,7 @@ float AudioEngine::synthSample(int t, float fsr) {
 }
 
 void AudioEngine::arpFire() {
-    int mode = arpMode.load(); if (mode < 0 || mode > 3) mode = 0;
+    int mode = arpMode.load(); if (mode < 0 || mode > 4) mode = 0;
     int oct = arpOct.load(); if (oct < 1) oct = 1; if (oct > 4) oct = 4;
     int s = scale.load(); if (s < 0 || s > 5) s = 0;
     int len = 0;
@@ -206,6 +206,13 @@ void AudioEngine::arpFire() {
                 else if (arpIdx < 0) { arpIdx = 1; arpDir = 1; }
             } else arpIdx = 0;
             break;
+        case 4: {
+            float xy = arpXy.load();
+            int i = (int)(xy * count);
+            if (i >= count) i = count - 1;
+            arpIdx = i;
+            break;
+        }
         default:
             noiseState = noiseState * 1103515245u + 12345u;
             arpIdx = (int)((noiseState >> 16) % (unsigned)count);
@@ -231,6 +238,8 @@ void AudioEngine::arpFire() {
         float stepDur = (60.f / fmaxf(bpm.load(), 40.f)) / divs[ri];
         envRate = 1.f / (gates[gi] * stepDur * fs);
     }
+
+    if (mode == 4) return;
 
     int slices = arpSlices.load();
     if (slices < 2) slices = 2;
@@ -349,6 +358,36 @@ bool AudioEngine::bankHasLoop(int bank) const {
     return banks[bank].samples > 0;
 }
 
+int AudioEngine::bankFrames(int bank) const {
+    if (bank < 0 || bank >= kNumBanks) return 0;
+    return banks[bank].samples;
+}
+
+int AudioEngine::copyBank(int bank, float* dst, int maxFrames) const {
+    if (bank < 0 || bank >= kNumBanks || !dst) return 0;
+    const LoopBank& lb = banks[bank];
+    int n = lb.samples < maxFrames ? lb.samples : maxFrames;
+    if (n > 0 && lb.buf) memcpy(dst, lb.buf, (size_t)n * 2 * sizeof(float));
+    return n;
+}
+
+void AudioEngine::loadBank(int bank, const float* src, int frames) {
+    if (bank < 0 || bank >= kNumBanks || !src || frames <= 0) return;
+    LoopBank& lb = banks[bank];
+    if (!lb.buf || lb.cap < frames) {
+        int extra = frames - (lb.samples > 0 ? lb.samples : 0);
+        if (totalFrames + extra > kTotalFrameBudget) return;
+        totalFrames += extra;
+        delete[] lb.buf;
+        lb.cap = frames;
+        lb.buf = new float[(size_t)frames * 2];
+    }
+    memcpy(lb.buf, src, (size_t)frames * 2 * sizeof(float));
+    lb.samples = frames;
+    lb.pos = 0;
+    lb.playing = true;
+}
+
 void AudioEngine::jumpSlice(int slice, int total) {
     if (total <= 0) return;
     loopSliceTotal.store(total);
@@ -443,6 +482,20 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         float loopL = 0.f, loopR = 0.f;
         int req = loopSliceReq.exchange(-1);
         int sm = soloMask.load();
+        bool xyT = arpOn.load() && arpMode.load() == 4 && arpXyTouch.load();
+        float xy = arpXy.load();
+        int xySlices = arpSlices.load();
+        if (xySlices < 2) xySlices = 2;
+        if (xySlices > 16) xySlices = 16;
+        int xySlice = -1;
+        if (xyT) {
+            xySlice = (int)(xy * xySlices);
+            if (xySlice >= xySlices) xySlice = xySlices - 1;
+            if (xySlice != xyLastSlice) xyLastSlice = xySlice;
+        } else {
+            xyLastSlice = -1;
+        }
+        float rate = xyT ? powf(2.f, (ay.load() - 0.5f) * 2.f) : 1.f;
         for (int k = 0; k < kNumBanks; k++) {
             LoopBank& lb = banks[k];
             if (!lb.playing || lb.samples <= 0) continue;
@@ -452,9 +505,27 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 if (tot > 0) lb.pos = (int)((float)req / tot * lb.samples);
                 if (lb.pos >= lb.samples) lb.pos = 0;
             }
+            int sStart = 0, sEnd = lb.samples;
+            if (xyT) {
+                sStart = (int)((float)xySlice / xySlices * lb.samples);
+                sEnd = (int)((float)(xySlice + 1) / xySlices * lb.samples);
+                if (sEnd <= sStart) sEnd = sStart + 1;
+                if (lb.pos < sStart || lb.pos >= sEnd) lb.pos = sStart;
+            }
             loopL += lb.buf[2 * lb.pos];
             loopR += lb.buf[2 * lb.pos + 1];
-            lb.pos = (lb.pos + 1) % lb.samples;
+            if (rate != 1.f) {
+                xyAcc += rate;
+                lb.pos += (int)xyAcc;
+                xyAcc -= (int)xyAcc;
+            } else {
+                lb.pos += 1;
+            }
+            if (xyT) {
+                if (lb.pos >= sEnd) lb.pos = sStart + ((lb.pos - sStart) % (sEnd - sStart));
+            } else if (lb.pos >= lb.samples) {
+                lb.pos %= lb.samples;
+            }
         }
 
         float history = liveL;

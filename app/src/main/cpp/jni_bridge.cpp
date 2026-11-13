@@ -62,6 +62,9 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetArpSlices(JNIEnv*, jobject, jint n) { if (g) g->setArpSlices(n); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetArpXy(JNIEnv*, jobject, jfloat x, jboolean t) { if (g) g->setArpXy(x, t); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetSoloMask(JNIEnv*, jobject, jint m) { if (g) g->setSoloMask(m); }
 
 JNIEXPORT void JNICALL
@@ -75,6 +78,27 @@ Java_com_zulu_AudioEngine_nativeToggleBank(JNIEnv*, jobject, jint bank) { if (g)
 
 JNIEXPORT jboolean JNICALL
 Java_com_zulu_AudioEngine_nativeBankHasLoop(JNIEnv*, jobject, jint bank) { return g ? g->bankHasLoop(bank) : JNI_FALSE; }
+
+JNIEXPORT jint JNICALL
+Java_com_zulu_AudioEngine_nativeBankFrames(JNIEnv*, jobject, jint bank) { return g ? g->bankFrames(bank) : 0; }
+
+JNIEXPORT jint JNICALL
+Java_com_zulu_AudioEngine_nativeCopyBank(JNIEnv* env, jobject, jint bank, jfloatArray dst) {
+    if (!g || !dst) return 0;
+    int n = env->GetArrayLength(dst);
+    jfloat* p = env->GetFloatArrayElements(dst, nullptr);
+    int got = g->copyBank(bank, p, n / 2);
+    env->ReleaseFloatArrayElements(dst, p, 0);
+    return got;
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeLoadBank(JNIEnv* env, jobject, jint bank, jfloatArray src, jint frames) {
+    if (!g || !src || frames <= 0) return;
+    jfloat* p = env->GetFloatArrayElements(src, nullptr);
+    g->loadBank(bank, p, frames);
+    env->ReleaseFloatArrayElements(src, p, JNI_ABORT);
+}
 
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeJumpSlice(JNIEnv*, jobject, jint slice, jint total) { if (g) g->jumpSlice(slice, total); }

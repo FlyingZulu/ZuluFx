@@ -16,9 +16,14 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : Activity() {
 
@@ -53,6 +58,9 @@ class MainActivity : Activity() {
     private lateinit var btnLu: Button
     private lateinit var fxOverlay: FrameLayout
     private lateinit var scaleOverlay: FrameLayout
+    private lateinit var projOverlay: FrameLayout
+    private lateinit var gridParams: LinearLayout.LayoutParams
+    private val projSlotButtons = ArrayList<Button>()
     private lateinit var arpOverlay: FrameLayout
     private lateinit var padPane: FrameLayout
 
@@ -75,6 +83,7 @@ class MainActivity : Activity() {
     private val arpButtons = ArrayList<Button>()
 
     private var activeFilter = 0
+    private var padAxisX = 0.5f
     private val userPresets = arrayOfNulls<UserPreset>(9)
 
     private data class UserPreset(
@@ -161,6 +170,11 @@ class MainActivity : Activity() {
             engine.nativeSetAy(ay)
             engine.nativeSetBx(bx)
             engine.nativeSetBy(by)
+            padAxisX = ax
+            if (arpOn && arpMode == 4) engine.nativeSetArpXy(ax, true)
+        }
+        pad.onPadTouchState = { t ->
+            if (!t) engine.nativeSetArpXy(padAxisX, false)
         }
         pad.onPresetTouch = { i ->
             val p = userPresets[i]
@@ -401,7 +415,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
         leftColumn.addView(padPane, padPaneParams)
-        val gridParams = LinearLayout.LayoutParams(
+        gridParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (96 * d).toInt()
         )
         gridParams.setMargins(0, (6 * d).toInt(), 0, 0)
@@ -409,9 +423,13 @@ class MainActivity : Activity() {
 
         vuMeter.onLongPress = {
             if (!simulLock) {
-                mirrored = !mirrored
-                content.layoutDirection =
-                    if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                if (shiftActive()) {
+                    mirrored = !mirrored
+                    content.layoutDirection =
+                        if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                } else {
+                    openProjPanel()
+                }
             }
         }
 
@@ -419,19 +437,14 @@ class MainActivity : Activity() {
             if (!simulLock && shiftActive()) {
                 openScalePanel()
             } else {
-                padGrid.padCount = when (padGrid.padCount) {
-                    8 -> 10
-                    10 -> 12
-                    12 -> 14
-                    else -> 8
-                }
-                gridParams.height =
-                    ((when (padGrid.padCount) {
-                        14 -> 112
-                        12, 10 -> 96
-                        else -> 80
-                    }) * d).toInt()
-                padGrid.requestLayout()
+                applyPadCount(
+                    when (padGrid.padCount) {
+                        8 -> 10
+                        10 -> 12
+                        12 -> 14
+                        else -> 8
+                    }
+                )
             }
         }
 
@@ -476,6 +489,7 @@ class MainActivity : Activity() {
         buildFxPanel(d)
         buildScalePanel(d)
         buildArpPanel(d)
+        buildProjPanel(d)
         padPane.addView(
             arpOverlay,
             FrameLayout.LayoutParams(
@@ -501,6 +515,13 @@ class MainActivity : Activity() {
         )
         root.addView(
             scaleOverlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        root.addView(
+            projOverlay,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -881,6 +902,240 @@ class MainActivity : Activity() {
         scaleOverlay.visibility = View.GONE
     }
 
+    private fun projDir(): File = File(filesDir, "projects")
+
+    private fun projFile(slot: Int): File = File(projDir(), "proj_$slot.json")
+
+    private fun bankFile(slot: Int, bank: Int): File =
+        File(projDir(), "proj_${slot}_b$bank.pcm")
+
+    private fun buildProjPanel(d: Float) {
+        projOverlay = FrameLayout(this)
+        projOverlay.setBackgroundColor(Color.argb(190, 8, 9, 12))
+        projOverlay.visibility = View.GONE
+        projOverlay.setOnClickListener { closeProjPanel() }
+
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        val panelBg = GradientDrawable()
+        panelBg.setColor(Color.rgb(24, 26, 32))
+        panelBg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
+        panelBg.cornerRadius = 8 * d
+        panel.background = panelBg
+        panel.setPadding((14 * d).toInt(), (10 * d).toInt(), (14 * d).toInt(), (12 * d).toInt())
+
+        val titleRow = LinearLayout(this)
+        titleRow.gravity = Gravity.CENTER_VERTICAL
+        val title = TextView(this)
+        title.text = "PROJET"
+        title.setTextColor(Color.rgb(236, 224, 196))
+        title.textSize = 16f
+        title.typeface = markerFont(this)
+        titleRow.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val close = Button(this)
+        close.text = "\u00d7"
+        close.setTextColor(silk)
+        close.textSize = 16f
+        close.minHeight = 0
+        close.minimumHeight = 0
+        close.setPadding(0, 0, 0, 0)
+        close.background = null
+        close.setOnClickListener { closeProjPanel() }
+        titleRow.addView(close, LinearLayout.LayoutParams((30 * d).toInt(), (30 * d).toInt()))
+        panel.addView(titleRow)
+
+        val hint = TextView(this)
+        hint.text = "TAP = CHARGER \u00b7 APPUI LONG = SAUVER"
+        hint.setTextColor(Color.rgb(120, 128, 146))
+        hint.textSize = 10f
+        panel.addView(hint)
+
+        for (s in 1..8) {
+            val b = Button(this)
+            b.text = "PROJ $s"
+            b.setTextColor(silk)
+            b.textSize = 14f
+            b.minHeight = 0
+            b.minimumHeight = 0
+            b.setPadding((8 * d).toInt(), (6 * d).toInt(), (8 * d).toInt(), (6 * d).toInt())
+            val bg = GradientDrawable()
+            bg.setColor(Color.rgb(16, 18, 24))
+            bg.setStroke((1 * d).toInt(), Color.rgb(60, 66, 82))
+            bg.cornerRadius = 6 * d
+            b.background = bg
+            b.setOnClickListener { loadProject(s) }
+            b.setOnLongClickListener { saveProject(s); true }
+            projSlotButtons.add(b)
+            panel.addView(
+                b,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (6 * d).toInt() }
+            )
+        }
+
+        projOverlay.addView(
+            panel,
+            FrameLayout.LayoutParams(
+                (240 * d).toInt(),
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
+        )
+    }
+
+    private fun refreshProjSlots() {
+        for (s in 1..8) {
+            val b = projSlotButtons[s - 1]
+            b.text = if (projFile(s).exists()) "PROJ $s \u25cf" else "PROJ $s"
+        }
+    }
+
+    private fun openProjPanel() {
+        refreshProjSlots()
+        projOverlay.visibility = View.VISIBLE
+    }
+
+    private fun closeProjPanel() {
+        projOverlay.visibility = View.GONE
+    }
+
+    private fun saveProject(slot: Int) {
+        val dir = projDir()
+        dir.mkdirs()
+        try {
+            val json = JSONObject()
+            json.put("version", 1)
+            json.put("bpm", bpmLcd.bpm)
+            json.put("padCount", padGrid.padCount)
+            json.put("loopLenSteps", loopLenSteps)
+            json.put("filter", activeFilter)
+            json.put("scale", activeScale)
+            json.put("root", activeRoot)
+            json.put("mix", mixFader.value)
+            json.put("fly", flyFader.value)
+            json.put("soloMask", soloGroups.fold(0) { m, on -> (m shl 1) or if (on) 1 else 0 })
+            val presets = JSONArray()
+            for (p in userPresets) {
+                if (p == null) {
+                    presets.put(JSONObject.NULL)
+                } else {
+                    presets.put(
+                        JSONObject()
+                            .put("filter", p.filter)
+                            .put("scale", p.scale)
+                            .put("root", p.root)
+                            .put("arpOn", p.arpOn)
+                            .put("arpMode", p.arpMode)
+                            .put("arpRate", p.arpRate)
+                            .put("arpOct", p.arpOct)
+                            .put("arpGate", p.arpGate)
+                            .put("arpOctJump", p.arpOctJump)
+                            .put("arpSlices", p.arpSlices)
+                    )
+                }
+            }
+            json.put("presets", presets)
+            val banks = JSONArray()
+            for (b in 0 until 8) {
+                val frames = engine.nativeBankFrames(b)
+                banks.put(frames)
+                bankFile(slot, b).delete()
+                if (frames > 0) {
+                    val data = FloatArray(frames * 2)
+                    if (engine.nativeCopyBank(b, data) > 0) {
+                        val bb = ByteBuffer.allocate(frames * 8).order(ByteOrder.LITTLE_ENDIAN)
+                        for (f in data) bb.putFloat(f)
+                        bankFile(slot, b).writeBytes(bb.array())
+                    }
+                }
+            }
+            json.put("banks", banks)
+            projFile(slot).writeText(json.toString())
+            refreshProjSlots()
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun loadProject(slot: Int) {
+        val f = projFile(slot)
+        if (!f.exists()) return
+        try {
+            val json = JSONObject(f.readText())
+            bpmLcd.bpm = json.getDouble("bpm").toFloat()
+            engine.nativeSetBpm(bpmLcd.bpm)
+            applyPadCount(json.optInt("padCount", 12))
+            loopLenSteps = json.optInt("loopLenSteps", 8)
+            padGrid.activeBank = loopLenSteps
+            activeFilter = json.optInt("filter", 0)
+            engine.nativeSetFilterType(activeFilter)
+            activeScale = json.optInt("scale", 0)
+            activeRoot = json.optInt("root", 9)
+            engine.nativeSetScale(activeScale)
+            engine.nativeSetRoot(activeRoot)
+            mixFader.value = json.getDouble("mix").toFloat()
+            engine.nativeSetMix(mixFader.value)
+            flyFader.value = json.getDouble("fly").toFloat()
+            engine.nativeSetFly(flyFader.value)
+            val sm = json.optInt("soloMask", 0)
+            for (g in 0 until 4) soloGroups[g] = (sm and (1 shl g)) != 0
+            engine.nativeSetSoloMask(sm)
+            padGrid.soloMask = sm
+            val presets = json.getJSONArray("presets")
+            for (i in 0 until min(9, presets.length())) {
+                if (presets.isNull(i)) {
+                    userPresets[i] = null
+                    pad.userPresets[i] = false
+                } else {
+                    val o = presets.getJSONObject(i)
+                    userPresets[i] = UserPreset(
+                        filter = o.getInt("filter"),
+                        scale = o.getInt("scale"),
+                        root = o.getInt("root"),
+                        arpOn = o.getBoolean("arpOn"),
+                        arpMode = o.getInt("arpMode"),
+                        arpRate = o.getInt("arpRate"),
+                        arpOct = o.getInt("arpOct"),
+                        arpGate = o.getInt("arpGate"),
+                        arpOctJump = o.getBoolean("arpOctJump"),
+                        arpSlices = o.getInt("arpSlices")
+                    )
+                    pad.userPresets[i] = true
+                }
+            }
+            pad.invalidate()
+            pushArp()
+            refreshScaleHighlight()
+            val banks = json.getJSONArray("banks")
+            for (b in 0 until min(8, banks.length())) {
+                val frames = banks.getInt(b)
+                if (frames <= 0) continue
+                val bf = bankFile(slot, b)
+                if (!bf.exists() || bf.length() < frames * 8L) continue
+                val bytes = bf.readBytes()
+                val bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+                val data = FloatArray(frames * 2)
+                for (i in data.indices) data[i] = bb.float
+                engine.nativeLoadBank(b, data, frames)
+            }
+            closeProjPanel()
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun applyPadCount(n: Int) {
+        val d = resources.displayMetrics.density
+        padGrid.padCount = n
+        gridParams.height =
+            ((when (n) {
+                14 -> 112
+                12, 10 -> 96
+                else -> 80
+            }) * d).toInt()
+        padGrid.requestLayout()
+    }
+
     private fun buildArpPanel(d: Float) {
         arpOverlay = FrameLayout(this)
         arpOverlay.setBackgroundColor(Color.argb(225, 8, 9, 12))
@@ -950,7 +1205,7 @@ class MainActivity : Activity() {
             pushArp()
         }
         header("MODE")
-        row(listOf("UP", "DOWN", "UP-DN", "RND"), "mode") { i ->
+        row(listOf("UP", "DOWN", "UP-DN", "RND", "XY"), "mode") { i ->
             arpMode = i
             pushArp()
         }

@@ -55,6 +55,7 @@ class ZuluPad(context: Context) : View(context) {
     var onArpTouch: (() -> Unit)? = null
 
     var onAxisChange: ((Float, Float, Float, Float) -> Unit)? = null
+    var onPadTouchState: ((Boolean) -> Unit)? = null
 
     private val presetSlots = 9
     private var stripLongRunnable: Runnable? = null
@@ -80,6 +81,10 @@ class ZuluPad(context: Context) : View(context) {
 
     private var fingerA = -1
     private var fingerB = -1
+
+    private var merged = false
+    private var lastMergeTap = 0L
+    private var lastTouched = false
 
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
@@ -184,10 +189,24 @@ class ZuluPad(context: Context) : View(context) {
             jby = (rnd.nextFloat() - 0.5f) * 4f * d
         }
 
+        if (merged) {
+            targetBx = targetAx
+            targetBy = targetAy
+        }
+
         drawCursor(canvas, ax * w + jax, (1f - ay) * h + jay, yellow, "A", stateA == AxisState.MOM,
             "${(ax * 100).toInt()} \u00b7 ${(ay * 100).toInt()}")
         drawCursor(canvas, bx * w + jbx, (1f - by) * h + jby, pink, "B", stateB == AxisState.MOM,
             "${(bx * 100).toInt()} \u00b7 ${(by * 100).toInt()}")
+
+        if (merged) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 1.5f * d
+            paint.color = Color.rgb(236, 224, 196)
+            paint.alpha = 190
+            canvas.drawCircle(ax * w + jax, (1f - ay) * h + jay, 26f * d, paint)
+            paint.alpha = 255
+        }
 
         postInvalidateOnAnimation()
     }
@@ -255,6 +274,25 @@ class ZuluPad(context: Context) : View(context) {
                     invalidate()
                     return true
                 }
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val now = System.currentTimeMillis()
+                    val tx = event.x
+                    val ty = event.y
+                    val caX = ax * width
+                    val caY = (1f - ay) * height
+                    val cbX = bx * width
+                    val cbY = (1f - by) * height
+                    val near = minOf(
+                        Math.hypot((tx - caX).toDouble(), (ty - caY).toDouble()),
+                        Math.hypot((tx - cbX).toDouble(), (ty - cbY).toDouble())
+                    ) < 26f * d
+                    if (now - lastMergeTap < 300 && near) {
+                        if (merged) unfuse() else fuse()
+                        lastMergeTap = 0L
+                    } else {
+                        lastMergeTap = now
+                    }
+                }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(true)
                 if (fingerA == -1 && fingerB == -1) {
                     if (stateA == AxisState.MOM) fingerA = id
@@ -295,7 +333,35 @@ class ZuluPad(context: Context) : View(context) {
         }
         onAxisChange?.invoke(targetAx, targetAy, targetBx, targetBy)
 
+        val touched = fingerA != -1 || fingerB != -1
+        if (touched != lastTouched) {
+            lastTouched = touched
+            onPadTouchState?.invoke(touched)
+        }
+
         invalidate()
         return true
+    }
+
+    private fun fuse() {
+        merged = true
+        val mx = (ax + bx) / 2f
+        val my = (ay + by) / 2f
+        targetAx = mx
+        targetAy = my
+        targetBx = mx
+        targetBy = my
+    }
+
+    private fun unfuse() {
+        merged = false
+        val ang = rnd.nextFloat() * 2f * Math.PI.toFloat()
+        val dist = 0.12f + rnd.nextFloat() * 0.22f
+        val ca = Math.cos(ang.toDouble()).toFloat()
+        val sa = Math.sin(ang.toDouble()).toFloat()
+        targetAx = (ax + ca * dist).coerceIn(0f, 1f)
+        targetAy = (ay + sa * dist).coerceIn(0f, 1f)
+        targetBx = (ax - ca * dist).coerceIn(0f, 1f)
+        targetBy = (ay - sa * dist).coerceIn(0f, 1f)
     }
 }

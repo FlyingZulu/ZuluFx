@@ -28,6 +28,7 @@ public:
         arpOct.store(oct); arpGate.store(gate); arpOctJump.store(octJump);
     }
     void setArpSlices(int n) { arpSlices.store(n); }
+    void setArpXy(float x, bool t) { arpXy.store(x); arpXyTouch.store(t); }
     void setSoloMask(int m) { soloMask.store(m); }
 
     void recordBank(int bank, int steps, bool wet);
@@ -35,6 +36,9 @@ public:
     void toggleBank(int bank);
     bool bankHasLoop(int bank) const;
     void jumpSlice(int slice, int total);
+    int bankFrames(int bank) const;
+    int copyBank(int bank, float* dst, int maxFrames) const;
+    void loadBank(int bank, const float* src, int frames);
     bool isLoopRecording() const { return recBank >= 0; }
 
     float getLevelL() const { return levelL.load(); }
@@ -66,6 +70,8 @@ private:
     std::atomic<int> arpGate{1};
     std::atomic<bool> arpOctJump{false};
     std::atomic<int> soloMask{0};
+    std::atomic<float> arpXy{0.5f};
+    std::atomic<bool> arpXyTouch{false};
     std::atomic<float> levelL{0.0f}, levelR{0.0f};
 
     bool mic = false;
@@ -87,6 +93,8 @@ private:
     int arpIdx = 0;
     int arpDir = 1;
     float arpClock = 0.f;
+    int xyLastSlice = -1;
+    float xyAcc = 0.f;
     float fcSmoothed = 1000.0f;
     float qSmoothed = 0.7f;
     float lfoRateSmoothed = 2.0f;
