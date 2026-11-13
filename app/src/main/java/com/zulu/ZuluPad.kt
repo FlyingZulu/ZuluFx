@@ -73,8 +73,10 @@ class ZuluPad(context: Context) : View(context) {
         zx += (targetZx - zx) * 0.18f
         zy += (targetZy - zy) * 0.18f
 
-        drawCursor(canvas, fx * w, (1f - fy) * h, yellow, "F")
-        drawCursor(canvas, zx * w, (1f - zy) * h, pink, "Z")
+        drawCursor(canvas, fx * w, (1f - fy) * h, yellow, "F",
+            "${(fx * 100).toInt()} · ${(fy * 100).toInt()}")
+        drawCursor(canvas, zx * w, (1f - zy) * h, pink, "Z",
+            "${(zx * 100).toInt()} · ${(zy * 100).toInt()}")
 
         postInvalidateOnAnimation()
     }
@@ -84,7 +86,8 @@ class ZuluPad(context: Context) : View(context) {
         x: Float,
         y: Float,
         color: Int,
-        letter: String
+        letter: String,
+        values: String
     ) {
         val active = (letter == "F" && stateF == AxisState.MOM) ||
                      (letter == "Z" && stateZ == AxisState.MOM)
@@ -112,6 +115,10 @@ class ZuluPad(context: Context) : View(context) {
 
         paint.color = Color.rgb(20, 22, 28)
         canvas.drawText(letter, x, y + 5f * d, paint)
+
+        paint.textSize = 11f * d
+        paint.color = if (active) color else offColor
+        canvas.drawText(values, x, y + 30f * d, paint)
     }
 
     private fun hitF(x: Float, y: Float): Boolean {

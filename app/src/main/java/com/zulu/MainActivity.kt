@@ -3,12 +3,8 @@ package com.zulu
 import android.app.Activity
 import android.graphics.Color
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.TextView
 
 class MainActivity : Activity() {
 
@@ -17,10 +13,6 @@ class MainActivity : Activity() {
     private lateinit var btnZ: Button
     private lateinit var btnStart: Button
     private lateinit var btnMute: Button
-    private lateinit var tvFx: TextView
-    private lateinit var tvFy: TextView
-    private lateinit var tvZx: TextView
-    private lateinit var tvZy: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,11 +25,6 @@ class MainActivity : Activity() {
         btnZ = Button(this).apply { text = "Z: ON" }
         btnStart = Button(this).apply { text = "START" }
         btnMute = Button(this).apply { text = "MUTE" }
-
-        tvFx = makeText(d, Color.rgb(245, 255, 90))
-        tvFy = makeText(d, Color.rgb(245, 255, 90))
-        tvZx = makeText(d, Color.rgb(255, 125, 205))
-        tvZy = makeText(d, Color.rgb(255, 125, 205))
 
         btnF.setOnClickListener {
             if (pad.stateF == ZuluPad.AxisState.MOM) {
@@ -69,7 +56,6 @@ class MainActivity : Activity() {
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
-        column.gravity = Gravity.TOP
         column.setPadding(
             (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt()
         )
@@ -82,10 +68,6 @@ class MainActivity : Activity() {
         column.addView(btnZ, btnParams)
         column.addView(btnStart, btnParams)
         column.addView(btnMute, btnParams)
-        column.addView(tvFx)
-        column.addView(tvFy)
-        column.addView(tvZx)
-        column.addView(tvZy)
 
         val root = LinearLayout(this)
         root.orientation = LinearLayout.HORIZONTAL
@@ -102,26 +84,5 @@ class MainActivity : Activity() {
         root.addView(column, columnParams)
 
         setContentView(root)
-        updateTexts()
-    }
-
-    private fun makeText(d: Float, color: Int): TextView {
-        val t = TextView(this)
-        t.textSize = 14f
-        t.setTextColor(color)
-        return t
-    }
-
-    private fun updateTexts() {
-        if (isDestroyed || isFinishing) return
-        runOnUiThread {
-            tvFx.text = "Fx: ${(pad.fx * 100).toInt()}"
-            tvFy.text = "Fy: ${(pad.fy * 100).toInt()}"
-            tvZx.text = "Zx: ${(pad.zx * 100).toInt()}"
-            tvZy.text = "Zy: ${(pad.zy * 100).toInt()}"
-        }
-        Handler(Looper.getMainLooper()).postDelayed({
-            updateTexts()
-        }, 100)
     }
 }
