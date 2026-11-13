@@ -39,6 +39,19 @@ class ZuluPad(context: Context) : View(context) {
     var bx = 0.65f
     var by = 0.50f
 
+    var waveform: FloatArray? = null
+
+    var bendActive = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    var onBendTouch: ((Boolean) -> Unit)? = null
+
+    private val rnd = java.util.Random()
+    private var glitchClock = 0
+
     private var targetAx = ax
     private var targetAy = ay
     private var targetBx = bx
@@ -60,6 +73,25 @@ class ZuluPad(context: Context) : View(context) {
         paint.color = Color.rgb(20, 22, 28)
         canvas.drawRect(0f, 0f, w, h, paint)
 
+        val wf = waveform
+        if (wf != null && wf.size > 1) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 1.2f * d
+            paint.color = Color.rgb(88, 100, 118)
+            val step = maxOf(1, wf.size / 160)
+            var px = 0f
+            var py = h / 2f
+            var i = 0
+            while (i < wf.size) {
+                val x = w * i / (wf.size - 1).toFloat()
+                val y = h / 2f - wf[i].coerceIn(-1f, 1f) * h * 0.35f
+                if (i > 0) canvas.drawLine(px, py, x, y, paint)
+                px = x
+                py = y
+                i += step
+            }
+        }
+
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = d
         paint.color = Color.rgb(50, 56, 70)
@@ -77,9 +109,28 @@ class ZuluPad(context: Context) : View(context) {
         bx += (targetBx - bx) * 0.18f
         by += (targetBy - by) * 0.18f
 
-        drawCursor(canvas, ax * w, (1f - ay) * h, yellow, "A", stateA == AxisState.MOM,
+        var jax = 0f
+        var jay = 0f
+        var jbx = 0f
+        var jby = 0f
+        if (bendActive) {
+            glitchClock++
+            if (glitchClock > 8 + rnd.nextInt(16)) {
+                glitchClock = 0
+                targetAx = rnd.nextFloat()
+                targetAy = rnd.nextFloat()
+                targetBx = rnd.nextFloat()
+                targetBy = rnd.nextFloat()
+            }
+            jax = (rnd.nextFloat() - 0.5f) * 4f * d
+            jay = (rnd.nextFloat() - 0.5f) * 4f * d
+            jbx = (rnd.nextFloat() - 0.5f) * 4f * d
+            jby = (rnd.nextFloat() - 0.5f) * 4f * d
+        }
+
+        drawCursor(canvas, ax * w + jax, (1f - ay) * h + jay, yellow, "A", stateA == AxisState.MOM,
             "${(ax * 100).toInt()} \u00b7 ${(ay * 100).toInt()}")
-        drawCursor(canvas, bx * w, (1f - by) * h, pink, "B", stateB == AxisState.MOM,
+        drawCursor(canvas, bx * w + jbx, (1f - by) * h + jby, pink, "B", stateB == AxisState.MOM,
             "${(bx * 100).toInt()} \u00b7 ${(by * 100).toInt()}")
 
         postInvalidateOnAnimation()
@@ -131,6 +182,7 @@ class ZuluPad(context: Context) : View(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val id = event.getPointerId(event.actionIndex)
+                if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(true)
                 if (fingerA == -1 && fingerB == -1) {
                     if (stateA == AxisState.MOM) fingerA = id
                     else if (stateB == AxisState.MOM) fingerB = id
@@ -144,10 +196,12 @@ class ZuluPad(context: Context) : View(context) {
                 val id = event.getPointerId(event.actionIndex)
                 if (id == fingerA) fingerA = -1
                 if (id == fingerB) fingerB = -1
+                if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(false)
             }
             MotionEvent.ACTION_CANCEL -> {
                 fingerA = -1
                 fingerB = -1
+                onBendTouch?.invoke(false)
             }
         }
 

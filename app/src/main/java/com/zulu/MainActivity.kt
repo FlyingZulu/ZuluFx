@@ -17,6 +17,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 
 class MainActivity : Activity() {
 
@@ -27,7 +28,8 @@ class MainActivity : Activity() {
     private lateinit var padGrid: PadGridView
     private lateinit var zuLu: ZuLuSelector
     private lateinit var diagFader: DiagFaderView
-    private lateinit var jitterFader: JitterFaderView
+    private lateinit var flyFader: FlyFaderView
+    private lateinit var glitchScope: GlitchScopeView
     private lateinit var btnStart: Button
     private lateinit var btnMute: Button
     private lateinit var btnShift: Button
@@ -76,7 +78,21 @@ class MainActivity : Activity() {
         padGrid = PadGridView(this)
         zuLu = ZuLuSelector(this)
         diagFader = DiagFaderView(this)
-        jitterFader = JitterFaderView(this)
+        flyFader = FlyFaderView(this)
+        glitchScope = GlitchScopeView(this)
+        glitchScope.visibility = View.GONE
+
+        pad.waveform = placeholderWaveform()
+        pad.onBendTouch = { down ->
+            val bend = down && shiftLocked
+            pad.bendActive = bend
+            if (bend) {
+                glitchScope.visibility = View.VISIBLE
+                glitchScope.start()
+            } else {
+                glitchScope.stop()
+            }
+        }
 
         btnStart = makeButton("START", green)
         btnMute = makeButton("MUTE", silk)
@@ -165,9 +181,6 @@ class MainActivity : Activity() {
         row1.addView(bpmDial, dialParams)
         row1.addView(btnTap, wrapParams((4 * d).toInt()))
         row1.addView(btnStart, wrapParams((4 * d).toInt()))
-        val shiftParams = LinearLayout.LayoutParams((42 * d).toInt(), (42 * d).toInt())
-        shiftParams.setMargins((6 * d).toInt(), 0, 0, 0)
-        row1.addView(btnShift, shiftParams)
         val menuParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
         menuParams.setMargins((6 * d).toInt(), 0, 0, 0)
         row1.addView(btnMenu, menuParams)
@@ -175,8 +188,14 @@ class MainActivity : Activity() {
         val row2 = LinearLayout(this)
         row2.addView(
             segAB,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (38 * d).toInt())
+            LinearLayout.LayoutParams((160 * d).toInt(), (38 * d).toInt())
         )
+
+        val rowShift = LinearLayout(this)
+        rowShift.gravity = Gravity.CENTER_VERTICAL
+        val shiftParams = LinearLayout.LayoutParams((48 * d).toInt(), (48 * d).toInt())
+        shiftParams.setMargins((8 * d).toInt(), 0, 0, 0)
+        rowShift.addView(btnShift, shiftParams)
 
         val row3 = LinearLayout(this)
         row3.addView(
@@ -190,31 +209,65 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (34 * d).toInt())
         )
 
-        val row5 = LinearLayout(this)
-        row5.orientation = LinearLayout.HORIZONTAL
-        row5.gravity = Gravity.CENTER_VERTICAL
-        row5.addView(diagFader, LinearLayout.LayoutParams(0, (84 * d).toInt(), 1f))
-        val muteParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        val row5 = FrameLayout(this)
+        val faderRow = LinearLayout(this)
+        faderRow.orientation = LinearLayout.HORIZONTAL
+        faderRow.addView(
+            diagFader,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
         )
-        muteParams.setMargins((8 * d).toInt(), 0, (8 * d).toInt(), 0)
+        val flyParams = LinearLayout.LayoutParams((34 * d).toInt(), LinearLayout.LayoutParams.MATCH_PARENT)
+        flyParams.setMargins((4 * d).toInt(), 0, 0, 0)
+        faderRow.addView(flyFader, flyParams)
+        row5.addView(
+            faderRow,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        val muteParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.START
+        )
+        muteParams.setMargins((12 * d).toInt(), (10 * d).toInt(), 0, 0)
         row5.addView(btnMute, muteParams)
-        row5.addView(jitterFader, LinearLayout.LayoutParams((34 * d).toInt(), (84 * d).toInt()))
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
         column.setPadding((6 * d).toInt(), (4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt())
         column.addView(row1)
         column.addView(row2, columnRowParams(d))
+        column.addView(rowShift, columnRowParams(d))
         column.addView(row3, columnRowParams(d))
         column.addView(row4, columnRowParams(d))
-        column.addView(row5, columnRowParams(d))
+        val row5Params = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (110 * d).toInt()
+        )
+        row5Params.topMargin = (6 * d).toInt()
+        column.addView(row5, row5Params)
 
         val content = LinearLayout(this)
         content.orientation = LinearLayout.HORIZONTAL
         content.setBackgroundColor(Color.rgb(18, 20, 25))
         val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT)
-        content.addView(pad, padParams)
+
+        val padPane = FrameLayout(this)
+        padPane.addView(
+            pad,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        val scopeParams = FrameLayout.LayoutParams(
+            (110 * d).toInt(), (64 * d).toInt(), Gravity.TOP or Gravity.END
+        )
+        scopeParams.setMargins(0, (10 * d).toInt(), (10 * d).toInt(), 0)
+        padPane.addView(glitchScope, scopeParams)
+
+        content.addView(padPane, padParams)
         content.addView(
             column,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
@@ -223,7 +276,7 @@ class MainActivity : Activity() {
         content.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             val side = v.height
             val padWidth = (side * 1.1f).toInt()
-            if (side > 0 && pad.width != padWidth) {
+            if (side > 0 && padPane.width != padWidth) {
                 padParams.width = padWidth
                 content.requestLayout()
             }
@@ -352,7 +405,22 @@ class MainActivity : Activity() {
 
     private fun refreshShift() {
         padGrid.shiftMode = shiftActive()
-        if (!shiftActive()) btnShift.alpha = 1f
+        if (!shiftActive()) {
+            btnShift.alpha = 1f
+            pad.bendActive = false
+            glitchScope.stop()
+        }
+    }
+
+    private fun placeholderWaveform(n: Int = 256): FloatArray {
+        val out = FloatArray(n)
+        for (i in 0 until n) {
+            val t = i.toFloat() / n
+            val beat = (t * 8) % 1f
+            val env = Math.pow((1.0 - beat).toDouble(), 3.0).toFloat()
+            out[i] = env * sin(t * 40f * Math.PI.toFloat()) * 0.8f
+        }
+        return out
     }
 
     private fun refreshBlink() {

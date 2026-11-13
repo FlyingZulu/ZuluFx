@@ -15,7 +15,6 @@ private val ink = Color.rgb(40, 38, 32)
 private val needleRed = Color.rgb(200, 60, 40)
 private val amber = Color.rgb(255, 176, 0)
 private val silk = Color.rgb(165, 172, 185)
-private val graffitiOrange = Color.rgb(255, 120, 30)
 
 internal fun drawSketchyRoundRect(
     canvas: Canvas,
@@ -324,34 +323,36 @@ class DiagFaderView(context: Context) : View(context) {
     var value = 0.5f
         private set
 
+    private fun groove(w: Float, h: Float): FloatArray {
+        val m = 10f * d
+        return floatArrayOf(m, h - m, m + (h - 2f * m) * 0.85f, m)
+    }
+
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        val m = 10f * d
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
         paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 61)
 
-        val groove = android.graphics.Path()
-        groove.moveTo(m, h - m)
-        groove.quadTo(w / 2f + 3f * d, h / 2f + 3f * d, w - m, m)
+        val g = groove(w, h)
         paint.stroke(Color.rgb(18, 20, 25), 5f * d)
-        canvas.drawPath(groove, paint)
+        canvas.drawLine(g[0], g[1], g[2], g[3], paint)
         paint.stroke(Color.rgb(60, 66, 80), 1f * d)
-        canvas.drawPath(groove, paint)
+        canvas.drawLine(g[0], g[1], g[2], g[3], paint)
 
-        paint.textAlign = Paint.Align.CENTER
+        paint.textAlign = Paint.Align.LEFT
         paint.typeface = marker
         paint.textSize = 10f * d
         paint.fill(turquoise)
-        canvas.drawText("ZU", m + 6f * d, h - 3f * d, paint)
+        canvas.drawText("ZU", g[0] + 2f * d, g[1] - 5f * d, paint)
         paint.fill(violet)
-        canvas.drawText("LU", w - m - 6f * d, 11f * d, paint)
+        canvas.drawText("LU", g[2] + 4f * d, g[3] + 11f * d, paint)
 
-        val u = m + value * (w - 2f * m)
-        val v = (h - m) - value * (h - 2f * m)
+        val u = g[0] + value * (g[2] - g[0])
+        val v = g[1] + value * (g[3] - g[1])
 
         paint.fill(Color.rgb(55, 60, 74))
         canvas.drawCircle(u, v, 9f * d, paint)
@@ -366,12 +367,11 @@ class DiagFaderView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
-                val w = width.toFloat()
-                val h = height.toFloat()
-                val m = 10f * d
-                val u = ((event.x - m) / (w - 2f * m)).coerceIn(0f, 1f)
-                val v = 1f - ((event.y - m) / (h - 2f * m)).coerceIn(0f, 1f)
-                value = (u + v) / 2f
+                val g = groove(width.toFloat(), height.toFloat())
+                val dx = g[2] - g[0]
+                val dy = g[3] - g[1]
+                val t = ((event.x - g[0]) * dx + (event.y - g[1]) * dy) / (dx * dx + dy * dy)
+                value = t.coerceIn(0f, 1f)
             }
         }
         invalidate()
@@ -446,65 +446,12 @@ class SegmentedABRecView(context: Context) : View(context) {
     private fun segmentAt(x: Float): Int = (x / width * 3f).toInt().coerceIn(0, 2)
 }
 
-class JitterDialView(context: Context) : DialView(context) {
+class FlyFaderView(context: Context) : View(context) {
 
-    val cmdId = "jitter"
+    val cmdId = "fly"
 
-    var value = 0f
-        private set
-
-    override fun onDraw(canvas: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-        drawBezelAndFace(canvas, w, h)
-
-        val cx = w / 2f
-        val cy = h * 0.46f
-        val radius = minOf(w, h) * 0.34f
-        val start = -52f
-        val sweep = 104f
-
-        for (i in 0..10) {
-            val a = start + sweep * i / 10f
-            val outer = needleXY(cx, cy, radius, a)
-            val inner = needleXY(cx, cy, radius * 0.88f, a)
-            paint.stroke(ink, 1f * d)
-            canvas.drawLine(inner[0], inner[1], outer[0], outer[1], paint)
-        }
-
-        val tip = needleXY(cx, cy, radius * 0.9f, start + sweep * value)
-        paint.stroke(ink, 1.8f * d)
-        canvas.drawLine(cx, cy, tip[0], tip[1], paint)
-        paint.fill(ink)
-        canvas.drawCircle(cx, cy, 3f * d, paint)
-
-        paint.fill(ink)
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = marker
-        paint.textSize = 8f * d
-        canvas.drawText("JITTER", cx, h * 0.86f, paint)
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
-                val cx = width / 2f
-                val cy = height * 0.46f
-                val dx = (event.x - cx).toDouble()
-                val dy = (event.y - cy).toDouble()
-                var angle = Math.toDegrees(Math.atan2(dx, -dy))
-                if (angle > 180.0) angle -= 360.0
-                value = ((angle + 52.0) / 104.0).toFloat().coerceIn(0f, 1f)
-            }
-        }
-        invalidate()
-        return true
-    }
-}
-
-class JitterFaderView(context: Context) : View(context) {
-
-    val cmdId = "jitter"
+    val stutter: Boolean
+        get() = value >= 0.75f
 
     private val d = resources.displayMetrics.density
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -529,10 +476,18 @@ class JitterFaderView(context: Context) : View(context) {
         paint.stroke(Color.rgb(60, 66, 80), 1f * d)
         canvas.drawLine(cx, m, cx, h - m, paint)
 
+        val zoneBottom = m + (h - 2f * m) * 0.25f
+        paint.stroke(if (stutter) amber else Color.rgb(52, 58, 72), 1f * d)
+        var hy = zoneBottom
+        while (hy > m + 2f) {
+            canvas.drawLine(cx - 6f * d, hy, cx + 6f * d, hy - 3f * d, paint)
+            hy -= 4f * d
+        }
+
         val ky = (h - m) - value * (h - 2f * m)
         paint.fill(Color.rgb(55, 60, 74))
         canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
-        paint.stroke(silk, 1.2f * d)
+        paint.stroke(if (stutter) amber else silk, 1.2f * d)
         canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
         paint.stroke(Color.rgb(28, 31, 38), 1f * d)
         canvas.drawLine(cx - 7f * d, ky, cx + 7f * d, ky, paint)
@@ -543,7 +498,7 @@ class JitterFaderView(context: Context) : View(context) {
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = marker
         paint.textSize = 9f * d
-        canvas.drawText("JITTER", cx, h * 0.28f + 3f * d, paint)
+        canvas.drawText("FLY", cx, h * 0.28f + 3f * d, paint)
         canvas.restore()
     }
 
@@ -557,5 +512,60 @@ class JitterFaderView(context: Context) : View(context) {
         }
         invalidate()
         return true
+    }
+}
+
+class GlitchScopeView(context: Context) : View(context) {
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+    private val rnd = java.util.Random()
+    private var phase = 0f
+    private var running = false
+
+    fun start() {
+        running = true
+        scaleX = 0.7f
+        scaleY = 0.7f
+        animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+        postInvalidateOnAnimation()
+    }
+
+    fun stop() {
+        running = false
+        visibility = GONE
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+
+        paint.fill(Color.rgb(12, 13, 16))
+        canvas.drawRoundRect(0f, 0f, w, h, 4f * d, 4f * d, paint)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 4f * d, 17)
+
+        phase += 0.11f
+        paint.stroke(amber, 1.2f * d)
+        val n = 36
+        var px = 6f * d
+        var py = h / 2f
+        for (i in 1..n) {
+            val x = 6f * d + (w - 12f * d) * i / n
+            val y = h / 2f + sin(phase + i * 0.9f) * h * 0.22f +
+                (if (rnd.nextInt(12) == 0) (rnd.nextFloat() - 0.5f) * h * 0.6f else 0f)
+            canvas.drawLine(px, py, x, y, paint)
+            px = x
+            py = y
+        }
+
+        paint.fill(silk)
+        paint.textAlign = Paint.Align.RIGHT
+        paint.typeface = marker
+        paint.textSize = 7f * d
+        canvas.drawText("BEND", w - 5f * d, h - 4f * d, paint)
+
+        if (running) postInvalidateOnAnimation()
     }
 }
