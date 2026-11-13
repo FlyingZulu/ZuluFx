@@ -40,16 +40,20 @@ class MainActivity : Activity() {
 
     private val engine = AudioEngine()
     private val levels = FloatArray(2)
+    private val inLevels = FloatArray(2)
     private var vuSlow = 0f
     private val vuHandler = Handler(Looper.getMainLooper())
     private val recEndHandler = Handler(Looper.getMainLooper())
     private val vuRunnable = object : Runnable {
         override fun run() {
             engine.nativeGetLevels(levels)
+            engine.nativeGetInLevels(inLevels)
             val lL = Math.sqrt(levels[0].toDouble()).toFloat()
             val lR = Math.sqrt(levels[1].toDouble()).toFloat()
             vuMeter.levelL = lL
             vuMeter.levelR = lR
+            vuMeter.inLevelL = Math.sqrt(inLevels[0].toDouble()).toFloat()
+            vuMeter.inLevelR = Math.sqrt(inLevels[1].toDouble()).toFloat()
             val lvl = maxOf(lL, lR)
             vuSlow += 0.06f * (lvl - vuSlow)
             pad.setAudio(lvl, (lvl - vuSlow).coerceAtLeast(0f) * 3f)
@@ -150,6 +154,7 @@ class MainActivity : Activity() {
     private var luDownAt = 0L
     private lateinit var menuOverlay: FrameLayout
     private val menuPadButtons = ArrayList<Button>()
+    private var menuLoopLbl: Button? = null
     private var menuMirrorBtn: Button? = null
     private val menuCurveButtons = ArrayList<Button>()
     private val menuFingerButtons = ArrayList<Button>()
@@ -164,6 +169,8 @@ class MainActivity : Activity() {
     private var menuFreezeBtn: Button? = null
     private val menuBillardButtons = ArrayList<Button>()
     private val menuLofiButtons = ArrayList<Button>()
+    private val menuStretchButtons = ArrayList<Button>()
+    private val bankStretch = IntArray(8)
     private var recFlavor = 0
     private var menuPunchBtn: Button? = null
     private var punchMode = false
@@ -482,6 +489,13 @@ class MainActivity : Activity() {
     private var recMidiEngines = true
     private var recStartMs = 0L
     private var recLenMs = 0L
+    private var recResampleFx = false
+    private var lenEntry = false
+    private var lenFirst = 0
+    private var masterVol = 1f
+    private var inVol = 1f
+    private val lenHandler = Handler(Looper.getMainLooper())
+    private val vuOverlayHandler = Handler(Looper.getMainLooper())
     private val punchLatched = BooleanArray(9)
     private var lastEditBank = -1
     private var lastEditAt = 0L
@@ -852,7 +866,7 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_DOWN -> recHeld = true
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     recHeld = false
-                    if (e.actionMasked == MotionEvent.ACTION_UP && !shiftActive()) recTap()
+                    if (e.actionMasked == MotionEvent.ACTION_UP) recTap()
                 }
             }
             refreshBlink()
@@ -882,6 +896,7 @@ class MainActivity : Activity() {
                     loopLenSteps = n
                     padGrid.activeBank = n
                 }
+                lenEntry && n in 1..9 -> lenDigit(n)
                 recActive && recMotion && n == recArmPad -> recStop()
                 recActive && !recMotion && n == recArmPad -> recStop()
                 recArmed && n >= 1 && n <= min(padGrid.padCount, 14) -> armRecDest(n)
@@ -923,7 +938,22 @@ class MainActivity : Activity() {
                 openStepEditor(n - 1)
             }
         }
-        padGrid.onPadDown = { n -> heldBankPad = n }
+        padGrid.onPadDown = { n ->
+            heldBankPad = n
+            if (recArmed && !recActive && n == recArmPad) {
+                lenHandler.postDelayed({
+                    if (heldBankPad == n && recArmed && !recActive && !lenEntry) {
+                        lenEntry = true
+                        lenFirst = 0
+                        Toast.makeText(
+                            this,
+                            "LONGUEUR ? PADS 1-9 (1 puis 4 = 14, max 19)",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }, 2000)
+            }
+        }
         padGrid.onPadUp = { heldBankPad = -1 }
 
         val vuModule = LinearLayout(this)
@@ -948,7 +978,10 @@ class MainActivity : Activity() {
         row1.addView(btnRec, recParams)
         row1.addView(btnUndo, LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt()))
         inKnob = LineInKnob(this)
-        inKnob.onValueChange = { v -> engine.nativeSetInGain(v) }
+        inKnob.onValueChange = { v ->
+            inVol = v
+            engine.nativeSetInGain(v)
+        }
         val knobParams = LinearLayout.LayoutParams((24 * d).toInt(), (30 * d).toInt())
         knobParams.setMargins((4 * d).toInt(), 0, 0, 0)
         row1.addView(inKnob, knobParams)
@@ -1073,30 +1106,19 @@ class MainActivity : Activity() {
         padPaneParams.setMargins(0, (4 * d).toInt(), 0, 0)
 
         vuMeter.onLongPress = {
-            if (!simulLock) {
-                if (shiftActive()) {
-                    mirrored = !mirrored
-                    content.layoutDirection =
-                        if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
-                } else {
-                    openMenuPanel()
-                }
-            }
+            if (!simulLock) openMenuPanel()
         }
 
-        vuMeter.onDoubleTap = {
-            if (!simulLock && shiftActive()) {
-                openScalePanel()
-            } else {
-                applyPadCount(
-                    when (padGrid.padCount) {
-                        8 -> 10
-                        10 -> 12
-                        12 -> 14
-                        else -> 8
-                    }
-                )
-            }
+        vuMeter.onVolDelta = { dv ->
+            masterVol = (masterVol + dv).coerceIn(0f, 2f)
+            engine.nativeSetMasterVolume(masterVol)
+            showVuOverlay("VOL " + ((masterVol * 50).toInt().coerceIn(0, 100)).toString() + "%")
+        }
+        vuMeter.onInDelta = { dxv ->
+            inVol = (inVol + dxv).coerceIn(0f, 2f)
+            engine.nativeSetInGain(inVol)
+            inKnob.setVal(inVol)
+            showVuOverlay("IN " + ((inVol * 50).toInt().coerceIn(0, 100)).toString() + "%")
         }
 
         val edgeColumn = LinearLayout(this)
@@ -2371,6 +2393,7 @@ class MainActivity : Activity() {
             json.put("recFlavor", recFlavor)
             json.put("punchCol", punchCol)
             json.put("fxSend", JSONArray(bankFxSend.toList()))
+            json.put("stretch", JSONArray(bankStretch.toList()))
             json.put("bankNames", JSONArray(bankLabels.toList()))
             projFile(slot).writeText(json.toString())
             refreshProjSlots()
@@ -2401,6 +2424,13 @@ class MainActivity : Activity() {
                 for (b in 0 until min(8, fsArr.length())) {
                     bankFxSend[b] = fsArr.getBoolean(b)
                     engine.nativeSetBankFxSend(b, bankFxSend[b])
+                }
+            }
+            val stArr = json.optJSONArray("stretch")
+            if (stArr != null) {
+                for (b in 0 until min(8, stArr.length())) {
+                    bankStretch[b] = stArr.optInt(b, 0).coerceIn(0, 3)
+                    engine.nativeSetStretchMode(b, bankStretch[b])
                 }
             }
             val bnArr = json.optJSONArray("bankNames")
@@ -2996,7 +3026,8 @@ class MainActivity : Activity() {
     }
 
     private fun startLoopRecording(bank: Int) {
-        val wet = loopWetA || loopWetB
+        val wet = loopWetA || loopWetB || recResampleFx
+        recResampleFx = false
         engine.nativeRecordBank(bank - 1, loopLenSteps, wet)
         resetSteps(bank - 1)
         recActive = true
@@ -3012,6 +3043,11 @@ class MainActivity : Activity() {
     }
 
     private fun recTap() {
+        if (lenEntry) {
+            lenEntry = false
+            lenFirst = 0
+            lenHandler.removeCallbacksAndMessages(null)
+        }
         when {
             recActive -> {
                 if (recMotion) finalizeMotionRec() else stopSampleRec()
@@ -3041,11 +3077,16 @@ class MainActivity : Activity() {
                 endSnapHold()
                 motionSrcA = false
                 motionSrcB = false
+                recResampleFx = recArmed && shiftActive()
                 padGrid.recArmed = recArmed
                 padGrid.recPad = -1
                 Toast.makeText(
                     this,
-                    if (recArmed) "REC : " + (if (padGrid.padMode == 1) "F/Z + PAD" else "PAD (F/Z = WET)")
+                    if (recArmed) "REC : " + when {
+                        recResampleFx -> "RESAMPLING FX \u2014 PAD + LONGUEUR"
+                        padGrid.padMode == 1 -> "F/Z + PAD"
+                        else -> "PAD (F/Z = WET)"
+                    }
                     else "REC OFF",
                     Toast.LENGTH_SHORT
                 ).show()
@@ -3615,6 +3656,24 @@ class MainActivity : Activity() {
         }
         panel.addView(padsRow)
 
+        header("TEMPS LOOP (REC 1-19)")
+        val loopRow = LinearLayout(this)
+        val bHalf = makeButton("\u00f72", silk)
+        bHalf.setOnClickListener { loopMul(0); refreshMenu() }
+        val bDbl = makeButton("\u00d72", silk)
+        bDbl.setOnClickListener { loopMul(1); refreshMenu() }
+        val bLoopLbl = makeButton("8", silk)
+        bLoopLbl.setOnClickListener {
+            loopLenSteps = 8
+            padGrid.activeBank = 8
+            refreshMenu()
+        }
+        menuLoopLbl = bLoopLbl
+        loopRow.addView(bHalf, wrapParams((4 * d).toInt()))
+        loopRow.addView(bLoopLbl, wrapParams((4 * d).toInt()))
+        loopRow.addView(bDbl, wrapParams((4 * d).toInt()))
+        panel.addView(loopRow)
+
         header("REC \u00b7 SAVEUR LO-FI")
         val lofiRow = LinearLayout(this)
         for ((i, lbl) in listOf("OFF", "SP", "K7", "M\u00c9TAL").withIndex()) {
@@ -3628,6 +3687,20 @@ class MainActivity : Activity() {
             lofiRow.addView(b, wrapParams((4 * d).toInt()))
         }
         panel.addView(lofiRow)
+
+        header("STRETCH SAMPLES \u00b7 B" + (playerBank + 1))
+        val stRow = LinearLayout(this)
+        for ((i, lbl) in listOf("OFF", "CLEAN", "BEAT", "RETRO").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener {
+                bankStretch[playerBank] = i
+                engine.nativeSetStretchMode(playerBank, i)
+                refreshMenu()
+            }
+            menuStretchButtons.add(b)
+            stRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(stRow)
 
         header("SC\u00c8NES")
         val scRow = LinearLayout(this)
@@ -4137,10 +4210,45 @@ class MainActivity : Activity() {
         refreshPresetRow()
     }
 
+    private fun lenDigit(n: Int) {
+        if (lenFirst == 0) {
+            if (n == 1) {
+                lenFirst = 1
+                lenHandler.postDelayed({ if (lenEntry && lenFirst == 1) commitLen(1) }, 2000)
+                Toast.makeText(this, "1_ ? (2e chiffre)", Toast.LENGTH_SHORT).show()
+            } else {
+                commitLen(n)
+            }
+        } else {
+            commitLen(10 + n)
+        }
+    }
+
+    private fun commitLen(v: Int) {
+        lenHandler.removeCallbacksAndMessages(null)
+        lenEntry = false
+        lenFirst = 0
+        loopLenSteps = v.coerceIn(1, 19)
+        padGrid.activeBank = loopLenSteps
+        Toast.makeText(this, "LONGUEUR : " + loopLenSteps + " TEMPS", Toast.LENGTH_SHORT).show()
+        refreshBlink()
+    }
+
+    private fun showVuOverlay(t: String) {
+        vuMeter.overlayText = t
+        vuOverlayHandler.removeCallbacksAndMessages(null)
+        vuOverlayHandler.postDelayed({ vuMeter.overlayText = null }, 900)
+    }
+
     private fun arpTap() {
         if (shiftActive()) {
-            toolPage = if (toolPage == 2) 0 else 2
-            showToolPage()
+            if (toolPage == 2) {
+                drumGrid.drumMode = (drumGrid.drumMode + 1) % 3
+                drumGrid.invalidate()
+            } else {
+                toolPage = 2
+                showToolPage()
+            }
         } else {
             toolPage = (toolPage + 1) % 3
             showToolPage()
@@ -4369,7 +4477,16 @@ class MainActivity : Activity() {
         engine.nativeSetNetworkParams(chaos, mod, alias, speed)
     }
 
+    private fun loopMul(dir: Int) {
+        loopLenSteps =
+            if (dir == 1) (loopLenSteps * 2).coerceAtMost(19)
+            else (loopLenSteps / 2).coerceAtLeast(1)
+        padGrid.activeBank = loopLenSteps
+        Toast.makeText(this, "LOOP : " + loopLenSteps + " TEMPS", Toast.LENGTH_SHORT).show()
+    }
+
     private fun refreshMenu() {
+        menuLoopLbl?.text = loopLenSteps.toString()
         val counts = listOf(8, 10, 12, 14)
         for ((i, b) in menuPadButtons.withIndex()) {
             b.setTextColor(if (counts[i] == padGrid.padCount) amber else silk)
@@ -4398,6 +4515,9 @@ class MainActivity : Activity() {
         }
         for ((i, b) in menuLofiButtons.withIndex()) {
             b.setTextColor(if (i == recFlavor) amber else silk)
+        }
+        for ((i, b) in menuStretchButtons.withIndex()) {
+            b.setTextColor(if (i == bankStretch[playerBank]) amber else silk)
         }
         for ((i, b) in menuDrumButtons.withIndex()) {
             b.setTextColor(if ((i == 0) == (drumGrid.padCount == 12)) amber else silk)

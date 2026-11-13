@@ -230,6 +230,16 @@ Java_com_zulu_AudioEngine_nativeGetLevels(JNIEnv* env, jobject, jfloatArray arr)
 }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeGetInLevels(JNIEnv* env, jobject, jfloatArray arr) {
+    if (!g || !arr) return;
+    float tmp[2] = { g->getInLevel(), g->getInLevel() };
+    env->SetFloatArrayRegion(arr, 0, 2, tmp);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetMasterVolume(JNIEnv*, jobject, jfloat v) { if (g) g->setMasterVolume(v); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetGenTouch(JNIEnv*, jobject, jboolean t) { if (g) g->setGenTouch(t == JNI_TRUE); }
 
 JNIEXPORT void JNICALL
@@ -237,5 +247,10 @@ Java_com_zulu_AudioEngine_nativeGenHit(JNIEnv*, jobject, jint type, jfloat x, jf
 
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetEco(JNIEnv*, jobject, jboolean e) { if (g) g->setEco(e == JNI_TRUE); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetStretchMode(JNIEnv*, jobject, jint bank, jint mode) {
+    if (g) g->setStretchMode(bank, mode);
+}
 
 }

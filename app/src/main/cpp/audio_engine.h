@@ -124,8 +124,11 @@ public:
     }
 
     void recordBank(int bank, int steps, bool wet);
+    void setStretchMode(int bank, int mode);
     void startResample(int bank, int steps);
     void setInGain(float v) { inGain.store(v); }
+    void setMasterVolume(float v) { masterVol.store(v); }
+    float getInLevel() const { return inLevel.load(); }
     void setInProfile(int p) { inProfile.store(p); }
     void setMasterEq(bool on) { masterEq.store(on); eqCoefOk = false; }
     void drumHit(int bank, int slice, int total, float pitch);
@@ -295,6 +298,8 @@ private:
     float rndPhase = 0.f, rndRead = 0.f;
     int rndCur = 0, rndOff = 0, rndLen = 0;
     std::atomic<float> inGain{1.f};
+    std::atomic<float> masterVol{1.f};
+    std::atomic<float> inLevel{0.f};
     std::atomic<int> inProfile{0};
     float inHpfX = 0.f, inHpfY = 0.f, inEnv = 0.f, inGr = 1.f;
     int inCoefProf = -1;
@@ -466,7 +471,7 @@ private:
     int stutterWrite = 0;
 
     static constexpr int kNumBanks = 8;
-    static constexpr int kMaxSteps = 14;
+    static constexpr int kMaxSteps = 20;
     struct LoopBank {
         float* buf = nullptr;
         int cap = 0;
@@ -478,10 +483,23 @@ private:
         float stepPitch[kMaxSteps];
         float stepVel[kMaxSteps];
         float acc = 0.f;
+        int stMode = 0;
+        float stInPos = 0.f;
+        int stGrainOn[2] = {0, 0};
+        int stGrainAge[2] = {0, 0};
+        float stGrainBase[2] = {0.f, 0.f};
+        int stHopCnt = 0;
+        int stCur = 0;
         LoopBank() {
             for (int s = 0; s < kMaxSteps; s++) { stepPitch[s] = 0.f; stepVel[s] = 1.f; }
         }
     };
+    void stReset(LoopBank& lb) {
+        lb.stInPos = (float)lb.pos;
+        lb.stGrainOn[0] = 0; lb.stGrainOn[1] = 0;
+        lb.stGrainAge[0] = 0; lb.stGrainAge[1] = 0;
+        lb.stHopCnt = 0; lb.stCur = 0;
+    }
     static constexpr int kTotalFrameBudget = 6553600;
     LoopBank banks[kNumBanks];
     bool bankFxSend[kNumBanks] = {};

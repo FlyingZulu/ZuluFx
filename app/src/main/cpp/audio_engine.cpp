@@ -460,6 +460,7 @@ void AudioEngine::arpFire() {
         int target = (int)((float)sIdx / slices * lb.samples);
         if (target >= lb.samples) target = lb.samples - 1;
         lb.pos = target;
+        stReset(lb);
     }
 }
 
@@ -756,6 +757,7 @@ void AudioEngine::stopRec() {
         lb.samples = lb.pos;
         lb.playing = true;
         lb.pos = 0;
+        stReset(lb);
     } else {
         lb.playing = false;
         lb.samples = 0;
@@ -983,6 +985,14 @@ void AudioEngine::setStepCount(int bank, int n) {
 void AudioEngine::toggleBank(int bank) {
     if (bank < 0 || bank >= kNumBanks) return;
     if (banks[bank].samples > 0) banks[bank].playing = !banks[bank].playing;
+    if (banks[bank].playing) stReset(banks[bank]);
+}
+
+void AudioEngine::setStretchMode(int bank, int mode) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    if (mode < 0 || mode > 3) mode = 0;
+    banks[bank].stMode = mode;
+    stReset(banks[bank]);
 }
 
 bool AudioEngine::bankHasLoop(int bank) const {
@@ -1019,6 +1029,7 @@ void AudioEngine::loadBank(int bank, const float* src, int frames) {
     lb.pos = 0;
     lb.playing = true;
     lb.decim = 1;
+    stReset(lb);
 }
 
 void AudioEngine::jumpSlice(int slice, int total) {
@@ -1071,6 +1082,11 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 inS = floorf(inS * 96.f + 0.5f) / 96.f;
                 inS = tanhf(inS * 1.7f) * 0.72f;
             }
+        }
+        {
+            float pil = fabsf(inS);
+            float cil = inLevel.load(std::memory_order_relaxed);
+            inLevel.store(cil + (pil > cil ? 0.5f : 0.02f) * (pil - cil), std::memory_order_relaxed);
         }
 
         if ((coeffClock++ & 31) == 0) {
@@ -1399,6 +1415,7 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 int tot = loopSliceTotal.load();
                 if (tot > 0) lb.pos = (int)((float)req / tot * lb.samples);
                 if (lb.pos >= lb.samples) lb.pos = 0;
+                stReset(lb);
             }
             int sStart = 0, sEnd = lb.samples;
             if (xyT) {
@@ -1415,12 +1432,63 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             float vel = si >= 0 ? lb.stepVel[si] : 1.f;
             float prate = 1.f;
             if (si >= 0 && lb.stepPitch[si] != 0.f) prate = powf(2.f, lb.stepPitch[si] / 12.f);
+            float sL = lb.buf[2 * lb.pos];
+            float sR = lb.buf[2 * lb.pos + 1];
+            if (lb.stMode != 0 && !xyT) {
+                float sdec = lb.decim > 0 ? (float)lb.decim : 1.f;
+                float sp = prate;
+                if (sp < 0.03f) sp = 0.03f;
+                if (sp > 8.f) sp = 8.f;
+                int Gt = (lb.stMode == 2)
+                    ? (lb.steps > 0 ? (int)((float)lb.samples * sdec / (float)lb.steps) : 1024)
+                    : (lb.stMode == 3 ? 1024 : 2048);
+                if (Gt < 64) Gt = 64;
+                if (Gt > 16384) Gt = 16384;
+                int H = (lb.stMode == 2) ? Gt : Gt / 2;
+                float accL = 0.f, accR = 0.f;
+                for (int gi = 0; gi < 2; gi++) {
+                    if (!lb.stGrainOn[gi]) continue;
+                    int t = lb.stGrainAge[gi];
+                    float u = (float)t / (float)Gt;
+                    float w = (lb.stMode == 2) ? 1.f : 0.5f - 0.5f * cosf(2.f * 3.14159265f * u);
+                    float ip = lb.stGrainBase[gi] + (float)t / sdec;
+                    while (ip >= lb.samples) ip -= lb.samples;
+                    int i0 = (int)ip;
+                    if (i0 >= lb.samples) i0 = 0;
+                    int i1 = (i0 + 1 >= lb.samples) ? 0 : i0 + 1;
+                    float gl, gr;
+                    if (lb.stMode == 3) {
+                        gl = floorf(lb.buf[2 * i0] * 63.f + 0.5f) / 63.f;
+                        gr = floorf(lb.buf[2 * i0 + 1] * 63.f + 0.5f) / 63.f;
+                    } else {
+                        float fr = ip - floorf(ip);
+                        gl = lb.buf[2 * i0] + (lb.buf[2 * i1] - lb.buf[2 * i0]) * fr;
+                        gr = lb.buf[2 * i0 + 1] + (lb.buf[2 * i1 + 1] - lb.buf[2 * i0 + 1]) * fr;
+                    }
+                    accL += w * gl;
+                    accR += w * gr;
+                    lb.stGrainAge[gi] = t + 1;
+                    if (t + 1 >= Gt) lb.stGrainOn[gi] = 0;
+                }
+                lb.stHopCnt++;
+                if (lb.stHopCnt >= H) {
+                    lb.stHopCnt = 0;
+                    lb.stCur = 1 - lb.stCur;
+                    lb.stGrainOn[lb.stCur] = 1;
+                    lb.stGrainAge[lb.stCur] = 0;
+                    lb.stGrainBase[lb.stCur] = lb.stInPos;
+                    lb.stInPos += (float)H * sp / sdec;
+                    while (lb.stInPos >= lb.samples) lb.stInPos -= lb.samples;
+                }
+                sL = accL;
+                sR = accR;
+            }
             if (bankFxSend[k]) {
-                loopL += lb.buf[2 * lb.pos] * vel;
-                loopR += lb.buf[2 * lb.pos + 1] * vel;
+                loopL += sL * vel;
+                loopR += sR * vel;
             } else {
-                dryL += lb.buf[2 * lb.pos] * vel;
-                dryR += lb.buf[2 * lb.pos + 1] * vel;
+                dryL += sL * vel;
+                dryR += sR * vel;
             }
             float dec = lb.decim > 0 ? (float)lb.decim : 1.f;
             if (xyT) {
@@ -2793,6 +2861,10 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 }
             }
         }
+
+        float mv = masterVol.load(std::memory_order_relaxed);
+        outL *= mv;
+        outR *= mv;
 
         float pL = fabsf(outL), pR = fabsf(outR);
         float cl = levelL.load(), cr = levelR.load();

@@ -280,7 +280,8 @@ pages.
   (sections LFO / arpégiateur / sampleur). Pas besoin de SHIFT.
 - **SHIFT + tap sur OUTILS** : ouvre/ferme direct la **GRID** (drum pad sur
   les samples : 12 pads, pitch ±12 façon MPC, modes slicé et random).
-- Sur la GRID : **SHIFT + tap sur OUTILS** = fermer la grille.
+- Sur la GRID : **SHIFT + tap sur OUTILS** = changer de mode de grille
+  (**12-LEVELS / SLICE / RND**). Fermer la grille : le **×** en haut à droite.
 
 ## Tirettes EDIT universelles (v0.33)
 
@@ -336,7 +337,55 @@ lissé) au lieu d'une coupure sèche.
 - **fond animé coupé** (mandala/kaléidoscope) pour économiser la batterie.
 Un peu dégradé, mais ça tourne et ça sonne.
 
-## À venir (v0.33+)
+## VU mètre : IN/OUT + swipes volume (v0.34)
+
+Le VU mètre affiche maintenant **4 barres** : **OUT L/R** (sortie, vert) et
+**IN L/R** (line-in, cyan).
+- **Swipe vertical** sur le VU = **volume général** (0-200 %).
+- **Swipe horizontal** sur le VU = **volume line-in** (0-200 %, synchronisé
+  avec le petit potard IN).
+- Un aperçu « VOL 80 % » / « IN 120 % » s'affiche pendant le réglage.
+- **Appui long sur le VU** = menu. Plus de raccourcis miroir ni double-tap :
+  MIROIR, GAMME et le nombre de PADS se règlent dans le **menu**.
+
+## Fusion : pincer à 2 doigts (v0.34)
+
+La fusion des deux points se fait maintenant en **pinçant à 2 doigts** et en
+**tenant 1 seconde** (au lieu de 3 doigts). La séparation billard reste au
+double-tap.
+
+## REC long : jusqu'à 19 temps (v0.34)
+
+1. **REC** → armer.
+2. **Tap sur le pad destination** → il s'arme.
+3. **Rester appuyé 2 secondes** sur ce pad → saisie de longueur.
+4. **Pads 1-9 = chiffres** : tap simple = 1 à 9 temps ; **1 puis 4 = 14**,
+   **1 puis 6 = 16**… **19 temps max**. (1 seul = attendre 2 s ou REC.)
+- **MENU · TEMPS LOOP** : **÷2 / ×2** pour subdiviser/doubler la durée de
+  boucle (1-19 temps), tap sur le chiffre = retour à 8.
+
+## Resampling avec FX : SHIFT + REC (v0.34)
+
+**SHIFT + REC** arme un enregistrement **avec les effets** (resampling à la
+SP-404, pas besoin de F/Z = WET) : choisir le pad destination, même protocole
+de longueur (pad tenu 2 s + chiffres).
+
+## STRETCH samples : OFF / CLEAN / BEAT / RETRO (v0.34)
+
+**MENU · STRETCH SAMPLES · B<n>** : qualité/mode de lecture de la banque
+sélectionnée. Quand le stretch est actif, le pitch des steps (±12 façon MPC)
+et les changements de vitesse deviennent du **time-stretch** : la vitesse
+change, la hauteur reste.
+- **OFF** : lecture normale (pitch = vitesse).
+- **CLEAN** : stretch granulaire lisse (grains 2048, fenêtrage doux) — ralentis
+  et accélérés propres.
+- **BEAT** : stretch « splice » calé sur le temps de la boucle — coupures
+  nettes à chaque temps, le groove reste carré (esprit SP-404 beat stretch).
+- **RETRO** : grains courts + réduction de bits — jungle/lo-fi crade, ça
+  granule et ça craque exprès.
+Le réglage est mémorisé par banque dans les sauvegardes de projet.
+
+## À venir (v0.34+)
 
 - Vendoring réel de Plaits (Mutable Instruments, MIT) — cette passe utilise
   des engines « inspirés MI » écrits à la main.

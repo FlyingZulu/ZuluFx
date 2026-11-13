@@ -306,15 +306,36 @@ class BarVuView(context: Context) : View(context) {
             invalidate()
         }
 
-    var onDoubleTap: (() -> Unit)? = null
+    var inLevelL = 0f
+        set(v) {
+            field = v.coerceIn(0f, 1f)
+            invalidate()
+        }
+
+    var inLevelR = 0f
+        set(v) {
+            field = v.coerceIn(0f, 1f)
+            invalidate()
+        }
+
+    var overlayText: String? = null
+        set(v) {
+            field = v
+            invalidate()
+        }
+
     var onLongPress: (() -> Unit)? = null
+    var onVolDelta: ((Float) -> Unit)? = null
+    var onInDelta: ((Float) -> Unit)? = null
 
     var pressed = false
         private set
     var onPressed: ((Boolean) -> Unit)? = null
 
-    private var lastTap = 0L
     private var longPressPending = false
+    private var lastX = 0f
+    private var lastY = 0f
+    private var swipeAxis = 0
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -326,22 +347,43 @@ class BarVuView(context: Context) : View(context) {
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 17)
 
         val m = 4f * d
-        val barW = (w - 3f * m) / 2f
-        drawBar(canvas, m, m, m + barW, h - m, levelL)
-        drawBar(canvas, m * 2f + barW, m, w - m, h - m, levelR)
+        val top = m + 9f * d
+        val barW = (w - 5f * m) / 4f
+        drawBar(canvas, m, top, m + barW, h - m, levelL, false)
+        drawBar(canvas, m * 2f + barW, top, m * 2f + barW * 2f, h - m, levelR, false)
+        drawBar(canvas, m * 3f + barW * 2f, top, m * 3f + barW * 3f, h - m, inLevelL, true)
+        drawBar(canvas, m * 4f + barW * 3f, top, w - m, h - m, inLevelR, true)
+
+        paint.fill(Color.rgb(160, 168, 184))
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        paint.textSize = 7f * d
+        val half = m + barW
+        canvas.drawText("OUT", m + half, m + 6.5f * d, paint)
+        canvas.drawText("IN", w - m - half, m + 6.5f * d, paint)
+
+        overlayText?.let {
+            paint.fill(Color.rgb(16, 18, 23))
+            paint.alpha = 220
+            canvas.drawRoundRect(w * 0.06f, h * 0.26f, w * 0.94f, h * 0.8f, 3f * d, 3f * d, paint)
+            paint.alpha = 255
+            paint.fill(Color.rgb(255, 244, 130))
+            paint.textSize = 10f * d
+            canvas.drawText(it, w / 2f, h * 0.64f, paint)
+        }
     }
 
-    private fun drawBar(canvas: Canvas, l: Float, t: Float, r: Float, b: Float, level: Float) {
+    private fun drawBar(canvas: Canvas, l: Float, t: Float, r: Float, b: Float, level: Float, isIn: Boolean) {
         val segs = 20
         val segH = (b - t) / segs
         val lit = (level * segs).toInt()
         for (i in 0 until segs) {
             paint.fill(
                 when {
-                    i >= lit -> Color.rgb(78, 84, 100)
+                    i >= lit -> if (isIn) Color.rgb(66, 72, 88) else Color.rgb(78, 84, 100)
                     i >= segs * 85 / 100 -> Color.rgb(255, 96, 70)
                     i >= segs * 65 / 100 -> Color.rgb(255, 205, 40)
-                    else -> Color.rgb(110, 255, 120)
+                    else -> if (isIn) Color.rgb(0, 229, 255) else Color.rgb(110, 255, 120)
                 }
             )
             canvas.drawRoundRect(
@@ -354,9 +396,11 @@ class BarVuView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val now = System.currentTimeMillis()
                 longPressPending = true
                 pressed = true
+                swipeAxis = 0
+                lastX = event.x
+                lastY = event.y
                 onPressed?.invoke(true)
                 postDelayed({
                     if (longPressPending) {
@@ -364,11 +408,19 @@ class BarVuView(context: Context) : View(context) {
                         onLongPress?.invoke()
                     }
                 }, 600)
-                if (now - lastTap < 300) {
-                    onDoubleTap?.invoke()
-                    lastTap = 0
-                } else {
-                    lastTap = now
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.x - lastX
+                val dy = event.y - lastY
+                if (swipeAxis == 0 && (Math.abs(dx) > 10f * d || Math.abs(dy) > 10f * d)) {
+                    swipeAxis = if (Math.abs(dy) > Math.abs(dx)) 1 else 2
+                    longPressPending = false
+                }
+                if (swipeAxis == 1) onVolDelta?.invoke(-(dy / (45f * d)))
+                else if (swipeAxis == 2) onInDelta?.invoke(dx / (45f * d))
+                if (swipeAxis != 0) {
+                    lastX = event.x
+                    lastY = event.y
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -1422,6 +1474,11 @@ class LineInKnob(context: Context) : View(context) {
     var value = 1f
         private set
     var onValueChange: ((Float) -> Unit)? = null
+
+    fun setVal(v: Float) {
+        value = v.coerceIn(0f, 2f)
+        invalidate()
+    }
 
     private var dragY = 0f
     private var dragV = 0f
