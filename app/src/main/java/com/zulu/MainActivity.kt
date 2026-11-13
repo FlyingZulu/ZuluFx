@@ -465,9 +465,8 @@ class MainActivity : Activity() {
 
         leftColumn.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             val side = padPane.height
-            val padWidth = (side * 1.1f).toInt()
-            if (side > 0 && padPane.width != padWidth) {
-                padParams.width = padWidth
+            if (side > 0 && padPane.width != side) {
+                padParams.width = side
                 leftColumn.requestLayout()
             }
         }
