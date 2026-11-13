@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -83,18 +84,59 @@ class ZuluPad(context: Context) : View(context) {
         paint.style = Paint.Style.FILL
     }
 
-    var onPresetTouch: ((Int) -> Unit)? = null
-    var onPresetLongTouch: ((Int) -> Unit)? = null
-    var onArpTouch: (() -> Unit)? = null
-
     var onAxisChange: ((Float, Float, Float, Float) -> Unit)? = null
     var onPadTouchState: ((Boolean) -> Unit)? = null
 
-    private val presetSlots = 9
-    private var stripLongRunnable: Runnable? = null
-    private var stripLongCell = -1
+    private var mandalaPh = 0f
+    private var mandalaLvl = 0f
+    private var mandalaAggr = 0f
+    private val mandalaPath = Path()
 
-    private fun presetStripHeight(): Float = 20f * d
+    fun setAudio(lvl: Float, aggr: Float) {
+        mandalaLvl += 0.10f * (lvl.coerceIn(0f, 1f) - mandalaLvl)
+        mandalaAggr += 0.06f * (aggr.coerceIn(0f, 1f) - mandalaAggr)
+        mandalaPh += 0.0012f + mandalaLvl * 0.003f
+        if (mandalaPh >= 1f) mandalaPh -= 1f
+        if (mandalaLvl > 0.004f || mandalaAggr > 0.004f) postInvalidateOnAnimation()
+    }
+
+    private fun drawMandala(c: Canvas, w: Float, h: Float) {
+        val cx = w / 2f
+        val cy = h / 2f
+        val baseR = minOf(w, h) * 0.46f
+        val amp = 0.05f + mandalaLvl * 0.22f
+        val ag = mandalaAggr.coerceIn(0f, 1f)
+        val col = Color.rgb(
+            (0 + (255 - 0) * ag).toInt(),
+            (229 - (229 - 96) * ag).toInt(),
+            (255 - (255 - 46) * ag).toInt()
+        )
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1f * d
+        paint.color = col
+        val petals = 12
+        for (layer in 0 until 3) {
+            val dir = if (layer % 2 == 0) 1f else -1f
+            val rot = mandalaPh * dir * 6.28318f + layer * 0.41f
+            val rr = baseR * (0.40f + layer * 0.21f) * (1f + mandalaLvl * 0.10f * (layer + 1))
+            paint.alpha = (12 + layer * 4 + (mandalaLvl * 30f).toInt()).coerceIn(0, 62)
+            mandalaPath.reset()
+            val segs = petals * 10
+            for (i in 0..segs) {
+                val t = i / segs.toFloat()
+                val a = rot + t * 6.28318f
+                val wob = Math.sin((t * petals + layer * 1.7f + mandalaPh * 5f * dir) * 6.28318).toFloat()
+                val rad = rr * (1f + amp * wob)
+                val x = cx + rad * Math.cos(a.toDouble()).toFloat()
+                val y = cy + rad * Math.sin(a.toDouble()).toFloat()
+                if (i == 0) mandalaPath.moveTo(x, y) else mandalaPath.lineTo(x, y)
+            }
+            mandalaPath.close()
+            c.drawPath(mandalaPath, paint)
+        }
+        paint.alpha = 255
+        paint.style = Paint.Style.FILL
+    }
 
     var bendActive = false
         set(value) {
@@ -149,6 +191,8 @@ class ZuluPad(context: Context) : View(context) {
         paint.color = Color.rgb(20, 22, 28)
         canvas.drawRect(0f, 0f, w, h, paint)
 
+        drawMandala(canvas, w, h)
+
         val wf = waveform
         if (wf != null && wf.size > 1) {
             paint.style = Paint.Style.STROKE
@@ -175,39 +219,6 @@ class ZuluPad(context: Context) : View(context) {
         for (i in 1..3) {
             canvas.drawLine(w * i / 4f, 0f, w * i / 4f, h, paint)
             canvas.drawLine(0f, h * i / 4f, w, h * i / 4f, paint)
-        }
-
-        val strip = presetStripHeight()
-        paint.style = Paint.Style.FILL
-        paint.color = Color.argb(200, 24, 26, 32)
-        canvas.drawRect(0f, 0f, w, strip, paint)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1f * d
-        paint.color = Color.rgb(60, 66, 80)
-        canvas.drawLine(0f, strip, w, strip, paint)
-        val cells = presetSlots + 1
-        val cellW = w / cells
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = marker
-        paint.textSize = 10f * d
-        for (i in 0 until cells) {
-            val cx = cellW * (i + 0.5f)
-            if (i > 0) canvas.drawLine(cellW * i, 2f * d, cellW * i, strip - 2f * d, paint)
-            paint.style = Paint.Style.FILL
-            val lit = (i < presetSlots && i == activePreset) || (i == presetSlots && arpOn)
-            paint.color = if (lit) amber else Color.rgb(120, 128, 144)
-            canvas.drawText(if (i == presetSlots) "ARP" else (i + 1).toString(), cx, strip - 6f * d, paint)
-            if (i < presetSlots && userPresets[i]) {
-                paint.style = Paint.Style.FILL
-                paint.color = Color.rgb(236, 224, 196)
-                canvas.drawCircle(cx, strip - 2.5f * d, 1.5f * d, paint)
-            }
-            if (lit) {
-                paint.color = amber
-                paint.alpha = 40
-                canvas.drawRect(cellW * i + 1f, 1f, cellW * (i + 1) - 1f, strip - 1f, paint)
-                paint.alpha = 255
-            }
         }
 
         paint.strokeWidth = 1f * d
@@ -333,23 +344,6 @@ class ZuluPad(context: Context) : View(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val id = event.getPointerId(event.actionIndex)
-                if (event.getY(event.actionIndex) < presetStripHeight()) {
-                    val cells = presetSlots + 1
-                    val cell = (event.getX(event.actionIndex) / width * cells)
-                        .toInt().coerceIn(0, cells - 1)
-                    if (cell == presetSlots) {
-                        onArpTouch?.invoke()
-                    } else {
-                        activePreset = cell
-                        onPresetTouch?.invoke(activePreset)
-                        stripLongCell = cell
-                        stripLongRunnable = Runnable {
-                            if (cell == stripLongCell) onPresetLongTouch?.invoke(cell)
-                        }.also { postDelayed(it, 600) }
-                    }
-                    invalidate()
-                    return true
-                }
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                     billardTicks = 0
                     val now = System.currentTimeMillis()
@@ -440,8 +434,6 @@ class ZuluPad(context: Context) : View(context) {
                     }
                 }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(false)
-                stripLongRunnable?.let { removeCallbacks(it) }
-                stripLongRunnable = null
             }
             MotionEvent.ACTION_CANCEL -> {
                 fingerA = -1
@@ -455,8 +447,6 @@ class ZuluPad(context: Context) : View(context) {
                     targetBy = restBy
                 }
                 onBendTouch?.invoke(false)
-                stripLongRunnable?.let { removeCallbacks(it) }
-                stripLongRunnable = null
             }
         }
 

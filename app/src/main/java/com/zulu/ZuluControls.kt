@@ -1014,3 +1014,129 @@ class PunchPadView(context: Context) : View(context) {
         }
     }
 }
+
+class ParamPageView(context: Context) : View(context) {
+    private val marker = markerFont(context)
+    var onParam: ((Int, Float) -> Unit)? = null
+    var onAssignCycle: ((Int) -> Unit)? = null
+    var onExit: (() -> Unit)? = null
+    var shiftCheck: (() -> Boolean)? = null
+
+    private var labels: List<String> = emptyList()
+    private var values = FloatArray(0)
+    private var assigns = IntArray(0)
+    private var dragSlot = -1
+
+    private val pBg = Paint().apply { color = Color.rgb(14, 15, 20) }
+    private val pScrew = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(60, 64, 76) }
+    private val pSlot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(40, 44, 54) }
+    private val pHandle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = amber }
+    private val pDot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(40, 44, 54) }
+    private val pLabel = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = silk
+        typeface = marker
+        textAlign = Paint.Align.CENTER
+    }
+    private val pLegendTxt = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = silk
+        typeface = marker
+    }
+    private val ledCols = intArrayOf(
+        Color.rgb(0, 229, 255),
+        Color.rgb(140, 255, 150),
+        Color.rgb(255, 125, 205),
+        amber
+    )
+
+    fun setContent(l: List<String>, v: FloatArray, a: IntArray) {
+        labels = l
+        values = v
+        assigns = a
+        invalidate()
+    }
+
+    fun refresh() {
+        invalidate()
+    }
+
+    private fun setFromY(slot: Int, y: Float) {
+        val top = height * 0.24f
+        val bot = height * 0.78f
+        val v = 1f - ((y - top) / (bot - top))
+        values[slot] = v.coerceIn(0f, 1f)
+        onParam?.invoke(slot, values[slot])
+        invalidate()
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        val n = labels.size.coerceAtLeast(1)
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (shiftCheck?.invoke() == true) {
+                    if (e.y < height * 0.06f || e.y > height * 0.9f) {
+                        onExit?.invoke()
+                    } else {
+                        val slot = (e.x * n / width).toInt().coerceIn(0, n - 1)
+                        onAssignCycle?.invoke(slot)
+                    }
+                    return true
+                }
+                if (e.y < height * 0.18f) {
+                    val slot = (e.x * n / width).toInt().coerceIn(0, n - 1)
+                    onAssignCycle?.invoke(slot)
+                    return true
+                }
+                dragSlot = (e.x * n / width).toInt().coerceIn(0, n - 1)
+                setFromY(dragSlot, e.y)
+            }
+            MotionEvent.ACTION_MOVE -> if (dragSlot >= 0) setFromY(dragSlot, e.y)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragSlot = -1
+        }
+        return true
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val d = context.resources.displayMetrics.density
+        c.drawRect(0f, 0f, w, h, pBg)
+        drawScrews(c, pScrew, 0f, 0f, w, h, d)
+        val n = labels.size
+        if (n == 0) return
+        pLegendTxt.textSize = 9f * d
+        val names = listOf("XY", "LFO", "ARP", "SNAP")
+        var lx = 12f * d
+        val ly = 9f * d
+        for (j in 0 until 4) {
+            pDot.color = ledCols[j]
+            c.drawCircle(lx + 3.5f * d, ly, 3f * d, pDot)
+            pLegendTxt.color = silk
+            c.drawText(names[j], lx + 9f * d, ly + 3.2f * d, pLegendTxt)
+            lx += 9f * d + pLegendTxt.measureText(names[j]) + 7f * d
+        }
+        val top = h * 0.24f
+        val bot = h * 0.78f
+        val cw = w / n
+        val sw = maxOf(cw * 0.28f, 8f * d)
+        val ledR = minOf(cw * 0.1f, 3.5f * d)
+        val ledStep = cw * 0.24f
+        for (i in 0 until n) {
+            val cx = cw * i + cw / 2f
+            for (j in 0 until 4) {
+                val lit = when (j) {
+                    0 -> assigns[i] == 1
+                    1 -> assigns[i] == 2 || assigns[i] == 3
+                    2 -> assigns[i] == 4
+                    else -> assigns[i] == 5
+                }
+                pDot.color = if (lit) ledCols[j] else Color.rgb(40, 44, 54)
+                c.drawCircle(cx + (j - 1.5f) * ledStep, h * 0.15f, ledR, pDot)
+            }
+            c.drawRect(cx - sw / 2f, top, cx + sw / 2f, bot, pSlot)
+            val hy = bot - values[i] * (bot - top)
+            c.drawRect(cx - sw / 2f - 4f * d, hy - 5f * d, cx + sw / 2f + 4f * d, hy + 5f * d, pHandle)
+            pLabel.textSize = minOf(cw * 0.3f, 13f * d)
+            c.drawText(labels[i], cx, h * 0.86f, pLabel)
+        }
+    }
+}

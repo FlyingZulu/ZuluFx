@@ -94,7 +94,16 @@ public:
     }
     void setFx(int fx, bool on);
     void setParam(int p, float v, bool on);
+    void setFxParam(int fx, int k, float v);
+    void setBankFxSend(int bank, bool on);
+    void undoBankRec();
+    void cancelRec();
     void setRecFlavor(int f) { recFlavor.store(f); }
+
+    AudioEngine() {
+        for (int i = 0; i < kNumBanks; i++) bankFxSend[i] = true;
+        for (int s = 0; s < kMaxSteps; s++) { undoStepPitch[s] = 0.f; undoStepVel[s] = 1.f; }
+    }
     void setCustomLfo(int idx, const float* table, bool on, int rateIdx, float depth,
                       float amount, int target, int wave) {
         if (idx < 0 || idx > 1) return;
@@ -248,6 +257,10 @@ private:
     bool prevFreeze = false;
     float compEnv = 0.f;
     static constexpr int kNumFx = 33;
+    std::atomic<float> fxParam[kNumFx][8] = {};
+    float fxMod[kNumFx][8] = {};
+    float fxAxisVal[kNumFx][8] = {};
+    unsigned char fxAxisMask[kNumFx] = {};
     static constexpr int kTurnMax = 24000;
     float turnBuf[kTurnMax * 2] = {0.f};
     int turnWrite = 0;
@@ -350,6 +363,7 @@ private:
     std::atomic<int> clfoWave[2] = {};
     float clfoPhase[2] = {0.f, 0.f};
     float clfoVal(int idx);
+    float fxP(int fx, int k);
     float muteGain = 1.0f;
     int coeffClock = 0;
 
@@ -375,6 +389,15 @@ private:
     };
     static constexpr int kTotalFrameBudget = 6553600;
     LoopBank banks[kNumBanks];
+    bool bankFxSend[kNumBanks] = {};
+    int undoBank = -1;
+    float* undoBuf = nullptr;
+    int undoSamples = 0;
+    int undoDecim = 1;
+    int undoSteps = 0;
+    int undoRecN = 0;
+    float undoStepPitch[kMaxSteps] = {};
+    float undoStepVel[kMaxSteps] = {};
     int totalFrames = 0;
     int recBank = -1;
     bool recWet = false;

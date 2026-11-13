@@ -111,6 +111,22 @@ Java_com_zulu_AudioEngine_nativeSetParam(JNIEnv*, jobject, jint p, jfloat v, jbo
 }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetFxParam(JNIEnv*, jobject, jint fx, jint k, jfloat v) {
+    if (g) g->setFxParam(fx, k, v);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetBankFxSend(JNIEnv*, jobject, jint b, jboolean on) {
+    if (g) g->setBankFxSend(b, on == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeUndo(JNIEnv*, jobject) { if (g) g->undoBankRec(); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeCancelRec(JNIEnv*, jobject) { if (g) g->cancelRec(); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeRecordBank(JNIEnv*, jobject, jint bank, jint steps, jboolean wet) { if (g) g->recordBank(bank, steps, wet); }
 
 JNIEXPORT void JNICALL

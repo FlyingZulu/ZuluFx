@@ -26,6 +26,10 @@ class AudioEngine {
     external fun nativeSetFx(fx: Int, on: Boolean)
     external fun nativeSetRecFlavor(f: Int)
     external fun nativeSetParam(p: Int, v: Float, on: Boolean)
+    external fun nativeSetFxParam(fx: Int, k: Int, v: Float)
+    external fun nativeSetBankFxSend(bank: Int, on: Boolean)
+    external fun nativeUndo()
+    external fun nativeCancelRec()
     external fun nativeBankFrames(bank: Int): Int
     external fun nativeCopyBank(bank: Int, dst: FloatArray): Int
     external fun nativeLoadBank(bank: Int, src: FloatArray, frames: Int)

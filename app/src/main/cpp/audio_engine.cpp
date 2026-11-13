@@ -434,6 +434,22 @@ void AudioEngine::setParam(int p, float v, bool on) {
     paramManualMask.store(m);
 }
 
+void AudioEngine::setFxParam(int fx, int k, float v) {
+    if (fx < 0 || fx >= kNumFx || k < 0 || k > 7) return;
+    if (v < 0.f) v = 0.f;
+    if (v > 1.f) v = 1.f;
+    fxParam[fx][k].store(v);
+}
+
+float AudioEngine::fxP(int fx, int k) {
+    float v;
+    if (fxAxisMask[fx] & (unsigned char)(1u << k)) v = fxAxisVal[fx][k];
+    else v = fxParam[fx][k].load(std::memory_order_relaxed) + fxMod[fx][k];
+    if (v < 0.f) v = 0.f;
+    if (v > 1.f) v = 1.f;
+    return v;
+}
+
 float AudioEngine::clfoVal(int idx) {
     float ph = clfoPhase[idx];
     if (ph < 0.f) ph = 0.f;
@@ -466,6 +482,22 @@ void AudioEngine::recordBank(int bank, int steps, bool wet) {
     int n = (int)(dur * fs / (float)D);
     if (n < 2400) n = 2400;
     LoopBank& lb = banks[bank];
+    if (lb.samples > 0 && lb.buf) {
+        delete[] undoBuf;
+        undoBuf = new float[(size_t)lb.samples * 2];
+        memcpy(undoBuf, lb.buf, (size_t)lb.samples * 2 * sizeof(float));
+        undoSamples = lb.samples;
+        undoDecim = lb.decim;
+        undoSteps = lb.steps;
+        undoRecN = n;
+        for (int s = 0; s < kMaxSteps; s++) {
+            undoStepPitch[s] = lb.stepPitch[s];
+            undoStepVel[s] = lb.stepVel[s];
+        }
+        undoBank = bank;
+    } else {
+        undoBank = -1;
+    }
     if (!lb.buf || lb.cap < n) {
         int extra = n - (lb.samples > 0 ? lb.samples : 0);
         if (totalFrames + extra > kTotalFrameBudget) return;
@@ -487,6 +519,57 @@ void AudioEngine::recordBank(int bank, int steps, bool wet) {
     recDiv = 0;
     recWarmLp = 0.f;
     recFizzLp = 0.f;
+}
+
+void AudioEngine::cancelRec() {
+    if (recBank < 0) return;
+    LoopBank& lb = banks[recBank];
+    lb.playing = false;
+    lb.samples = 0;
+    lb.pos = 0;
+    recBank = -1;
+}
+
+void AudioEngine::undoBankRec() {
+    if (undoBank < 0 || !undoBuf) return;
+    if (recBank == undoBank) {
+        banks[recBank].playing = false;
+        recBank = -1;
+    }
+    LoopBank& lb = banks[undoBank];
+    int n = undoSamples;
+    if (n <= 0) {
+        undoBank = -1;
+        delete[] undoBuf;
+        undoBuf = nullptr;
+        return;
+    }
+    if (!lb.buf || lb.cap < n) {
+        delete[] lb.buf;
+        lb.cap = n;
+        lb.buf = new float[(size_t)n * 2];
+    }
+    memcpy(lb.buf, undoBuf, (size_t)n * 2 * sizeof(float));
+    if (n > lb.samples) totalFrames += n - lb.samples;
+    else if (undoRecN > n && lb.samples >= undoRecN) totalFrames -= undoRecN - n;
+    lb.samples = n;
+    lb.pos = 0;
+    lb.playing = true;
+    lb.decim = undoDecim > 0 ? undoDecim : 1;
+    lb.steps = undoSteps;
+    for (int s = 0; s < kMaxSteps; s++) {
+        lb.stepPitch[s] = undoStepPitch[s];
+        lb.stepVel[s] = undoStepVel[s];
+    }
+    lb.acc = 0.f;
+    undoBank = -1;
+    delete[] undoBuf;
+    undoBuf = nullptr;
+}
+
+void AudioEngine::setBankFxSend(int bank, bool on) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    bankFxSend[bank] = on;
 }
 
 void AudioEngine::startResample(int bank, int steps) {
@@ -656,6 +739,20 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             int ayn = assignY.load();
             if (axn >= 0 && axn < 8) baseNorm[axn] = clamp01(ax.load());
             if (ayn >= 0 && ayn < 8) baseNorm[ayn] = clamp01(ay.load());
+            for (int f2 = 0; f2 < kNumFx; f2++) {
+                fxAxisMask[f2] = 0;
+                for (int k2 = 0; k2 < 8; k2++) fxMod[f2][k2] = 0.f;
+            }
+            if (axn >= 8) {
+                int i2 = axn - 8;
+                fxAxisMask[i2 / 8] |= (unsigned char)(1u << (i2 % 8));
+                fxAxisVal[i2 / 8][i2 % 8] = clamp01(ax.load());
+            }
+            if (ayn >= 8) {
+                int i2 = ayn - 8;
+                fxAxisMask[i2 / 8] |= (unsigned char)(1u << (i2 % 8));
+                fxAxisVal[i2 / 8][i2 % 8] = clamp01(ay.load());
+            }
             static const float clfoRates[6] = {0.25f, 0.5f, 1.f, 2.f, 4.f, 8.f};
             for (int L = 0; L < 2; L++) {
                 if (!clfoOn[L].load(std::memory_order_relaxed)) continue;
@@ -665,9 +762,14 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 clfoPhase[L] += clfoRates[ri] * 32.f / fs;
                 if (clfoPhase[L] >= 1.f) clfoPhase[L] -= 1.f;
                 int tg = clfoTarget[L].load(std::memory_order_relaxed);
-                if (tg < 0 || tg > 7) continue;
                 float dep = clfoDepth[L].load(std::memory_order_relaxed);
                 float amt = clfoAmount[L].load(std::memory_order_relaxed);
+                if (tg >= 8) {
+                    int i2 = tg - 8;
+                    fxMod[i2 / 8][i2 % 8] += dep * amt * clfoVal(L);
+                    continue;
+                }
+                if (tg < 0) continue;
                 applyAssign(tg, clamp01(baseNorm[tg] + dep * amt * clfoVal(L)),
                             fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
             }
@@ -815,6 +917,7 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         }
 
         float loopL = 0.f, loopR = 0.f;
+        float dryL = 0.f, dryR = 0.f;
         int req = loopSliceReq.exchange(-1);
         int sm = soloMask.load();
         bool xyT = arpOn.load() && arpMode.load() == 4 && arpXyTouch.load();
@@ -855,8 +958,13 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
             float vel = si >= 0 ? lb.stepVel[si] : 1.f;
             float prate = 1.f;
             if (si >= 0 && lb.stepPitch[si] != 0.f) prate = powf(2.f, lb.stepPitch[si] / 12.f);
-            loopL += lb.buf[2 * lb.pos] * vel;
-            loopR += lb.buf[2 * lb.pos + 1] * vel;
+            if (bankFxSend[k]) {
+                loopL += lb.buf[2 * lb.pos] * vel;
+                loopR += lb.buf[2 * lb.pos + 1] * vel;
+            } else {
+                dryL += lb.buf[2 * lb.pos] * vel;
+                dryR += lb.buf[2 * lb.pos + 1] * vel;
+            }
             float dec = lb.decim > 0 ? (float)lb.decim : 1.f;
             if (xyT) {
                 xyAcc += rate / dec;
@@ -1514,36 +1622,45 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         {
             float w = fxWet[27].load();
             if (w > 0.001f) {
+                float p0 = fxP(27, 0), p1 = fxP(27, 1), p2 = fxP(27, 2), p3 = fxP(27, 3);
                 float b = fmaxf(bpm.load(), 40.f);
-                int d = (int)(1.5f * (60.f / b) * fs);
+                float mult = 0.25f + p0 * 2.75f;
+                int d = (int)(mult * (60.f / b) * fs);
                 if (d < 64) d = 64;
                 if (d > kDubMax - 2) d = kDubMax - 2;
                 int i0 = (dubPos - d + kDubMax) % kDubMax;
                 float dl = dubBuf[2 * i0];
                 float dr = dubBuf[2 * i0 + 1];
-                dubLpL += 0.15f * (dl - dubLpL);
-                dubLpR += 0.15f * (dr - dubLpR);
-                dubBuf[2 * dubPos] = outL + tanhf(dubLpL * 1.3f) * 0.82f;
-                dubBuf[2 * dubPos + 1] = outR + tanhf(dubLpR * 1.3f) * 0.82f;
+                float lpk = 0.05f + p2 * 0.45f;
+                float fb = 0.3f + p1 * 0.65f;
+                float drv = 1.f + p3 * 1.5f;
+                dubLpL += lpk * (dl - dubLpL);
+                dubLpR += lpk * (dr - dubLpR);
+                dubBuf[2 * dubPos] = outL + tanhf(dubLpL * drv) * fb;
+                dubBuf[2 * dubPos + 1] = outR + tanhf(dubLpR * drv) * fb;
                 dubPos = (dubPos + 1) % kDubMax;
-                outL = outL * (1.f - w) + tanhf(dubLpL * 1.4f) * w;
-                outR = outR * (1.f - w) + tanhf(dubLpR * 1.4f) * w;
+                outL = outL * (1.f - w) + tanhf(dubLpL * (drv + 0.1f)) * w;
+                outR = outR * (1.f - w) + tanhf(dubLpR * (drv + 0.1f)) * w;
             }
         }
         {
             float w = fxWet[28].load();
             if (w > 0.001f) {
-                megaLp1L += 0.04f * (outL - megaLp1L);
-                megaLp1R += 0.04f * (outR - megaLp1R);
+                float k1 = 0.01f + fxP(28, 0) * 0.08f;
+                float k2 = 0.15f + fxP(28, 1) * 0.45f;
+                float drv = 2.f + fxP(28, 2) * 6.f;
+                float humA = fxP(28, 3) * 0.06f;
+                megaLp1L += k1 * (outL - megaLp1L);
+                megaLp1R += k1 * (outR - megaLp1R);
                 float hpl = outL - megaLp1L;
                 float hpr = outR - megaLp1R;
-                megaLp2L += 0.35f * (hpl - megaLp2L);
-                megaLp2R += 0.35f * (hpr - megaLp2R);
+                megaLp2L += k2 * (hpl - megaLp2L);
+                megaLp2R += k2 * (hpr - megaLp2R);
                 megaPh += 120.f * fsr;
                 if (megaPh >= 1.f) megaPh -= 1.f;
-                float hum = 0.02f * sinf(2.f * 3.14159265f * megaPh);
-                float yl = tanhf((megaLp2L + hum) * 4.5f) * 0.8f;
-                float yr = tanhf((megaLp2R + hum) * 4.5f) * 0.8f;
+                float hum = humA * sinf(2.f * 3.14159265f * megaPh);
+                float yl = tanhf((megaLp2L + hum) * drv) * 0.8f;
+                float yr = tanhf((megaLp2R + hum) * drv) * 0.8f;
                 outL = outL * (1.f - w) + yl * w;
                 outR = outR * (1.f - w) + yr * w;
             }
@@ -1556,7 +1673,7 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 tapePos = (tapePos + 1) % kTapeMax;
                 tapePhase += 0.4f * fsr;
                 if (tapePhase >= 1.f) tapePhase -= 1.f;
-                float lag = 900.f + 90.f * sinf(2.f * 3.14159265f * tapePhase);
+                float lag = 900.f + (20.f + fxP(29, 0) * 140.f) * sinf(2.f * 3.14159265f * tapePhase);
                 float rp = (float)tapePos - lag;
                 while (rp < 0.f) rp += (float)kTapeMax;
                 int i0 = (int)rp;
@@ -1573,14 +1690,15 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                     if (tapeDropClock > 33600) {
                         tapeDropClock = 0;
                         noiseState = noiseState * 1103515245u + 12345u;
-                        if (((noiseState >> 16) % 100u) < 45u)
+                        if (((noiseState >> 16) % 100u) < (unsigned)(fxP(29, 1) * 80.f))
                             tapeDropLen = 2400 + (int)((noiseState >> 20) % 4800u);
                     }
                 }
-                float yl = tanhf(dl * tapeGain * 1.15f);
-                float yr = tanhf(dr * tapeGain * 1.15f);
+                float sat = 1.f + fxP(29, 2);
+                float yl = tanhf(dl * tapeGain * sat);
+                float yr = tanhf(dr * tapeGain * sat);
                 noiseState = noiseState * 1103515245u + 12345u;
-                float nz = ((float)((noiseState >> 16) % 65536u) / 32768.f - 1.f) * 0.004f;
+                float nz = ((float)((noiseState >> 16) % 65536u) / 32768.f - 1.f) * (fxP(29, 3) * 0.012f);
                 outL = outL * (1.f - w) + (yl + nz) * w;
                 outR = outR * (1.f - w) + (yr + nz) * w;
             }
@@ -1603,9 +1721,12 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 if (warpClock == 0) {
                     noiseState = noiseState * 1103515245u + 12345u;
                     int r = (int)((noiseState >> 16) % 7u) - 3;
-                    warpTarget = powf(2.f, (float)r * 0.25f);
+                    warpTarget = powf(2.f, (float)r / 12.f * (fxP(30, 0) * 6.f));
                 }
-                warpRate += 0.002f * (warpTarget - warpRate);
+                int div = 1 + (int)(fxP(30, 1) * 7.f);
+                int per = (int)((60.f / b) * fs / (float)div);
+                if (per < 64) per = 64;
+                warpRate += (0.0005f + fxP(30, 2) * 0.0095f) * (warpTarget - warpRate);
                 warpRead += warpRate;
                 while (warpRead >= (float)kWarpMax) warpRead -= (float)kWarpMax;
                 while (warpRead < 0.f) warpRead += (float)kWarpMax;
@@ -1614,8 +1735,9 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 int i1 = (i0 + 1) % kWarpMax;
                 float dl = warpBuf[2 * i0] * (1.f - fr) + warpBuf[2 * i1] * fr;
                 float dr = warpBuf[2 * i0 + 1] * (1.f - fr) + warpBuf[2 * i1 + 1] * fr;
-                outL = outL * (1.f - w) + dl * w * 0.8f;
-                outR = outR * (1.f - w) + dr * w * 0.8f;
+                float gl = 0.3f + fxP(30, 3) * 0.7f;
+                outL = outL * (1.f - w) + dl * w * gl;
+                outR = outR * (1.f - w) + dr * w * gl;
             }
             prevWarp = w > 0.001f;
         }
@@ -1627,10 +1749,13 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 float b = fmaxf(bpm.load(), 40.f);
                 int per = (int)((60.f / b) * fs);
                 if (per < 64) per = 64;
+                int div = 1 + (int)(fxP(31, 0) * 7.f);
+                int step2 = per / div;
+                if (step2 < 64) step2 = 64;
                 tkClock = (tkClock + 1) % (per * 4);
-                if (tkClock % per == 0) tkVowel = (tkVowel + 1) % 5;
-                tkF1 += 0.0015f * (vwF1[tkVowel] - tkF1);
-                tkF2 += 0.0015f * (vwF2[tkVowel] - tkF2);
+                if (tkClock % step2 == 0) tkVowel = (tkVowel + 1) % 5;
+                tkF1 += 0.0015f * (vwF1[tkVowel] * (0.7f + fxP(31, 1) * 0.6f) - tkF1);
+                tkF2 += 0.0015f * (vwF2[tkVowel] * (0.6f + fxP(31, 2) * 1.f) - tkF2);
                 float k1 = 1.f - expf(-2.f * 3.14159265f * tkF1 * fsr);
                 float k2 = 1.f - expf(-2.f * 3.14159265f * tkF2 * fsr);
                 tkLp1L += k1 * (outL - tkLp1L);
@@ -1645,8 +1770,9 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 tkLp3R += k2 * (outR - tkLp3R);
                 tkLp4R += k2 * (tkLp3R - tkLp4R);
                 float b2r = tkLp3R - tkLp4R;
-                float yl = tanhf((b1l * 3.5f + b2l * 2.5f) * 1.2f);
-                float yr = tanhf((b1r * 3.5f + b2r * 2.5f) * 1.2f);
+                float rg = 1.5f + fxP(31, 3) * 4.f;
+                float yl = tanhf((b1l * rg + b2l * rg * 0.7f) * 1.2f);
+                float yr = tanhf((b1r * rg + b2r * rg * 0.7f) * 1.2f);
                 outL = outL * (1.f - w) + yl * w;
                 outR = outR * (1.f - w) + yr * w;
             }
@@ -1654,7 +1780,7 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         {
             float w = fxWet[32].load();
             if (w > 0.001f) {
-                float f0 = 55.f * powf(2.f, (float)rootNote.load() / 12.f) * 2.f;
+                float f0 = 55.f * powf(2.f, (float)rootNote.load() / 12.f) * 2.f * (0.5f + fxP(32, 0) * 1.5f);
                 int len = (int)(fs / f0);
                 if (len < 8) len = 8;
                 if (len > kRinMax) len = kRinMax;
@@ -1666,7 +1792,7 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 float a = fabsf(s);
                 rinEnv += 0.002f * (a - rinEnv);
                 if (rinDebounce > 0) rinDebounce--;
-                if (a > rinEnv * 2.5f + 0.04f && rinDebounce == 0) {
+                if (a > rinEnv * 2.5f + 0.06f * (1.f - fxP(32, 2)) && rinDebounce == 0) {
                     rinDebounce = 2400;
                     for (int i = 0; i < rinLen; i++) {
                         noiseState = noiseState * 1103515245u + 12345u;
@@ -1675,13 +1801,17 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                     rinPos = 0;
                 }
                 float y = rinBuf[rinPos];
-                rinPrev = 0.996f * 0.5f * (y + rinPrev);
+                rinPrev = (0.985f + fxP(32, 1) * 0.0145f) * 0.5f * (y + rinPrev);
                 rinBuf[rinPos] = rinPrev;
                 rinPos = (rinPos + 1) % rinLen;
-                outL = outL * (1.f - w) + y * w * 0.9f;
-                outR = outR * (1.f - w) + y * w * 0.9f;
+                float gl = 0.4f + fxP(32, 3) * 0.8f;
+                outL = outL * (1.f - w) + y * w * gl;
+                outR = outR * (1.f - w) + y * w * gl;
             }
         }
+
+        outL += dryL * kLoopGain;
+        outR += dryR * kLoopGain;
 
         if (outL > 0.95f) outL = 0.95f + (outL - 0.95f) / (1.f + (outL - 0.95f) * (outL - 0.95f) * 40.f);
         else if (outL < -0.95f) outL = -0.95f + (outL + 0.95f) / (1.f + (outL + 0.95f) * (outL + 0.95f) * 40.f);

@@ -39,13 +39,19 @@ class MainActivity : Activity() {
 
     private val engine = AudioEngine()
     private val levels = FloatArray(2)
+    private var vuSlow = 0f
     private val vuHandler = Handler(Looper.getMainLooper())
     private val recEndHandler = Handler(Looper.getMainLooper())
     private val vuRunnable = object : Runnable {
         override fun run() {
             engine.nativeGetLevels(levels)
-            vuMeter.levelL = Math.sqrt(levels[0].toDouble()).toFloat()
-            vuMeter.levelR = Math.sqrt(levels[1].toDouble()).toFloat()
+            val lL = Math.sqrt(levels[0].toDouble()).toFloat()
+            val lR = Math.sqrt(levels[1].toDouble()).toFloat()
+            vuMeter.levelL = lL
+            vuMeter.levelR = lR
+            val lvl = maxOf(lL, lR)
+            vuSlow += 0.06f * (lvl - vuSlow)
+            pad.setAudio(lvl, (lvl - vuSlow).coerceAtLeast(0f) * 3f)
             vuHandler.postDelayed(this, 50)
         }
     }
@@ -66,6 +72,7 @@ class MainActivity : Activity() {
     private lateinit var btnRec: Button
     private lateinit var btnZu: Button
     private lateinit var btnLu: Button
+    private lateinit var btnUndo: Button
     private lateinit var fxOverlay: FrameLayout
     private lateinit var scaleOverlay: FrameLayout
     private lateinit var projOverlay: FrameLayout
@@ -139,6 +146,35 @@ class MainActivity : Activity() {
     private var punchMode = false
     private var punchView: PunchPadView? = null
     private var punchCol = 0
+    private var paramView: ParamPageView? = null
+    private var paramFx = -1
+    private val fxParamInit = BooleanArray(33)
+    private val fxParamVals = Array(33) { FloatArray(8) }
+    private val fxParamAssign = Array(33) { IntArray(8) }
+    private val fxParamDefs = mapOf(
+        27 to listOf("TEMPS", "FB", "TONAL", "SAT"),
+        28 to listOf("GRAVE", "AIGU", "DRIVE", "HUM"),
+        29 to listOf("WOW", "DROP", "SAT", "SOUFFLE"),
+        30 to listOf("PLAGE", "VITESSE", "LISSAGE", "NIVEAU"),
+        31 to listOf("VITESSE", "GRAVE", "AIGU", "RESO"),
+        32 to listOf("ACCORD", "AMORTI", "EXCIT", "NIVEAU")
+    )
+    private val fxParamDefaults = mapOf(
+        27 to floatArrayOf(0.45f, 0.8f, 0.22f, 0.2f),
+        28 to floatArrayOf(0.38f, 0.44f, 0.42f, 0.33f),
+        29 to floatArrayOf(0.5f, 0.56f, 0.15f, 0.33f),
+        30 to floatArrayOf(0.5f, 0.14f, 0.16f, 0.71f),
+        31 to floatArrayOf(0f, 0.5f, 0.4f, 0.5f),
+        32 to floatArrayOf(0.33f, 0.76f, 0.33f, 0.63f)
+    )
+    private var sendPadBank = -1
+    private var sendPadAt = 0L
+    private var sendComboStart = true
+    private val presetBtns = ArrayList<Button>()
+    private var arpBtn: Button? = null
+    private val bankFxSend = BooleanArray(8) { true }
+    private var fHeld = false
+    private var zHeld = false
     private val menuProjButtons = ArrayList<Button>()
     private var morphCurve = 0
     private var fingerModeOpt = 0
@@ -206,6 +242,7 @@ class MainActivity : Activity() {
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
     private val green = Color.rgb(140, 255, 150)
+    private val cream = Color.rgb(236, 224, 196)
     private val silk = Color.rgb(165, 172, 185)
     private val amber = Color.rgb(255, 176, 0)
     private val turquoise = Color.rgb(0, 229, 255)
@@ -275,31 +312,6 @@ class MainActivity : Activity() {
         pad.onPadTouchState = { t ->
             if (!t) engine.nativeSetArpXy(padAxisX, false)
         }
-        pad.onPresetTouch = { i ->
-            if (fxHeld) {
-                fxConsumed = true
-                saveUserPreset(i)
-            } else {
-                val p = userPresets[i]
-                if (p != null) {
-                    applyUserPreset(p)
-                } else {
-                    activeFilter = i % 4
-                    engine.nativeSetFilterType(activeFilter)
-                }
-            }
-        }
-        pad.onPresetLongTouch = { i -> saveUserPreset(i) }
-        pad.onArpTouch = {
-            if (shiftActive()) {
-                openArpPanel()
-            } else {
-                arpOn = !arpOn
-                pushArp()
-                pad.arpOn = arpOn
-                pad.invalidate()
-            }
-        }
         pad.onBendTouch = { down ->
             val bend = down && shiftLocked
             pad.bendActive = bend
@@ -335,6 +347,11 @@ class MainActivity : Activity() {
         btnRec = makeRoundButton("REC", red, 10f)
         btnZu = makeButton("ZU", turquoise)
         btnLu = makeButton("LU", violet)
+        btnUndo = makeButton("UNDO", silk)
+        btnUndo.setOnClickListener {
+            engine.nativeUndo()
+            Toast.makeText(this, "UNDO REC", Toast.LENGTH_SHORT).show()
+        }
 
         btnZu.setOnTouchListener { _, e ->
             when (e.actionMasked) {
@@ -449,11 +466,18 @@ class MainActivity : Activity() {
         btnF.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    fHeld = true
+                    if (shiftActive() && sendPadBank >= 0 &&
+                        System.currentTimeMillis() - sendPadAt < 900
+                    ) {
+                        applySendCombo(sendPadBank, 1)
+                    }
                     fDownAt = System.currentTimeMillis()
                     if (fxHeld) loopWetA = true
                     refreshBlink()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    fHeld = false
                     loopWetA = false
                     if (!fxHeld) {
                         if (System.currentTimeMillis() - fDownAt >= 400) {
@@ -473,11 +497,18 @@ class MainActivity : Activity() {
         btnZ.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    zHeld = true
+                    if (shiftActive() && sendPadBank >= 0 &&
+                        System.currentTimeMillis() - sendPadAt < 900
+                    ) {
+                        applySendCombo(sendPadBank, 2)
+                    }
                     zDownAt = System.currentTimeMillis()
                     if (fxHeld) loopWetB = true
                     refreshBlink()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    zHeld = false
                     loopWetB = false
                     if (!fxHeld) {
                         if (System.currentTimeMillis() - zDownAt >= 400) {
@@ -513,6 +544,9 @@ class MainActivity : Activity() {
                 shiftActive() -> {
                     fxConsumed = true
                     startLoopRecording(n)
+                    sendPadBank = n - 1
+                    sendComboStart = bankFxSend[sendPadBank]
+                    sendPadAt = System.currentTimeMillis()
                 }
                 padGrid.padCount == 12 && n in 9..12 -> toggleSolo(n - 9)
                 n - 1 < 14 && snapPads[n - 1] != null -> recallSnap(n - 1)
@@ -557,17 +591,28 @@ class MainActivity : Activity() {
         )
         vuWrap.setMargins((6 * d).toInt(), 0, 0, 0)
         row1.addView(vuModule, vuWrap)
+        row1.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        row1.addView(btnUndo, LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt()))
+
+        val shiftRow = LinearLayout(this)
+        shiftRow.orientation = LinearLayout.HORIZONTAL
+        shiftRow.setPadding((2 * d).toInt(), 0, 0, 0)
+        shiftRow.addView(btnShift, LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt()))
+        val shiftRowParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        shiftRowParams.topMargin = (4 * d).toInt()
 
         val zuLuBtns = LinearLayout(this)
         zuLuBtns.orientation = LinearLayout.HORIZONTAL
         val zuParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, (20 * d).toInt()
+            LinearLayout.LayoutParams.WRAP_CONTENT, (28 * d).toInt()
         )
         zuParams.setMargins((2 * d).toInt(), (6 * d).toInt(), 0, 0)
         zuLuBtns.addView(btnZu, zuParams)
         zuLuBtns.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         val luParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, (20 * d).toInt()
+            LinearLayout.LayoutParams.WRAP_CONTENT, (28 * d).toInt()
         )
         luParams.setMargins(0, (6 * d).toInt(), (2 * d).toInt(), 0)
         zuLuBtns.addView(btnLu, luParams)
@@ -578,6 +623,7 @@ class MainActivity : Activity() {
         column.orientation = LinearLayout.VERTICAL
         column.setPadding((6 * d).toInt(), (4 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
         column.addView(row1)
+        column.addView(shiftRow, shiftRowParams)
         gridParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (96 * d).toInt()
         )
@@ -607,15 +653,41 @@ class MainActivity : Activity() {
         content = LinearLayout(this)
         content.orientation = LinearLayout.HORIZONTAL
         content.setBackgroundColor(Color.rgb(18, 20, 25))
-        val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT)
+        val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
 
         padPane = FrameLayout(this)
 
+        val presetRow = LinearLayout(this)
+        presetRow.orientation = LinearLayout.HORIZONTAL
+        for (i in 0 until 9) {
+            val b = makeButton((i + 1).toString(), silk)
+            b.textSize = 9f
+            b.setOnClickListener { presetTap(i) }
+            b.setOnLongClickListener { presetLongTap(i); true }
+            presetBtns.add(b)
+            val bp = LinearLayout.LayoutParams(0, (22 * d).toInt(), 1f)
+            bp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
+            presetRow.addView(b, bp)
+        }
+        val ab = makeButton("ARP", pink)
+        ab.textSize = 9f
+        ab.setOnClickListener { arpTap() }
+        arpBtn = ab
+        val abp = LinearLayout.LayoutParams(0, (22 * d).toInt(), 1f)
+        abp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
+        presetRow.addView(ab, abp)
+
         val leftColumn = LinearLayout(this)
         leftColumn.orientation = LinearLayout.VERTICAL
+        val presetRowParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        presetRowParams.setMargins((4 * d).toInt(), (4 * d).toInt(), (4 * d).toInt(), 0)
+        leftColumn.addView(presetRow, presetRowParams)
         val padPaneParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         )
+        padPaneParams.setMargins(0, (4 * d).toInt(), 0, 0)
         leftColumn.addView(padPane, padPaneParams)
 
         vuMeter.onLongPress = {
@@ -648,7 +720,6 @@ class MainActivity : Activity() {
         val edgeColumn = LinearLayout(this)
         edgeColumn.orientation = LinearLayout.VERTICAL
         edgeColumn.setPadding((3 * d).toInt(), (6 * d).toInt(), (3 * d).toInt(), (6 * d).toInt())
-        edgeColumn.addView(btnShift, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
         edgeColumn.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
         edgeColumn.addView(btnMute, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
         padPane.addView(
@@ -685,6 +756,27 @@ class MainActivity : Activity() {
             )
         )
 
+        val ppage = ParamPageView(this)
+        ppage.visibility = View.GONE
+        ppage.onParam = { k, v ->
+            val fx = paramFx
+            if (fx >= 0) {
+                fxParamVals[fx][k] = v
+                engine.nativeSetFxParam(fx, k, v)
+            }
+        }
+        ppage.onAssignCycle = { k -> cycleParamAssign(k) }
+        ppage.onExit = { closeParamPage() }
+        ppage.shiftCheck = { shiftActive() }
+        paramView = ppage
+        padPane.addView(
+            ppage,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
         content.addView(leftColumn, padParams)
         content.addView(
             edgeColumn,
@@ -695,20 +787,13 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
         )
 
-        leftColumn.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            val side = padPane.height
-            if (side > 0 && padPane.width != side) {
-                padParams.width = side
-                leftColumn.requestLayout()
-            }
-        }
-
         buildFxPanel(d)
         buildScalePanel(d)
         buildArpPanel(d)
         buildProjPanel(d)
         buildStepPanel(d)
         buildMenuPanel(d)
+        refreshPresetRow()
         padPane.addView(
             arpOverlay,
             FrameLayout.LayoutParams(
@@ -1002,8 +1087,12 @@ class MainActivity : Activity() {
                                 engine.nativeSetFilterType(num)
                             }
                             'X' -> {
-                                fxActive[num] = !fxActive[num]
-                                engine.nativeSetFx(num, fxActive[num])
+                                if (shiftActive() && fxParamDefs.containsKey(num)) {
+                                    openParamPage(num)
+                                } else {
+                                    fxActive[num] = !fxActive[num]
+                                    engine.nativeSetFx(num, fxActive[num])
+                                }
                             }
                             'P' -> {
                                 paramActive[num] = !paramActive[num]
@@ -1075,6 +1164,7 @@ class MainActivity : Activity() {
             }
             b.setTextColor(if (on) amber else silk)
         }
+        refreshPresetRow()
     }
 
     private fun refreshAssignLabels() {
@@ -1417,6 +1507,7 @@ class MainActivity : Activity() {
             json.put("activeLu", activeLu)
             json.put("recFlavor", recFlavor)
             json.put("punchCol", punchCol)
+            json.put("fxSend", JSONArray(bankFxSend.toList()))
             projFile(slot).writeText(json.toString())
             refreshProjSlots()
         } catch (e: Exception) {
@@ -1441,6 +1532,13 @@ class MainActivity : Activity() {
             engine.nativeSetRoot(activeRoot)
             recFlavor = json.optInt("recFlavor", 0)
             engine.nativeSetRecFlavor(recFlavor)
+            val fsArr = json.optJSONArray("fxSend")
+            if (fsArr != null) {
+                for (b in 0 until min(8, fsArr.length())) {
+                    bankFxSend[b] = fsArr.getBoolean(b)
+                    engine.nativeSetBankFxSend(b, bankFxSend[b])
+                }
+            }
             punchCol = json.optInt("punchCol", 0).coerceIn(0, punchLabels.size - 1)
             punchView?.setCollectionIndex(punchCol)
             punchView?.setLabels(punchLabels[punchCol])
@@ -2306,6 +2404,115 @@ class MainActivity : Activity() {
         floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0.5f, 0f, 0.6f),
         floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.8f, 0.7f)
     )
+
+    private fun presetTap(i: Int) {
+        if (fxHeld) {
+            fxConsumed = true
+            saveUserPreset(i)
+        } else {
+            val p = userPresets[i]
+            if (p != null) {
+                applyUserPreset(p)
+            } else {
+                activeFilter = i % 4
+                engine.nativeSetFilterType(activeFilter)
+            }
+            pad.activePreset = i
+        }
+        pad.invalidate()
+        refreshPresetRow()
+    }
+
+    private fun presetLongTap(i: Int) {
+        saveUserPreset(i)
+        refreshPresetRow()
+    }
+
+    private fun arpTap() {
+        if (shiftActive()) {
+            openArpPanel()
+        } else {
+            arpOn = !arpOn
+            pushArp()
+            pad.arpOn = arpOn
+            pad.invalidate()
+        }
+        refreshPresetRow()
+    }
+
+    private fun refreshPresetRow() {
+        for (i in 0 until 9) {
+            val b = presetBtns.getOrNull(i) ?: continue
+            b.setTextColor(
+                when {
+                    userPresets[i] != null -> cream
+                    pad.activePreset == i -> amber
+                    else -> silk
+                }
+            )
+        }
+        arpBtn?.setTextColor(if (arpOn) amber else silk)
+    }
+
+    private fun openParamPage(fx: Int) {
+        val pv = paramView ?: return
+        val defs = fxParamDefs[fx] ?: return
+        paramFx = fx
+        if (!fxParamInit[fx]) {
+            fxParamDefaults[fx]?.copyInto(fxParamVals[fx])
+            fxParamInit[fx] = true
+        }
+        for (k in 0 until 8) engine.nativeSetFxParam(fx, k, fxParamVals[fx][k])
+        pv.setContent(defs, fxParamVals[fx], fxParamAssign[fx])
+        pv.visibility = View.VISIBLE
+    }
+
+    private fun closeParamPage() {
+        paramView?.visibility = View.GONE
+        paramFx = -1
+    }
+
+    private fun cycleParamAssign(k: Int) {
+        val fx = paramFx
+        if (fx < 0) return
+        val prev = fxParamAssign[fx][k]
+        val next = (prev + 1) % 4
+        fxParamAssign[fx][k] = next
+        val target = 8 + fx * 8 + k
+        if (prev == 1) engine.nativeSetAssign(0, assignXIdx)
+        if (prev == 2 || prev == 3) {
+            val l = prev - 2
+            if (lfoTargets[l] == target) {
+                lfoTargets[l] = -1
+                pushLfo(l)
+            }
+        }
+        when (next) {
+            1 -> engine.nativeSetAssign(0, target)
+            2, 3 -> {
+                val l = next - 2
+                lfoTargets[l] = target
+                pushLfo(l)
+            }
+        }
+        paramView?.refresh()
+    }
+
+    private fun applySendCombo(bank: Int, mode: Int) {
+        if (bank !in 0..7) return
+        val both = if (mode == 1) zHeld else fHeld
+        val target = if (both) !sendComboStart else (mode == 1)
+        bankFxSend[bank] = target
+        engine.nativeSetBankFxSend(bank, target)
+        engine.nativeCancelRec()
+        engine.nativeUndo()
+        sendPadBank = -1
+        Toast.makeText(
+            this,
+            "FX SEND B${bank + 1} " + (if (target) "ON" else "OFF"),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 
     private fun punchApply(zone: Int, on: Boolean) {
         val fx = punchFx[punchCol][zone]
