@@ -1547,14 +1547,14 @@ class DrumGridView(context: Context) : View(context) {
     private var flash = -1
     private var flashAt = 0L
 
-    private val modeNames = listOf("12-LEVELS", "SLICE", "RND")
+    private val modeNames = listOf("NOTES", "SLICE", "RND")
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
         val gap = 4f * d
         val top = 20f * d
-        val cols = 4
+        val cols = if (padCount > 16) 8 else 4
         val rows = (padCount + cols - 1) / cols
         val rowsF = rows.toFloat()
         val padW = (w - (cols + 1) * gap) / cols
@@ -1626,7 +1626,7 @@ class DrumGridView(context: Context) : View(context) {
                 }
                 val gap = 4f * d
                 val top = 20f * d
-                val cols = 4
+                val cols = if (padCount > 16) 8 else 4
                 val rows = (padCount + cols - 1) / cols
                 val padW = (w - (cols + 1) * gap) / cols
                 val padH = (height - top - rows * gap + gap) / rows

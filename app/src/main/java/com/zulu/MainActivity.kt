@@ -3785,12 +3785,13 @@ class MainActivity : Activity() {
         }
         panel.addView(ecoRow)
 
-        header("DRUM PADS")
+        header("DRUM PADS (NOTES = 32 = 2 OCTAVES)")
         val drumRow = LinearLayout(this)
-        for ((i, lbl) in listOf("12", "16").withIndex()) {
+        val drumCounts = listOf(8, 12, 16, 32)
+        for ((i, lbl) in listOf("8", "12", "16", "32").withIndex()) {
             val b = makeButton(lbl, silk)
             b.setOnClickListener {
-                drumGrid.padCount = if (i == 0) 12 else 16
+                drumGrid.padCount = drumCounts[i]
                 refreshMenu()
             }
             menuDrumButtons.add(b)
@@ -4520,7 +4521,7 @@ class MainActivity : Activity() {
             b.setTextColor(if (i == bankStretch[playerBank]) amber else silk)
         }
         for ((i, b) in menuDrumButtons.withIndex()) {
-            b.setTextColor(if ((i == 0) == (drumGrid.padCount == 12)) amber else silk)
+            b.setTextColor(if (listOf(8, 12, 16, 32)[i] == drumGrid.padCount) amber else silk)
         }
         for ((i, b) in menuMidiButtons.withIndex()) {
             b.setTextColor(if ((i == 0) == recMidiEngines) amber else silk)

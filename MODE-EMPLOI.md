@@ -281,7 +281,11 @@ pages.
 - **SHIFT + tap sur OUTILS** : ouvre/ferme direct la **GRID** (drum pad sur
   les samples : 12 pads, pitch ±12 façon MPC, modes slicé et random).
 - Sur la GRID : **SHIFT + tap sur OUTILS** = changer de mode de grille
-  (**12-LEVELS / SLICE / RND**). Fermer la grille : le **×** en haut à droite.
+  (**NOTES / SLICE / RND**). Fermer la grille : le **×** en haut à droite.
+- **Mode NOTES** : grille façon Koala Sampler — **32 cubes = 2 octaves**
+  chromatiques (grave en bas à gauche → aigu en haut à droite).
+  **MENU · DRUM PADS** : 8 / 12 / 16 / **32** cubes — moins de cubes = cubes
+  plus gros. SLICE = tranches du sample, RND = tranches aléatoires avec pitch.
 
 ## Tirettes EDIT universelles (v0.33)
 
