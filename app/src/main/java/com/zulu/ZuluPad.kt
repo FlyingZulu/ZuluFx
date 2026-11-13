@@ -104,6 +104,7 @@ class ZuluPad(context: Context) : View(context) {
 
     var fingerMode = 0
     var bendFreeze = false
+    var billardFriction = 2
 
     var onBendTouch: ((Boolean) -> Unit)? = null
     var onBendPos: ((Float, Float) -> Unit)? = null
@@ -247,8 +248,8 @@ class ZuluPad(context: Context) : View(context) {
             targetBy = targetAy
         }
 
-        if (billardTicks > 0) {
-            billardTicks--
+        if (billardTicks != 0) {
+            if (billardTicks > 0) billardTicks--
             targetAx += velAx; targetAy += velAy
             targetBx += velBx; targetBy += velBy
             if (targetAx < 0f) { targetAx = 0f; velAx = -velAx }
@@ -259,8 +260,10 @@ class ZuluPad(context: Context) : View(context) {
             if (targetBx > 1f) { targetBx = 1f; velBx = -velBx }
             if (targetBy < 0f) { targetBy = 0f; velBy = -velBy }
             if (targetBy > 1f) { targetBy = 1f; velBy = -velBy }
-            velAx *= 0.99f; velAy *= 0.99f
-            velBx *= 0.99f; velBy *= 0.99f
+            if (billardFriction > 0) {
+                velAx *= 0.99f; velAy *= 0.99f
+                velBx *= 0.99f; velBy *= 0.99f
+            }
             onAxisChange?.invoke(targetAx, targetAy, targetBx, targetBy)
             if (billardTicks == 0) {
                 velAx = 0f; velAy = 0f; velBx = 0f; velBy = 0f
@@ -506,6 +509,15 @@ class ZuluPad(context: Context) : View(context) {
         velAy = sa * speed * (0.7f + rnd.nextFloat() * 0.6f)
         velBx = -ca * speed * (0.7f + rnd.nextFloat() * 0.6f)
         velBy = -sa * speed * (0.7f + rnd.nextFloat() * 0.6f)
-        billardTicks = 70 + rnd.nextInt(50)
+        billardTicks = when (billardFriction) {
+            0 -> -1
+            1 -> 30
+            2 -> 60
+            3 -> 120
+            else -> 240
+        }
+        if (billardFriction == 0) {
+            velAx *= 0.7f; velAy *= 0.7f; velBx *= 0.7f; velBy *= 0.7f
+        }
     }
 }

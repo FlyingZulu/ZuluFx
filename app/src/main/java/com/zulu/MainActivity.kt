@@ -123,6 +123,7 @@ class MainActivity : Activity() {
     private val menuCurveButtons = ArrayList<Button>()
     private val menuFingerButtons = ArrayList<Button>()
     private var menuFreezeBtn: Button? = null
+    private val menuBillardButtons = ArrayList<Button>()
     private var morphCurve = 0
     private var fingerModeOpt = 0
     private var bendFreezeOpt = false
@@ -1871,6 +1872,25 @@ class MainActivity : Activity() {
             panel.addView(h)
         }
 
+        header("LIVE")
+        val liveRow = LinearLayout(this)
+        val bProj = makeButton("PROJET", silk)
+        bProj.setOnClickListener { menuOverlay.visibility = View.GONE; openProjPanel() }
+        val bScale = makeButton("GAMME", silk)
+        bScale.setOnClickListener { menuOverlay.visibility = View.GONE; openScalePanel() }
+        val bMirror = makeButton("MIROIR", silk)
+        bMirror.setOnClickListener {
+            mirrored = !mirrored
+            content.layoutDirection =
+                if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            refreshMenu()
+        }
+        menuMirrorBtn = bMirror
+        liveRow.addView(bProj, wrapParams((4 * d).toInt()))
+        liveRow.addView(bScale, wrapParams((4 * d).toInt()))
+        liveRow.addView(bMirror, wrapParams((4 * d).toInt()))
+        panel.addView(liveRow)
+
         header("PADS")
         val padsRow = LinearLayout(this)
         for (n in listOf(8, 10, 12, 14)) {
@@ -1889,7 +1909,17 @@ class MainActivity : Activity() {
         scRow.addView(bMotion, wrapParams((4 * d).toInt()))
         panel.addView(scRow)
 
-        header("COURBE DU FADER")
+        header("BILLARD")
+        val billardRow = LinearLayout(this)
+        for ((i, lbl) in listOf("\u221e", "0.5", "1", "2", "4").withIndex()) {
+            val b = makeButton(lbl, silk)
+            b.setOnClickListener { pad.billardFriction = i; refreshMenu() }
+            menuBillardButtons.add(b)
+            billardRow.addView(b, wrapParams((4 * d).toInt()))
+        }
+        panel.addView(billardRow)
+
+        header("FINITIONS")
         val curveRow = LinearLayout(this)
         for ((i, lbl) in listOf("LIN", "D\u00c9BUT", "FIN", "S").withIndex()) {
             val b = makeButton(lbl, silk)
@@ -1899,7 +1929,6 @@ class MainActivity : Activity() {
         }
         panel.addView(curveRow)
 
-        header("ATTRIBUTION DOIGTS")
         val fingerRow = LinearLayout(this)
         for ((i, lbl) in listOf("ORDRE", "INVERS\u00c9", "ZONES").withIndex()) {
             val b = makeButton(lbl, silk)
@@ -1913,9 +1942,8 @@ class MainActivity : Activity() {
         }
         panel.addView(fingerRow)
 
-        header("BEND")
         val bendRow = LinearLayout(this)
-        val bFreeze = makeButton("JEU FIG\u00c9", silk)
+        val bFreeze = makeButton("BEND : JEU FIG\u00c9", silk)
         bFreeze.setOnClickListener {
             bendFreezeOpt = !bendFreezeOpt
             pad.bendFreeze = bendFreezeOpt
@@ -1925,27 +1953,11 @@ class MainActivity : Activity() {
         bendRow.addView(bFreeze, wrapParams((4 * d).toInt()))
         panel.addView(bendRow)
 
-        header("PAGES")
-        val pagesRow = LinearLayout(this)
-        val bProj = makeButton("PROJET", silk)
-        bProj.setOnClickListener { menuOverlay.visibility = View.GONE; openProjPanel() }
-        val bScale = makeButton("GAMME", silk)
-        bScale.setOnClickListener { menuOverlay.visibility = View.GONE; openScalePanel() }
-        val bMirror = makeButton("MIROIR", silk)
-        bMirror.setOnClickListener {
-            mirrored = !mirrored
-            content.layoutDirection =
-                if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
-            refreshMenu()
-        }
-        menuMirrorBtn = bMirror
-        pagesRow.addView(bProj, wrapParams((4 * d).toInt()))
-        pagesRow.addView(bScale, wrapParams((4 * d).toInt()))
-        pagesRow.addView(bMirror, wrapParams((4 * d).toInt()))
-        panel.addView(pagesRow)
-
+        val scroll = android.widget.ScrollView(this)
+        scroll.isVerticalScrollBarEnabled = false
+        scroll.addView(panel)
         menuOverlay.addView(
-            panel,
+            scroll,
             FrameLayout.LayoutParams(
                 (340 * d).toInt(),
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -1967,6 +1979,9 @@ class MainActivity : Activity() {
             b.setTextColor(if (i == fingerModeOpt) amber else silk)
         }
         menuFreezeBtn?.setTextColor(if (bendFreezeOpt) amber else silk)
+        for ((i, b) in menuBillardButtons.withIndex()) {
+            b.setTextColor(if (i == pad.billardFriction) amber else silk)
+        }
     }
 
     private fun openMenuPanel() {
