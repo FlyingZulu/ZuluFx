@@ -4,10 +4,13 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 
 class ZuluPad(context: Context) : View(context) {
+
+    constructor(context: Context, attrs: AttributeSet?) : this(context)
 
     enum class AxisState { OFF, MOM }
 
