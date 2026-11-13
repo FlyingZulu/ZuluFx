@@ -247,7 +247,7 @@ private:
     bool freezeFull = false;
     bool prevFreeze = false;
     float compEnv = 0.f;
-    static constexpr int kNumFx = 24;
+    static constexpr int kNumFx = 27;
     static constexpr int kTurnMax = 24000;
     float turnBuf[kTurnMax * 2] = {0.f};
     int turnWrite = 0;
