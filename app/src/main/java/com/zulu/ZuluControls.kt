@@ -48,144 +48,135 @@ private fun Paint.stroke(color: Int, width: Float) {
     strokeWidth = width
 }
 
-open class DialView(context: Context) : View(context) {
-
-    protected val d = resources.displayMetrics.density
-    protected val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    protected val marker = markerFont(context)
-
-    protected fun drawBezelAndFace(canvas: Canvas, w: Float, h: Float) {
-        paint.fill(Color.rgb(30, 33, 40))
-        canvas.drawRoundRect(0f, 0f, w, h, 6f * d, 6f * d, paint)
-        val m = 2.5f * d
-        paint.fill(cream)
-        canvas.drawRoundRect(m, m, w - m, h - m, 4f * d, 4f * d, paint)
-        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 7)
-    }
-
-    protected fun needleXY(pivotX: Float, pivotY: Float, len: Float, angleDeg: Float): FloatArray {
-        val rad = Math.toRadians(angleDeg.toDouble())
-        return floatArrayOf(
-            (pivotX + len * sin(rad)).toFloat(),
-            (pivotY - len * cos(rad)).toFloat()
-        )
-    }
-}
-
-class VuMeterView(context: Context) : DialView(context) {
+class BarVuView(context: Context) : View(context) {
 
     val cmdId = "vu"
 
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
     var levelL = 0f
-        set(value) { field = value.coerceIn(0f, 1f); invalidate() }
+        set(v) {
+            field = v.coerceIn(0f, 1f)
+            invalidate()
+        }
 
     var levelR = 0f
-        set(value) { field = value.coerceIn(0f, 1f); invalidate() }
+        set(v) {
+            field = v.coerceIn(0f, 1f)
+            invalidate()
+        }
+
+    var onDoubleTap: (() -> Unit)? = null
+
+    private var lastTap = 0L
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        drawBezelAndFace(canvas, w, h)
 
-        val pivotX = w / 2f
-        val pivotY = h * 1.18f
-        val radius = h * 0.92f
-        val start = -52f
-        val sweep = 104f
+        paint.fill(Color.rgb(30, 33, 40))
+        canvas.drawRoundRect(0f, 0f, w, h, 6f * d, 6f * d, paint)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 17)
 
-        paint.stroke(ink, 1.2f * d)
-        canvas.drawArc(
-            pivotX - radius, pivotY - radius, pivotX + radius, pivotY + radius,
-            270f + start, sweep, false, paint
-        )
+        val m = 4f * d
+        val barH = (h - 3f * m) / 2f
+        drawBar(canvas, m, m, w - m, m + barH, levelL)
+        drawBar(canvas, m, m * 2f + barH, w - m, h - m, levelR)
 
-        for (i in 0..10) {
-            val a = start + sweep * i / 10f
-            val outer = needleXY(pivotX, pivotY, radius, a)
-            val inner = needleXY(pivotX, pivotY, radius * 0.86f, a)
-            paint.stroke(if (i >= 8) needleRed else ink, if (i % 5 == 0) 1.4f * d else 1f * d)
-            canvas.drawLine(inner[0], inner[1], outer[0], outer[1], paint)
-        }
-
-        paint.fill(ink)
-        paint.textAlign = Paint.Align.CENTER
+        paint.fill(Color.rgb(120, 128, 144))
+        paint.textAlign = Paint.Align.RIGHT
         paint.typeface = marker
-        paint.textSize = 9f * d
-        canvas.drawText("VU", pivotX, h * 0.46f, paint)
-
-        drawNeedle(canvas, pivotX, pivotY, radius * 0.95f, start + sweep * levelL)
-        drawNeedle(canvas, pivotX, pivotY, radius * 0.78f, start + sweep * levelR)
+        paint.textSize = 7f * d
+        canvas.drawText("L/R", w - 5f * d, h - 3.5f * d, paint)
     }
 
-    private fun drawNeedle(canvas: Canvas, pivotX: Float, pivotY: Float, len: Float, angle: Float) {
-        val tip = needleXY(pivotX, pivotY, len, angle)
-        val tail = needleXY(pivotX, pivotY, len * 0.78f, angle)
-        paint.stroke(ink, 1.6f * d)
-        canvas.drawLine(pivotX, pivotY, tail[0], tail[1], paint)
-        paint.stroke(needleRed, 1.6f * d)
-        canvas.drawLine(tail[0], tail[1], tip[0], tip[1], paint)
+    private fun drawBar(canvas: Canvas, l: Float, t: Float, r: Float, b: Float, level: Float) {
+        val segs = 20
+        val segW = (r - l) / segs
+        val lit = (level * segs).toInt()
+        for (i in 0 until segs) {
+            paint.fill(
+                when {
+                    i >= lit -> Color.rgb(38, 42, 52)
+                    i >= segs * 85 / 100 -> Color.rgb(220, 70, 50)
+                    i >= segs * 65 / 100 -> amber
+                    else -> Color.rgb(90, 200, 90)
+                }
+            )
+            canvas.drawRoundRect(
+                l + i * segW + 1f, t, l + (i + 1) * segW - 1f, b,
+                1.5f * d, 1.5f * d, paint
+            )
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            val now = System.currentTimeMillis()
+            if (now - lastTap < 300) {
+                onDoubleTap?.invoke()
+                lastTap = 0
+            } else {
+                lastTap = now
+            }
+        }
+        return true
     }
 }
 
-class BpmDialView(context: Context) : DialView(context) {
+class BpmLcdView(context: Context) : View(context) {
 
     val cmdId = "bpm"
 
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    var onBpmChange: ((Float) -> Unit)? = null
+
     var bpm = 120f
-        set(value) { field = value.coerceIn(60f, 200f); invalidate() }
+        set(v) {
+            field = v.coerceIn(40f, 200f)
+            invalidate()
+        }
+
+    private var dragY = 0f
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        drawBezelAndFace(canvas, w, h)
 
-        val pivotX = w / 2f
-        val pivotY = h * 1.05f
-        val radius = h * 0.78f
-        val start = -52f
-        val sweep = 104f
+        paint.fill(Color.rgb(24, 26, 32))
+        canvas.drawRoundRect(0f, 0f, w, h, 4f * d, 4f * d, paint)
+        paint.fill(Color.rgb(122, 138, 116))
+        val m = 2.5f * d
+        canvas.drawRoundRect(m, m, w - m, h - m, 2.5f * d, 2.5f * d, paint)
 
-        paint.stroke(ink, 1.1f * d)
-        canvas.drawArc(
-            pivotX - radius, pivotY - radius, pivotX + radius, pivotY + radius,
-            270f + start, sweep, false, paint
-        )
+        paint.fill(Color.rgb(24, 30, 22))
+        paint.textAlign = Paint.Align.RIGHT
+        paint.typeface = Typeface.MONOSPACE
+        paint.isFakeBoldText = true
+        paint.textSize = h * 0.62f
+        canvas.drawText(bpm.toInt().toString(), w * 0.72f, h * 0.72f, paint)
 
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = marker
-        for (b in 60..200 step 20) {
-            val a = start + sweep * (b - 60) / 140f
-            val outer = needleXY(pivotX, pivotY, radius, a)
-            val inner = needleXY(pivotX, pivotY, radius * 0.88f, a)
-            paint.stroke(ink, 1f * d)
-            canvas.drawLine(inner[0], inner[1], outer[0], outer[1], paint)
-            if (b % 40 == 20 || b == 60 || b == 200) {
-                val lab = needleXY(pivotX, pivotY, radius * 0.7f, a)
-                paint.fill(ink)
-                paint.textSize = 6.5f * d
-                canvas.drawText("$b", lab[0], lab[1] + 2.5f * d, paint)
+        paint.textSize = h * 0.30f
+        paint.textAlign = Paint.Align.LEFT
+        canvas.drawText("BPM", w * 0.76f, h * 0.72f, paint)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> dragY = event.y
+            MotionEvent.ACTION_MOVE -> {
+                val dy = dragY - event.y
+                dragY = event.y
+                bpm += dy * 0.4f
+                onBpmChange?.invoke(bpm)
             }
         }
-
-        val a = start + sweep * (bpm - 60) / 140f
-        val tip = needleXY(pivotX, pivotY, radius * 0.94f, a)
-        paint.stroke(ink, 1.6f * d)
-        canvas.drawLine(pivotX, pivotY, tip[0], tip[1], paint)
-
-        val winW = w * 0.42f
-        val winH = h * 0.2f
-        val winL = pivotX - winW / 2f
-        val winB = h - 2.5f * d
-        paint.fill(Color.rgb(24, 22, 18))
-        canvas.drawRect(winL, winB - winH, winL + winW, winB, paint)
-        paint.fill(amber)
-        paint.textSize = winH * 0.72f
-        canvas.drawText("${bpm.toInt()}", pivotX, winB - winH * 0.22f, paint)
-
-        paint.fill(ink)
-        paint.textSize = 7f * d
-        canvas.drawText("BPM", pivotX, h * 0.32f, paint)
+        return true
     }
 }
 
@@ -286,116 +277,6 @@ class PadGridView(context: Context) : View(context) {
         val i = row * 4 + col
         return if (i in 0 until padCount) i else -1
     }
-}
-
-class ZuLuSelector(context: Context) : View(context) {
-
-    val cmdId = "zuLu"
-
-    private val d = resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val marker = markerFont(context)
-
-    val turquoise = Color.rgb(0, 229, 255)
-    val violet = Color.rgb(170, 140, 255)
-
-    var side = 0
-
-    override fun onDraw(canvas: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-        drawHalf(canvas, 0f, w / 2f, "ZU", turquoise, side == 1, 51)
-        drawHalf(canvas, w / 2f, w, "LU", violet, side == 2, 52)
-    }
-
-    private fun drawHalf(canvas: Canvas, l: Float, r: Float, label: String, color: Int, on: Boolean, seed: Int) {
-        paint.fill(if (on) color else Color.rgb(40, 44, 54))
-        canvas.drawRoundRect(l, 0f, r, height.toFloat(), 6f * d, 6f * d, paint)
-        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-        drawSketchyRoundRect(canvas, paint, l, 0f, r, height.toFloat(), 6f * d, seed)
-        paint.fill(if (on) ink else color)
-        paint.textAlign = Paint.Align.CENTER
-        paint.typeface = marker
-        paint.textSize = height * 0.42f
-        canvas.drawText(label, (l + r) / 2f, height * 0.68f, paint)
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN ||
-            event.actionMasked == MotionEvent.ACTION_POINTER_DOWN
-        ) {
-            side = if (event.getX(event.actionIndex) < width / 2f) 1 else 2
-        }
-        invalidate()
-        return true
-    }
-}
-
-class SegmentedABRecView(context: Context) : View(context) {
-
-    val cmdId = "abRec"
-
-    private val d = resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val marker = markerFont(context)
-
-    private val yellow = Color.rgb(245, 255, 90)
-    private val pink = Color.rgb(255, 125, 205)
-    private val red = Color.rgb(255, 90, 70)
-
-    var aOn = true
-        set(value) { field = value; invalidate() }
-
-    var bOn = true
-        set(value) { field = value; invalidate() }
-
-    var recHeld = false
-        set(value) { field = value; invalidate() }
-
-    var blinkOn = true
-        set(value) { field = value; invalidate() }
-
-    var onSegmentDown: ((Int) -> Unit)? = null
-    var onSegmentUp: ((Int) -> Unit)? = null
-
-    override fun onDraw(canvas: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-        val segW = w / 3f
-
-        paint.fill(Color.rgb(30, 33, 40))
-        canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
-        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 41)
-
-        val labels = arrayOf("A", "B", "REC")
-        val colors = arrayOf(yellow, pink, red)
-        val states = booleanArrayOf(aOn, bOn, recHeld && blinkOn)
-
-        for (i in 0..2) {
-            val l = i * segW
-            val inset = 3f * d
-            paint.fill(if (states[i]) colors[i] else Color.rgb(40, 44, 54))
-            canvas.drawRoundRect(l + inset, inset, l + segW - inset, h - inset, 5f * d, 5f * d, paint)
-            paint.fill(if (states[i]) ink else colors[i])
-            paint.textAlign = Paint.Align.CENTER
-            paint.typeface = marker
-            paint.textSize = h * 0.38f
-            canvas.drawText(labels[i], l + segW / 2f, h * 0.64f, paint)
-        }
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN ->
-                onSegmentDown?.invoke(segmentAt(event.getX(event.actionIndex)))
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL ->
-                onSegmentUp?.invoke(segmentAt(event.getX(event.actionIndex)))
-        }
-        return true
-    }
-
-    private fun segmentAt(x: Float): Int = (x / width * 3f).toInt().coerceIn(0, 2)
 }
 
 class FlyFaderView(context: Context) : View(context) {

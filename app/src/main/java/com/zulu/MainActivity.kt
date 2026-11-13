@@ -36,22 +36,22 @@ class MainActivity : Activity() {
     }
 
     private lateinit var pad: ZuluPad
-    private lateinit var vuMeter: VuMeterView
-    private lateinit var bpmDial: BpmDialView
-    private lateinit var segAB: SegmentedABRecView
+    private lateinit var vuMeter: BarVuView
+    private lateinit var bpmLcd: BpmLcdView
     private lateinit var padGrid: PadGridView
-    private lateinit var zuLu: ZuLuSelector
     private lateinit var zuLuFader: VFaderView
     private lateinit var flyFader: FlyFaderView
     private lateinit var mixFader: VFaderView
-    private lateinit var tempoFader: VFaderView
     private lateinit var glitchScope: GlitchScopeView
     private lateinit var btnStart: Button
     private lateinit var btnMute: Button
     private lateinit var btnShift: Button
-    private lateinit var btnMenu: Button
-    private lateinit var btnTap: Button
     private lateinit var btnFx: Button
+    private lateinit var btnF: Button
+    private lateinit var btnZ: Button
+    private lateinit var btnRec: Button
+    private lateinit var btnZu: Button
+    private lateinit var btnLu: Button
     private lateinit var fxOverlay: FrameLayout
     private lateinit var scaleOverlay: FrameLayout
     private lateinit var arpOverlay: FrameLayout
@@ -105,6 +105,11 @@ class MainActivity : Activity() {
     private val green = Color.rgb(140, 255, 150)
     private val silk = Color.rgb(165, 172, 185)
     private val amber = Color.rgb(255, 176, 0)
+    private val yellow = Color.rgb(245, 255, 90)
+    private val pink = Color.rgb(255, 125, 205)
+    private val turquoise = Color.rgb(0, 229, 255)
+    private val violet = Color.rgb(170, 140, 255)
+    private val red = Color.rgb(255, 90, 70)
 
     private var playing = false
     private var muteOn = false
@@ -112,8 +117,9 @@ class MainActivity : Activity() {
     private var shiftLocked = false
     private var recHeld = false
     private var blinkOn = true
+    private var axisAOn = true
+    private var axisBOn = true
     private var lastShiftUp = 0L
-    private val taps = ArrayList<Long>()
 
     private val blinkHandler = Handler(Looper.getMainLooper())
     private val blinkRunnable = object : Runnable {
@@ -133,23 +139,17 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val d = resources.displayMetrics.density
-        val margin = (16 * d).toInt()
+        val margin = (24 * d).toInt()
 
         pad = ZuluPad(this)
-        vuMeter = VuMeterView(this)
-        bpmDial = BpmDialView(this)
-        segAB = SegmentedABRecView(this)
+        vuMeter = BarVuView(this)
+        bpmLcd = BpmLcdView(this)
         padGrid = PadGridView(this)
-        zuLu = ZuLuSelector(this)
+        padGrid.padCount = 12
         zuLuFader = VFaderView(this, "ZU/LU")
         flyFader = FlyFaderView(this)
         mixFader = VFaderView(this, "MIX")
         mixFader.value = 1f
-        tempoFader = VFaderView(
-            this, "TEMPO",
-            listOf(0f to "20", 0.301f to "40", 0.602f to "80", 0.903f to "160")
-        )
-        tempoFader.value = 0.778f
         glitchScope = GlitchScopeView(this)
         glitchScope.visibility = View.GONE
 
@@ -193,10 +193,13 @@ class MainActivity : Activity() {
 
         btnStart = makeButton("START", green)
         btnMute = makeRoundButton("MUTE", silk, 10f)
-        btnTap = makeButton("\u25cf", amber)
         btnShift = makeRoundButton("SHIFT", silk, 10f)
-        btnMenu = makeRoundButton("\u2699", silk, 16f)
         btnFx = makeRoundButton("FX", amber, 12f)
+        btnF = makeButton("F", yellow)
+        btnZ = makeButton("Z", pink)
+        btnRec = makeRoundButton("REC", red, 10f)
+        btnZu = makeButton("ZU", turquoise)
+        btnLu = makeButton("LU", violet)
 
         btnFx.setOnClickListener {
             if (fxConsumed) {
@@ -231,20 +234,7 @@ class MainActivity : Activity() {
             }
         }
 
-        btnTap.setOnClickListener {
-            val now = System.currentTimeMillis()
-            if (taps.isNotEmpty() && now - taps.last() > 2000) taps.clear()
-            taps.add(now)
-            if (taps.size >= 2) {
-                val recent = taps.takeLast(4)
-                var sum = 0L
-                for (i in 1 until recent.size) sum += recent[i] - recent[i - 1]
-                bpmDial.bpm = (60000.0 * (recent.size - 1) / sum).toFloat()
-                engine.nativeSetBpm(bpmDial.bpm)
-                tempoFader.value = (Math.log10(bpmDial.bpm.toDouble() / 20.0)).toFloat()
-            }
-            if (taps.size > 8) taps.removeAt(0)
-        }
+        bpmLcd.onBpmChange = { b -> engine.nativeSetBpm(b) }
 
         btnShift.setOnTouchListener { _, e ->
             when (e.actionMasked) {
@@ -285,23 +275,39 @@ class MainActivity : Activity() {
             true
         }
 
-        segAB.onSegmentDown = { i ->
-            when {
-                fxHeld && i == 0 -> loopWetA = true
-                fxHeld && i == 1 -> loopWetB = true
-                i == 0 -> toggleAxis(true)
-                i == 1 -> toggleAxis(false)
-                i == 2 -> recHeld = true
+        btnF.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (fxHeld) loopWetA = true else toggleAxis(true)
+                    refreshBlink()
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    loopWetA = false
+                    refreshBlink()
+                }
             }
-            refreshBlink()
+            false
         }
-        segAB.onSegmentUp = { i ->
-            when {
-                fxHeld && i == 0 -> loopWetA = false
-                fxHeld && i == 1 -> loopWetB = false
-                i == 2 -> recHeld = false
+        btnZ.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (fxHeld) loopWetB = true else toggleAxis(false)
+                    refreshBlink()
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    loopWetB = false
+                    refreshBlink()
+                }
+            }
+            false
+        }
+        btnRec.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> recHeld = true
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> recHeld = false
             }
             refreshBlink()
+            false
         }
 
         padGrid.onPadTouch = { n ->
@@ -329,71 +335,35 @@ class MainActivity : Activity() {
         val row1 = LinearLayout(this)
         row1.orientation = LinearLayout.HORIZONTAL
         row1.gravity = Gravity.CENTER_VERTICAL
-        row1.addView(
-            vuMeter,
-            LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
-        )
-        val dialParams = LinearLayout.LayoutParams((64 * d).toInt(), (46 * d).toInt())
-        dialParams.setMargins((6 * d).toInt(), 0, 0, 0)
-        row1.addView(bpmDial, dialParams)
+        row1.addView(btnFx, LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt()))
+        val sqParams = LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt())
+        sqParams.setMargins((4 * d).toInt(), 0, 0, 0)
+        row1.addView(btnF, sqParams)
+        row1.addView(btnZ, sqParams)
+        val recParams = LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt())
+        recParams.setMargins((4 * d).toInt(), 0, 0, 0)
+        row1.addView(btnRec, recParams)
+        val vuParams = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
+        vuParams.setMargins((6 * d).toInt(), 0, 0, 0)
+        row1.addView(vuMeter, vuParams)
         row1.addView(btnStart, wrapParams((4 * d).toInt()))
-        val menuParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
-        menuParams.setMargins((6 * d).toInt(), 0, 0, 0)
-        row1.addView(btnMenu, menuParams)
 
-        val row2 = LinearLayout(this)
-        row2.gravity = Gravity.CENTER_VERTICAL
-        row2.addView(btnShift, LinearLayout.LayoutParams((48 * d).toInt(), (48 * d).toInt()))
-        val segParams = LinearLayout.LayoutParams((160 * d).toInt(), (38 * d).toInt())
-        segParams.setMargins((8 * d).toInt(), 0, 0, 0)
-        row2.addView(segAB, segParams)
+        val bpmRow = LinearLayout(this)
+        bpmRow.gravity = Gravity.END
+        val lcdParams = LinearLayout.LayoutParams((110 * d).toInt(), (24 * d).toInt())
+        lcdParams.setMargins(0, (5 * d).toInt(), (2 * d).toInt(), 0)
+        bpmRow.addView(bpmLcd, lcdParams)
 
-        val row3 = LinearLayout(this)
-        val row3Params = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, (80 * d).toInt()
-        )
-        row3Params.topMargin = (4 * d).toInt()
-        row3.addView(padGrid, row3Params)
-
-        btnMenu.setOnClickListener {
-            if (shiftActive()) {
-                openScalePanel()
-                return@setOnClickListener
-            }
-            padGrid.padCount = when (padGrid.padCount) {
-                8 -> 10
-                10 -> 12
-                12 -> 14
-                else -> 8
-            }
-            row3Params.height =
-                ((when (padGrid.padCount) {
-                    14 -> 112
-                    12, 10 -> 96
-                    else -> 80
-                }) * d).toInt()
-            padGrid.requestLayout()
-        }
-
-        val row4 = LinearLayout(this)
-        row4.addView(
-            zuLu,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (34 * d).toInt())
-        )
-
-        val roundRow = LinearLayout(this)
-        roundRow.orientation = LinearLayout.HORIZONTAL
-        roundRow.gravity = Gravity.CENTER
-        val roundParams = LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt())
-        roundParams.setMargins((4 * d).toInt(), 0, (4 * d).toInt(), 0)
-        roundRow.addView(btnMute, roundParams)
-        roundRow.addView(btnTap, roundParams)
-        roundRow.addView(btnFx, roundParams)
+        val zuLuBtns = LinearLayout(this)
+        zuLuBtns.orientation = LinearLayout.HORIZONTAL
+        val zuParams = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
+        zuParams.setMargins((2 * d).toInt(), (8 * d).toInt(), (2 * d).toInt(), 0)
+        zuLuBtns.addView(btnZu, zuParams)
+        zuLuBtns.addView(btnLu, zuParams)
 
         val faderRow = LinearLayout(this)
         faderRow.orientation = LinearLayout.HORIZONTAL
-        faderRow.setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
-        for (f in listOf(zuLuFader, flyFader, mixFader, tempoFader)) {
+        for (f in listOf(flyFader, mixFader)) {
             val fp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
             fp.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
             faderRow.addView(f, fp)
@@ -402,18 +372,18 @@ class MainActivity : Activity() {
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
-        column.setPadding((6 * d).toInt(), (4 * d).toInt(), (6 * d).toInt(), (8 * d).toInt())
+        column.setPadding((6 * d).toInt(), (4 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
         column.addView(row1)
-        column.addView(row2, columnRowParams(d))
-        column.addView(row3, columnRowParams(d))
-        column.addView(row4, columnRowParams(d))
-        val roundRowParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, (46 * d).toInt()
+        column.addView(bpmRow)
+        column.addView(zuLuBtns)
+        column.addView(
+            zuLuFader,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
         )
-        roundRowParams.topMargin = (8 * d).toInt()
-        column.addView(roundRow, roundRowParams)
         val faderRowParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            LinearLayout.LayoutParams.MATCH_PARENT, (90 * d).toInt()
         )
         faderRowParams.topMargin = (10 * d).toInt()
         column.addView(faderRow, faderRowParams)
@@ -424,6 +394,46 @@ class MainActivity : Activity() {
         val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT)
 
         padPane = FrameLayout(this)
+
+        val leftColumn = LinearLayout(this)
+        leftColumn.orientation = LinearLayout.VERTICAL
+        val padPaneParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        )
+        leftColumn.addView(padPane, padPaneParams)
+        val gridParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (96 * d).toInt()
+        )
+        gridParams.setMargins(0, (6 * d).toInt(), 0, 0)
+        leftColumn.addView(padGrid, gridParams)
+
+        vuMeter.onDoubleTap = {
+            if (shiftActive()) {
+                openScalePanel()
+            } else {
+                padGrid.padCount = when (padGrid.padCount) {
+                    8 -> 10
+                    10 -> 12
+                    12 -> 14
+                    else -> 8
+                }
+                gridParams.height =
+                    ((when (padGrid.padCount) {
+                        14 -> 112
+                        12, 10 -> 96
+                        else -> 80
+                    }) * d).toInt()
+                padGrid.requestLayout()
+            }
+        }
+
+        val edgeColumn = LinearLayout(this)
+        edgeColumn.orientation = LinearLayout.VERTICAL
+        edgeColumn.setPadding((3 * d).toInt(), (6 * d).toInt(), (3 * d).toInt(), 0)
+        edgeColumn.addView(btnShift, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
+        val edgeMuteParams = LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt())
+        edgeMuteParams.setMargins(0, (14 * d).toInt(), 0, 0)
+        edgeColumn.addView(btnMute, edgeMuteParams)
         padPane.addView(
             pad,
             FrameLayout.LayoutParams(
@@ -437,18 +447,22 @@ class MainActivity : Activity() {
         scopeParams.setMargins(0, (26 * d).toInt(), (10 * d).toInt(), 0)
         padPane.addView(glitchScope, scopeParams)
 
-        content.addView(padPane, padParams)
+        content.addView(leftColumn, padParams)
+        content.addView(
+            edgeColumn,
+            LinearLayout.LayoutParams((46 * d).toInt(), LinearLayout.LayoutParams.MATCH_PARENT)
+        )
         content.addView(
             column,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
         )
 
-        content.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-            val side = v.height
+        leftColumn.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val side = padPane.height
             val padWidth = (side * 1.1f).toInt()
             if (side > 0 && padPane.width != padWidth) {
                 padParams.width = padWidth
-                content.requestLayout()
+                leftColumn.requestLayout()
             }
         }
 
@@ -529,15 +543,6 @@ class MainActivity : Activity() {
         vuHandler.post(vuRunnable)
     }
 
-    private fun columnRowParams(d: Float): LinearLayout.LayoutParams {
-        val p = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        p.topMargin = (8 * d).toInt()
-        return p
-    }
-
     private fun wrapParams(marginStart: Int): LinearLayout.LayoutParams {
         val p = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -589,12 +594,14 @@ class MainActivity : Activity() {
 
     private fun toggleAxis(axisA: Boolean) {
         if (axisA) {
-            segAB.aOn = segAB.aOn != true
+            axisAOn = !axisAOn
         } else {
-            segAB.bOn = segAB.bOn != true
+            axisBOn = !axisBOn
         }
-        pad.stateA = if (segAB.aOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
-        pad.stateB = if (segAB.bOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
+        btnF.setTextColor(if (axisAOn) yellow else silk)
+        btnZ.setTextColor(if (axisBOn) pink else silk)
+        pad.stateA = if (axisAOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
+        pad.stateB = if (axisBOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
     }
 
     private fun shiftActive() = shiftHeld || shiftLocked
@@ -1023,9 +1030,8 @@ class MainActivity : Activity() {
     }
 
     private fun refreshBlink() {
-        segAB.blinkOn = blinkOn
-        segAB.recHeld = recHeld
         padGrid.blinkOn = blinkOn
+        btnRec.setTextColor(if (recHeld && blinkOn) Color.WHITE else red)
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
     }
 
@@ -1033,7 +1039,7 @@ class MainActivity : Activity() {
         val wet = loopWetA || loopWetB
         engine.nativeRecordBank(bank - 1, loopLenSteps, wet)
         padGrid.recPad = bank - 1
-        val ms = (loopLenSteps * 60000f / bpmDial.bpm.coerceAtLeast(40f)).toLong()
+        val ms = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
         recEndHandler.removeCallbacksAndMessages(null)
         recEndHandler.postDelayed({ padGrid.recPad = -1 }, ms + 200)
     }
@@ -1067,11 +1073,6 @@ class MainActivity : Activity() {
         flyFader.onValueChange = { v, st ->
             engine.nativeSetFly(v)
             engine.nativeSetStutter(st)
-        }
-        tempoFader.onValueChange = { v ->
-            val b = (20f * Math.pow(10.0, v.toDouble()).toFloat()).coerceIn(40f, 200f)
-            bpmDial.bpm = b
-            engine.nativeSetBpm(b)
         }
     }
 }
