@@ -17,18 +17,17 @@ class ZuluPad(context: Context) : View(context) {
     var stateF = AxisState.MOM
         set(value) {
             field = value
-            if (value == AxisState.OFF && fingerF != -1) fingerF = -1
+            if (value == AxisState.MOM) fOrder = nextOrder()
             invalidate()
         }
 
     var stateZ = AxisState.MOM
         set(value) {
             field = value
-            if (value == AxisState.OFF && fingerZ != -1) fingerZ = -1
+            if (value == AxisState.MOM) zOrder = nextOrder()
             invalidate()
         }
 
-    // Ordre de priorité pour les zones vides
     private var fOrder = 1L
     private var zOrder = 2L
     private var orderCounter = 2L
@@ -126,15 +125,15 @@ class ZuluPad(context: Context) : View(context) {
         return dx * dx + dy * dy <= r * r
     }
 
-    private fun hitZ(x: Float, y: Float): Boolean {
+    private fun hitZ(x:```kotlin
+    y: Float): Boolean {
         val dx = x - zx * width
         val dy = y - (1f - zy) * height
         val r = 54f * d
         return dx * dx + dy * dy <= r * r
     }
 
-    private fun assignFinger(id: Int, x: Float,```kotlin
-        y: Float) {
+    private fun assignFinger(id: Int, x: Float, y: Float) {
         val fFree = fingerF == -1
         val zFree = fingerZ == -1
 
