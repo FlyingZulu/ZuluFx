@@ -1,106 +1,83 @@
 package com.zulu
 
-import android.app.Activity
-import android.graphics.Color
 import android.os.Bundle
-import android.view.Gravity
 import android.widget.Button
-import android.widget.LinearLayout
+import androidx.appcompat.app.AppCompatActivity
 import android.widget.TextView
 
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var pad: ZuluPad
+    private lateinit var btnF: Button
+    private lateinit var btnZ: Button
+    private lateinit var btnStart: Button
+    private lateinit var btnMute: Button
+    private lateinit var tvFx: TextView
+    private lateinit var tvFy: TextView
+    private lateinit var tvZx: TextView
+    private lateinit var tvZy: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.rgb(11, 12, 16))
-        }
+        pad = findViewById(R.id.zuluPad)
+        btnF = findViewById(R.id.btnF)
+        btnZ = findViewById(R.id.btnZ)
+        btnStart = findViewById(R.id.btnStart)
+        btnMute = findViewById(R.id.btnMute)
+        tvFx = findViewById(R.id.tvFx)
+        tvFy = findViewById(R.id.tvFy)
+        tvZx = findViewById(R.id.tvZx)
+        tvZy = findViewById(R.id.tvZy)
 
-        val pad = ZuluPad(this)
-
-        val side = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(12, 12, 12, 12)
-        }
-
-        val title = TextView(this).apply {
-            text = "ZULU"
-            setTextColor(Color.WHITE)
-            textSize = 20f
-            gravity = Gravity.CENTER
-        }
-
-        val buttonA = Button(this)
-        val buttonB = Button(this)
-
-        fun updateButtons() {
-            buttonA.text = if (pad.stateA == ZuluPad.AxisState.MOM) {
-                "A MOM"
+        // Bascule AXIS F
+        btnF.setOnClickListener {
+            if (pad.stateF == ZuluPad.AxisState.MOM) {
+                pad.stateF = ZuluPad.AxisState.OFF
+                btnF.text = "F: OFF"
             } else {
-                "A OFF"
-            }
-
-            buttonB.text = if (pad.stateB == ZuluPad.AxisState.MOM) {
-                "B MOM"
-            } else {
-                "B OFF"
+                pad.stateF = ZuluPad.AxisState.MOM
+                btnF.text = "F: ON"
             }
         }
 
-        buttonA.setOnClickListener {
-            pad.stateA = if (pad.stateA == ZuluPad.AxisState.MOM) {
-                ZuluPad.AxisState.OFF
+        // Bascule AXIS Z
+        btnZ.setOnClickListener {
+            if (pad.stateZ == ZuluPad.AxisState.MOM) {
+                pad.stateZ = ZuluPad.AxisState.OFF
+                btnZ.text = "Z: OFF"
             } else {
-                ZuluPad.AxisState.MOM
+                pad.stateZ = ZuluPad.AxisState.MOM
+                btnZ.text = "Z: ON"
             }
-            updateButtons()
         }
 
-        buttonB.setOnClickListener {
-            pad.stateB = if (pad.stateB == ZuluPad.AxisState.MOM) {
-                ZuluPad.AxisState.OFF
-            } else {
-                ZuluPad.AxisState.MOM
-            }
-            updateButtons()
+        // Bouton START
+        btnStart.setOnClickListener {
+            // TODO: logique START
         }
 
-        val start = Button(this).apply {
-            text = "START"
+        // Bouton MUTE
+        btnMute.setOnClickListener {
+            // TODO: logique MUTE
         }
 
-        val mute = Button(this).apply {
-            text = "MUTE"
+        // Mise à jour des textes
+        updateTexts()
+    }
+
+    private fun updateTexts() {
+        // Rafraîchit les valeurs affichées
+        runOnUiThread {
+            tvFx.text = "Fx: ${pad.fx.toInt()}"
+            tvFy.text = "Fy: ${pad.fy.toInt()}"
+            tvZx.text = "Zx: ${pad.zx.toInt()}"
+            tvZy.text = "Zy: ${pad.zy.toInt()}"
         }
-
-        updateButtons()
-
-        side.addView(title)
-        side.addView(buttonA)
-        side.addView(buttonB)
-        side.addView(start)
-        side.addView(mute)
-
-        layout.addView(
-            pad,
-            LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                1f
-            )
-        )
-
-        layout.addView(
-            side,
-            LinearLayout.LayoutParams(
-                150,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        setContentView(layout)
+        // Rafraîchissement périodique
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            updateTexts()
+        }, 100)
     }
 }
