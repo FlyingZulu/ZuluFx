@@ -83,7 +83,7 @@ class ZuluPad(context: Context) : View(context) {
         color: Int,
         letter: String
     ) {
-        val active = (letter == "F" && stateF == AxisState.MOM) || 
+        val active = (letter == "F" && stateF == AxisState.MOM) ||
                      (letter == "Z" && stateZ == AxisState.MOM)
 
         paint.color = if (active) color else offColor
@@ -145,7 +145,7 @@ class ZuluPad(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-                assignFinger(event.getPointerId(event.actionIndex), 
+                assignFinger(event.getPointerId(event.actionIndex),
                     event.getX(event.actionIndex), event.getY(event.actionIndex))
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
