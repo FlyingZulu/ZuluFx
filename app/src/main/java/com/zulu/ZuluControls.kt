@@ -61,7 +61,7 @@ open class DialView(context: Context) : View(context) {
         val m = 2.5f * d
         paint.fill(cream)
         canvas.drawRoundRect(m, m, w - m, h - m, 4f * d, 4f * d, paint)
-        paint.stroke(graffitiOrange, 1.5f * d)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 7)
     }
 
@@ -331,7 +331,7 @@ class DiagFaderView(context: Context) : View(context) {
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
-        paint.stroke(graffitiOrange, 1.5f * d)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 61)
 
         val groove = android.graphics.Path()
@@ -413,7 +413,7 @@ class SegmentedABRecView(context: Context) : View(context) {
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
-        paint.stroke(graffitiOrange, 1.5f * d)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 41)
 
         val labels = arrayOf("A", "B", "REC")
@@ -520,7 +520,7 @@ class JitterFaderView(context: Context) : View(context) {
 
         paint.fill(Color.rgb(30, 33, 40))
         canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
-        paint.stroke(graffitiOrange, 1.5f * d)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 71)
 
         val cx = w / 2f
