@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 
 private val cream = Color.rgb(236, 224, 196)
