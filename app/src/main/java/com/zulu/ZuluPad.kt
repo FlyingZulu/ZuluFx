@@ -299,9 +299,9 @@ class ZuluPad(context: Context) : View(context) {
             }
         }
 
-        drawCursor(canvas, ax * w + jax, (1f - ay) * h + jay, yellow, "A", stateA != AxisState.OFF,
+        drawCursor(canvas, ax * w + jax, (1f - ay) * h + jay, yellow, "F", stateA != AxisState.OFF,
             "${(ax * 100).toInt()} \u00b7 ${(ay * 100).toInt()}")
-        drawCursor(canvas, bx * w + jbx, (1f - by) * h + jby, pink, "B", stateB != AxisState.OFF,
+        drawCursor(canvas, bx * w + jbx, (1f - by) * h + jby, pink, "Z", stateB != AxisState.OFF,
             "${(bx * 100).toInt()} \u00b7 ${(by * 100).toInt()}")
 
         if (merged) {
@@ -399,11 +399,6 @@ class ZuluPad(context: Context) : View(context) {
                     val grab = (30f * d).toDouble()
                     val nearA = dA < grab
                     val nearB = dB < grab
-                    val firstA = when (fingerMode) {
-                        1 -> false
-                        2 -> px < width / 2f
-                        else -> true
-                    }
                     fun takeA() {
                         if (stateA == AxisState.MOM && fingerA == -1) {
                             restAx = targetAx; restAy = targetAy
@@ -420,20 +415,8 @@ class ZuluPad(context: Context) : View(context) {
                         nearA && stateA == AxisState.MOM && fingerA == -1 &&
                             (!nearB || dA <= dB) -> takeA()
                         nearB && stateB == AxisState.MOM && fingerB == -1 -> takeB()
-                        nearA && stateA == AxisState.MOM && fingerA == -1 -> takeA()
                         nearA && stateA == AxisState.HOLD -> {}
                         nearB && stateB == AxisState.HOLD -> {}
-                        fingerA == -1 && fingerB == -1 -> {
-                            if (firstA) {
-                                takeA()
-                                if (fingerA == -1) takeB()
-                            } else {
-                                takeB()
-                                if (fingerB == -1) takeA()
-                            }
-                        }
-                        fingerA == -1 && stateA == AxisState.MOM -> takeA()
-                        fingerB == -1 && stateB == AxisState.MOM -> takeB()
                     }
                 }
                 if (event.pointerCount >= 3 && !pinchFused) {

@@ -1,17 +1,37 @@
-# ZULU — MODE D'EMPLOI (mémo v0.26)
+# ZULU — MODE D'EMPLOI (mémo v0.27)
 
 Aide-mémoire des gestes et fonctions principales. Tout se joue au doigt, pensé pour le LIVE.
 
+## Le son démarre TOUT SEUL
+
+Depuis la v0.27, le moteur audio se lance à l'ouverture de l'appli : le synthé joué
+au pad XY s'entend immédiatement. **START/STOP (VU + BPM appuyés ensemble)** coupe ou
+relance le moteur (un message MOTEUR ON/OFF s'affiche).
+
 ## L'écran
 
-- **Pad XY (gauche)** : pièce maîtresse. Curseur jaune = axe A, curseur rose = axe B.
+- **Pad XY (gauche)** : pièce maîtresse. Curseur jaune = axe **F**, curseur rose = axe **Z**.
   Fond : mandala discret qui respire avec le son (turquoise = doux, chaud/rouge = agressif).
 - **Rangée du haut du pad** : 9 boutons banques FX/synth user presets + **ARP**.
-- **Bord du pad** : **SHIFT** (haut) et **MUTE** (bas).
-- **Ligne du haut à droite** : **FX** (rond), **F** (axe A), **Z** (axe B), **REC** (rond),
+- **Bord du pad** : **MUTE** (en bas) et **SHIFT** juste au-dessus.
+- **Ligne du haut à droite** : **FX** (rond), **F** (axe F), **Z** (axe Z), **REC** (rond),
   **VU-mètre 2 aiguilles** + **cadran BPM** style Casio, **UNDO** (à droite).
 - **Dessous** : 12 pads scènes/banques (8 samples + 4 solo par paires de colonnes),
-  boutons **ZU / LU**, grand fader **ZU/LU**, puis faders **FLY** et **MIX**.
+  **orange**, dernière rangée **rose magenta**. Un badge en haut à droite de la grille
+  affiche toujours le mode : **SCÈNE** (ambre) / **MOTION** (turquoise) / **SAMPLES**
+  (vert, quand SHIFT est enfoncé).
+  Boutons **ZU / LU**, grand fader **ZU/LU**, puis faders **FLY** et **MIX**.
+- Les curseurs ne se posent que si on les touche (rayon ~30dp) : pas de saut intempestif.
+
+## Fenêtre FX · SYNTH
+
+Le bouton **FX** ouvre une fenêtre avec **toutes les catégories en grille de pads
+colorés** : FILTRE (turquoise), MODULATION (violet), TEMPS (vert), TEXTURE (ambre),
+RESONANCE (rose), GRANULAIRE (cream), TRANSITIONS (jaune), SYNTH (orange).
+- **Tap** = ON/OFF (le bouton passe ambre quand il est actif) ; pour un SYNTH, tap =
+  le charger, puis **jouer sur le pad XY**.
+- **SHIFT + tap** = page de réglages de l'effet (tirettes).
+- **Tap hors de la fenêtre** ou **×** = fermer.
 
 ## Gestes essentiels
 
@@ -30,7 +50,8 @@ Aide-mémoire des gestes et fonctions principales. Tout se joue au doigt, pensé
 | SHIFT + MUTE | resampling (réenregistre la sortie en banque) |
 | Banques basses (mode 12 pads) | SOLO par paires de colonnes (aucun solo = silence) |
 | ZU / LU maintenu ≥ 400 ms | capture snapshot |
-| Double-tap sur les 2 curseurs | fusion ; re-double-tap = défusion billard |
+| Pincer à 3 doigts sur le pad | fusion des 2 curseurs |
+| Double-tap sur les curseurs fusionnés | défusion billard (rebonds aléatoires) |
 | SHIFT + écran (pad) | BEND : 4 ambiances aux 4 coins (doux / blip / anarchie / tempête) |
 
 ## FX send par sample (v0.26)

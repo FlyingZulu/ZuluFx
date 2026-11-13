@@ -212,6 +212,18 @@ class MainActivity : Activity() {
         val assignY: Int
     )
     private val fxButtons = ArrayList<Button>()
+    private val fxButtonCols = ArrayList<Int>()
+
+    private val fxCatCols = listOf(
+        Color.rgb(0, 240, 255),
+        Color.rgb(185, 110, 255),
+        Color.rgb(70, 255, 130),
+        Color.rgb(255, 190, 0),
+        Color.rgb(255, 70, 205),
+        Color.rgb(236, 224, 196),
+        Color.rgb(235, 255, 40),
+        Color.rgb(255, 120, 80)
+    )
 
     private val fxSections = listOf(
         "FILTRE" to listOf("LPF", "HPF", "BPF", "NOTCH", "PHASER"),
@@ -251,6 +263,9 @@ class MainActivity : Activity() {
 
     private var playing = false
     private var simulLock = false
+    private var sceneMode = 0
+    private var bSnapBtn: Button? = null
+    private var bMotionBtn: Button? = null
     private var resampling = false
     private var muteOn = false
     private val soloGroups = booleanArrayOf(false, false, false, false)
@@ -594,15 +609,6 @@ class MainActivity : Activity() {
         row1.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         row1.addView(btnUndo, LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt()))
 
-        val shiftRow = LinearLayout(this)
-        shiftRow.orientation = LinearLayout.HORIZONTAL
-        shiftRow.setPadding((2 * d).toInt(), 0, 0, 0)
-        shiftRow.addView(btnShift, LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt()))
-        val shiftRowParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        shiftRowParams.topMargin = (4 * d).toInt()
-
         val zuLuBtns = LinearLayout(this)
         zuLuBtns.orientation = LinearLayout.HORIZONTAL
         val zuParams = LinearLayout.LayoutParams(
@@ -623,7 +629,6 @@ class MainActivity : Activity() {
         column.orientation = LinearLayout.VERTICAL
         column.setPadding((6 * d).toInt(), (4 * d).toInt(), (10 * d).toInt(), (8 * d).toInt())
         column.addView(row1)
-        column.addView(shiftRow, shiftRowParams)
         gridParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (96 * d).toInt()
         )
@@ -725,6 +730,12 @@ class MainActivity : Activity() {
         edgeColumn.orientation = LinearLayout.VERTICAL
         edgeColumn.setPadding((3 * d).toInt(), (6 * d).toInt(), (3 * d).toInt(), (6 * d).toInt())
         edgeColumn.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
+        edgeColumn.addView(btnShift, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
+        val shiftGap = View(this)
+        edgeColumn.addView(
+            shiftGap,
+            LinearLayout.LayoutParams(0, (8 * d).toInt())
+        )
         edgeColumn.addView(btnMute, LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt()))
         padPane.addView(
             pad,
@@ -891,6 +902,11 @@ class MainActivity : Activity() {
         setContentView(root)
         blinkHandler.post(blinkRunnable)
         vuHandler.post(vuRunnable)
+
+        playing = engine.nativeStart(false)
+        if (!playing) {
+            Toast.makeText(this, "AUDIO : demarrage impossible", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun wrapParams(marginStart: Int): LinearLayout.LayoutParams {
@@ -1020,11 +1036,17 @@ class MainActivity : Activity() {
     private fun togglePlay() {
         if (!playing) {
             playing = engine.nativeStart(false)
+            Toast.makeText(
+                this,
+                if (playing) "MOTEUR ON" else "MOTEUR : ECHEC",
+                Toast.LENGTH_SHORT
+            ).show()
         } else {
             engine.nativeStop()
             playing = false
             vuMeter.levelL = 0f
             vuMeter.levelR = 0f
+            Toast.makeText(this, "MOTEUR OFF", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1081,10 +1103,13 @@ class MainActivity : Activity() {
         scroll.addView(list)
 
         var globalIdx = 0
+        var catIdx = 0
         for ((section, effects) in fxSections) {
+            val catCol = fxCatCols[catIdx % fxCatCols.size]
+            catIdx++
             val header = TextView(this)
             header.text = section
-            header.setTextColor(amber)
+            header.setTextColor(catCol)
             header.textSize = 11f
             header.typeface = markerFont(this)
             header.setPadding(0, (10 * d).toInt(), 0, (4 * d).toInt())
@@ -1096,8 +1121,14 @@ class MainActivity : Activity() {
                     row = LinearLayout(this)
                     list.addView(row)
                 }
-                val b = makeButton(fx, silk)
+                val b = makeButton(fx, catCol)
+                val bg = GradientDrawable()
+                bg.setColor(Color.rgb(16, 18, 24))
+                bg.setStroke((1 * d).toInt(), catCol)
+                bg.cornerRadius = 6 * d
+                b.background = bg
                 val idx = globalIdx
+                fxButtonCols.add(catCol)
                 b.setOnClickListener {
                     activeFx = idx
                     val code = fxCodes.getOrNull(idx) ?: ""
@@ -1134,7 +1165,9 @@ class MainActivity : Activity() {
                     refreshFxHighlight()
                 }
                 fxButtons.add(b)
-                row.addView(b, wrapParams((4 * d).toInt()))
+                val gp = LinearLayout.LayoutParams(0, (34 * d).toInt(), 1f)
+                gp.setMargins((3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt(), (3 * d).toInt())
+                row.addView(b, gp)
                 globalIdx++
             }
         }
@@ -1166,11 +1199,25 @@ class MainActivity : Activity() {
         assignRow.addView(bay, wrapParams((4 * d).toInt()))
         list.addView(assignRow)
 
+        val hint = TextView(this)
+        hint.text = "TAP = ON/OFF \u00b7 SHIFT+TAP = R\u00c9GLAGES \u00b7 SYNTH = JOUER SUR LE PAD"
+        hint.setTextColor(Color.rgb(120, 128, 146))
+        hint.textSize = 10f
+        hint.typeface = markerFont(this)
+        hint.setPadding(0, (8 * d).toInt(), 0, 0)
+        panel.addView(hint)
+
+        panel.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, (300 * d).toInt()
+            ).apply { topMargin = (4 * d).toInt() }
+        )
+
         val panelParams = FrameLayout.LayoutParams(
             (430 * d).toInt(), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
         )
         fxOverlay.addView(panel, panelParams)
-        fxOverlay.addView(scroll, FrameLayout.LayoutParams(0, 0))
     }
 
     private fun refreshFxHighlight() {
@@ -1184,7 +1231,7 @@ class MainActivity : Activity() {
                 'G' -> genIdx == num
                 else -> false
             }
-            b.setTextColor(if (on) amber else silk)
+            b.setTextColor(if (on) amber else fxButtonCols.getOrElse(i) { silk })
         }
         refreshPresetRow()
     }
@@ -2316,7 +2363,19 @@ class MainActivity : Activity() {
         header("SC\u00c8NES")
         val scRow = LinearLayout(this)
         val bSnap = makeButton("SNAPSHOT", amber)
-        val bMotion = makeButton("MOTION (BIENT\u00d4T)", Color.rgb(90, 96, 108))
+        bSnap.setOnClickListener {
+            sceneMode = 0
+            padGrid.padMode = 0
+            refreshMenu()
+        }
+        val bMotion = makeButton("MOTION", turquoise)
+        bMotion.setOnClickListener {
+            sceneMode = 1
+            padGrid.padMode = 1
+            refreshMenu()
+        }
+        bSnapBtn = bSnap
+        bMotionBtn = bMotion
         scRow.addView(bSnap, wrapParams((4 * d).toInt()))
         scRow.addView(bMotion, wrapParams((4 * d).toInt()))
         panel.addView(scRow)
@@ -2564,6 +2623,8 @@ class MainActivity : Activity() {
             b.setTextColor(if (i == fingerModeOpt) amber else silk)
         }
         menuFreezeBtn?.setTextColor(if (bendFreezeOpt) amber else silk)
+        bSnapBtn?.setTextColor(if (sceneMode == 0) amber else silk)
+        bMotionBtn?.setTextColor(if (sceneMode == 1) turquoise else silk)
         for ((i, b) in menuBillardButtons.withIndex()) {
             b.setTextColor(if (i == pad.billardFriction) amber else silk)
         }

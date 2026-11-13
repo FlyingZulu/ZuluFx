@@ -451,6 +451,9 @@ class PadGridView(context: Context) : View(context) {
     var soloMask = 0
         set(value) { field = value; invalidate() }
 
+    var padMode = 0
+        set(value) { field = value; invalidate() }
+
     var snapSides = IntArray(14)
         set(value) { field = value; invalidate() }
 
@@ -487,16 +490,18 @@ class PadGridView(context: Context) : View(context) {
             val lit = (shiftMode && activeBank == i + 1) || flash == i
             val rec = shiftMode && recPad == i
             val side = if (i < snapSides.size) snapSides[i] else 0
+            val lastRow = row == rows - 1
 
             paint.fill(
                 when {
                     rec && blinkOn -> Color.rgb(255, 90, 70)
                     rec -> Color.rgb(120, 40, 34)
                     soloOn -> Color.rgb(0, 229, 255)
-                    lit -> Color.rgb(255, 176, 0)
+                    lit -> Color.rgb(255, 244, 130)
                     side == 1 -> Color.rgb(18, 58, 60)
                     side == 2 -> Color.rgb(56, 38, 78)
-                    else -> Color.rgb(40, 44, 54)
+                    lastRow -> Color.rgb(198, 42, 140)
+                    else -> Color.rgb(196, 108, 20)
                 }
             )
             canvas.drawRoundRect(l, t, l + padW, t + padH, 5f * d, 5f * d, paint)
@@ -529,10 +534,39 @@ class PadGridView(context: Context) : View(context) {
                 paint.textSize = padH * 0.42f
                 canvas.drawText("S", l + padW / 2f, t + padH * 0.68f, paint)
             } else {
-                paint.fill(if (lit) ink else Color.rgb(70, 76, 90))
+                paint.fill(if (lit) ink else Color.rgb(40, 26, 12))
                 canvas.drawCircle(l + padW / 2f, t + padH / 2f, 2.5f * d, paint)
             }
         }
+
+        val modeCol = when {
+            shiftMode -> Color.rgb(70, 255, 130)
+            padMode == 1 -> Color.rgb(0, 240, 255)
+            else -> Color.rgb(255, 190, 0)
+        }
+        val modeName = when {
+            shiftMode -> "SAMPLES"
+            padMode == 1 -> "MOTION"
+            else -> "SC\u00c8NE"
+        }
+        paint.stroke(modeCol, 1.5f * d)
+        paint.alpha = 150
+        canvas.drawRoundRect(1f * d, 1f * d, w - 1f * d, h - 1f * d, 7f * d, 7f * d, paint)
+        paint.alpha = 255
+        paint.fill(Color.rgb(16, 18, 23))
+        paint.alpha = 225
+        val bw = 62f * d
+        val bh = 15f * d
+        canvas.drawRoundRect(w - bw - 3f * d, 3f * d, w - 3f * d, 3f * d + bh, 4f * d, 4f * d, paint)
+        paint.alpha = 255
+        paint.stroke(modeCol, 1f * d)
+        canvas.drawRoundRect(w - bw - 3f * d, 3f * d, w - 3f * d, 3f * d + bh, 4f * d, 4f * d, paint)
+        paint.fill(modeCol)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        paint.textSize = 9f * d
+        canvas.drawText(modeName, w - 3f * d - bw / 2f, 3f * d + bh * 0.72f, paint)
+
         drawScrews(canvas, paint, 0f, 0f, w, h, d)
     }
 
