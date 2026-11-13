@@ -57,6 +57,9 @@ class MainActivity : Activity() {
     private var fxHeld = false
     private var fxConsumed = false
     private var activeFx = -1
+    private var loopLenSteps = 8
+    private var loopWetA = false
+    private var loopWetB = false
     private val fxButtons = ArrayList<Button>()
 
     private val fxSections = listOf(
@@ -227,25 +230,43 @@ class MainActivity : Activity() {
         }
 
         segAB.onSegmentDown = { i ->
-            when (i) {
-                0 -> toggleAxis(true)
-                1 -> toggleAxis(false)
-                2 -> recHeld = true
+            when {
+                fxHeld && i == 0 -> loopWetA = true
+                fxHeld && i == 1 -> loopWetB = true
+                i == 0 -> toggleAxis(true)
+                i == 1 -> toggleAxis(false)
+                i == 2 -> recHeld = true
             }
             refreshBlink()
         }
         segAB.onSegmentUp = { i ->
-            if (i == 2) recHeld = false
+            when {
+                fxHeld && i == 0 -> loopWetA = false
+                fxHeld && i == 1 -> loopWetB = false
+                i == 2 -> recHeld = false
+            }
             refreshBlink()
         }
 
         padGrid.onPadTouch = { n ->
-            if (shiftActive() || fxHeld) {
-                fxConsumed = true
-                padGrid.activeBank = n
-                startLoopRecording(n)
-            } else {
-                engine.nativeJumpSlice(n, padGrid.padCount)
+            when {
+                fxHeld -> {
+                    fxConsumed = true
+                    loopLenSteps = n
+                    padGrid.activeBank = n
+                }
+                shiftActive() -> {
+                    fxConsumed = true
+                    startLoopRecording(n)
+                }
+                n <= 8 -> {
+                    if (engine.nativeBankHasLoop(n - 1)) {
+                        engine.nativeToggleBank(n - 1)
+                    } else {
+                        startLoopRecording(n)
+                    }
+                }
+                else -> engine.nativeJumpSlice(n, padGrid.padCount)
             }
         }
 
@@ -639,10 +660,11 @@ class MainActivity : Activity() {
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
     }
 
-    private fun startLoopRecording(steps: Int) {
-        engine.nativeRecordLoop(steps)
-        padGrid.recPad = steps - 1
-        val ms = (steps * 60000f / bpmDial.bpm.coerceAtLeast(40f)).toLong()
+    private fun startLoopRecording(bank: Int) {
+        val wet = loopWetA || loopWetB
+        engine.nativeRecordBank(bank - 1, loopLenSteps, wet)
+        padGrid.recPad = bank - 1
+        val ms = (loopLenSteps * 60000f / bpmDial.bpm.coerceAtLeast(40f)).toLong()
         recEndHandler.removeCallbacksAndMessages(null)
         recEndHandler.postDelayed({ padGrid.recPad = -1 }, ms + 200)
     }

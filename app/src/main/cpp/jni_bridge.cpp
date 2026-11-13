@@ -47,7 +47,13 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetBpm(JNIEnv*, jobject, jfloat b) { if (g) g->setBpm(b); }
 
 JNIEXPORT void JNICALL
-Java_com_zulu_AudioEngine_nativeRecordLoop(JNIEnv*, jobject, jint steps) { if (g) g->recordLoop(steps); }
+Java_com_zulu_AudioEngine_nativeRecordBank(JNIEnv*, jobject, jint bank, jint steps, jboolean wet) { if (g) g->recordBank(bank, steps, wet); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeToggleBank(JNIEnv*, jobject, jint bank) { if (g) g->toggleBank(bank); }
+
+JNIEXPORT jboolean JNICALL
+Java_com_zulu_AudioEngine_nativeBankHasLoop(JNIEnv*, jobject, jint bank) { return g ? g->bankHasLoop(bank) : JNI_FALSE; }
 
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeJumpSlice(JNIEnv*, jobject, jint slice, jint total) { if (g) g->jumpSlice(slice, total); }

@@ -21,9 +21,11 @@ public:
     void setStutter(bool s) { stutter.store(s); }
     void setBpm(float b) { bpm.store(b); }
 
-    void recordLoop(int steps);
+    void recordBank(int bank, int steps, bool wet);
+    void toggleBank(int bank);
+    bool bankHasLoop(int bank) const;
     void jumpSlice(int slice, int total);
-    bool isLoopRecording() const { return loopRecording.load(); }
+    bool isLoopRecording() const { return recBank >= 0; }
 
     float getLevelL() const { return levelL.load(); }
     float getLevelR() const { return levelR.load(); }
@@ -58,15 +60,22 @@ private:
     bool prevStutter = false;
     int stutterWrite = 0;
 
-    std::atomic<bool> loopRecording{false};
-    std::atomic<bool> loopPlaying{false};
+    struct LoopBank {
+        float* buf = nullptr;
+        int cap = 0;
+        int samples = 0;
+        int pos = 0;
+        bool playing = false;
+    };
+    static constexpr int kNumBanks = 8;
+    static constexpr int kMaxSteps = 14;
+    static constexpr int kTotalFrameBudget = 6553600;
+    LoopBank banks[kNumBanks];
+    int totalFrames = 0;
+    int recBank = -1;
+    bool recWet = false;
     std::atomic<int> loopSliceReq{-1};
     std::atomic<int> loopSliceTotal{0};
-    float* loopBuf = nullptr;
-    int loopCap = 0;
-    int loopSamples = 0;
-    int loopPos = 0;
-    int loopRecPos = 0;
     static constexpr float kLoopGain = 0.9f;
     int stutterPos = 0;
     int stutterLoopStart = 0;

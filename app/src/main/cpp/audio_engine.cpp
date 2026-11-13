@@ -51,20 +51,37 @@ float AudioEngine::runFilter(float xn) {
     return filter.process(xn);
 }
 
-void AudioEngine::recordLoop(int steps) {
+void AudioEngine::recordBank(int bank, int steps, bool wet) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    if (steps < 1) steps = 1;
+    if (steps > kMaxSteps) steps = kMaxSteps;
     float b = fmaxf(bpm.load(), 40.f);
     int n = (int)((60.f / b) * steps * fs);
     if (n < 4800) n = 4800;
-    if (!loopBuf || loopCap < n) {
-        delete[] loopBuf;
-        loopCap = n;
-        loopBuf = new float[(size_t)n * 2];
+    LoopBank& lb = banks[bank];
+    if (!lb.buf || lb.cap < n) {
+        int extra = n - (lb.samples > 0 ? lb.samples : 0);
+        if (totalFrames + extra > kTotalFrameBudget) return;
+        totalFrames += extra;
+        delete[] lb.buf;
+        lb.cap = n;
+        lb.buf = new float[(size_t)n * 2];
     }
-    loopSamples = n;
-    loopRecPos = 0;
-    loopPos = 0;
-    loopPlaying.store(false);
-    loopRecording.store(true);
+    lb.samples = n;
+    lb.pos = 0;
+    lb.playing = false;
+    recBank = bank;
+    recWet = wet;
+}
+
+void AudioEngine::toggleBank(int bank) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    if (banks[bank].samples > 0) banks[bank].playing = !banks[bank].playing;
+}
+
+bool AudioEngine::bankHasLoop(int bank) const {
+    if (bank < 0 || bank >= kNumBanks) return false;
+    return banks[bank].samples > 0;
 }
 
 void AudioEngine::jumpSlice(int slice, int total) {
@@ -134,28 +151,32 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
 
         float liveL = smp, liveR = smp;
 
-        if (loopRecording.load()) {
-            loopBuf[2 * loopRecPos] = liveL;
-            loopBuf[2 * loopRecPos + 1] = liveR;
-            loopRecPos++;
-            if (loopRecPos >= loopSamples) {
-                loopRecording.store(false);
-                loopPlaying.store(true);
-                loopPos = 0;
+        if (recBank >= 0) {
+            LoopBank& lb = banks[recBank];
+            float c = recWet ? smp : inS;
+            lb.buf[2 * lb.pos] = c;
+            lb.buf[2 * lb.pos + 1] = c;
+            lb.pos++;
+            if (lb.pos >= lb.samples) {
+                lb.playing = true;
+                lb.pos = 0;
+                recBank = -1;
             }
         }
 
         float loopL = 0.f, loopR = 0.f;
-        if (loopPlaying.load()) {
-            int req = loopSliceReq.exchange(-1);
+        int req = loopSliceReq.exchange(-1);
+        for (int k = 0; k < kNumBanks; k++) {
+            LoopBank& lb = banks[k];
+            if (!lb.playing || lb.samples <= 0) continue;
             if (req >= 0) {
                 int tot = loopSliceTotal.load();
-                if (tot > 0) loopPos = (int)((float)req / tot * loopSamples);
-                if (loopPos >= loopSamples) loopPos = 0;
+                if (tot > 0) lb.pos = (int)((float)req / tot * lb.samples);
+                if (lb.pos >= lb.samples) lb.pos = 0;
             }
-            loopL = loopBuf[2 * loopPos];
-            loopR = loopBuf[2 * loopPos + 1];
-            loopPos = (loopPos + 1) % loopSamples;
+            loopL += lb.buf[2 * lb.pos];
+            loopR += lb.buf[2 * lb.pos + 1];
+            lb.pos = (lb.pos + 1) % lb.samples;
         }
 
         float history = liveL;
