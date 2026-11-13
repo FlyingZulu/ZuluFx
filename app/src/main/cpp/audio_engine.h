@@ -49,6 +49,7 @@ private:
     int coeffClock = 0;
 
     bool prevStutter = false;
+    int stutterWrite = 0;
     int stutterPos = 0;
     int stutterLoopStart = 0;
     int stutterWindow = 0;
