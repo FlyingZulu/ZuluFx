@@ -331,76 +331,6 @@ class ZuLuSelector(context: Context) : View(context) {
     }
 }
 
-class DiagFaderView(context: Context) : View(context) {
-
-    val cmdId = "faderZuLu"
-
-    private val d = resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val marker = markerFont(context)
-
-    val turquoise = Color.rgb(0, 229, 255)
-    val violet = Color.rgb(170, 140, 255)
-
-    var value = 0.5f
-        private set
-
-    private fun groove(w: Float, h: Float): FloatArray {
-        val m = 10f * d
-        return floatArrayOf(m, h - m, m + (h - 2f * m) * 0.85f, m)
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-
-        paint.fill(Color.rgb(30, 33, 40))
-        canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
-        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 61)
-
-        val g = groove(w, h)
-        paint.stroke(Color.rgb(18, 20, 25), 5f * d)
-        canvas.drawLine(g[0], g[1], g[2], g[3], paint)
-        paint.stroke(Color.rgb(60, 66, 80), 1f * d)
-        canvas.drawLine(g[0], g[1], g[2], g[3], paint)
-
-        paint.textAlign = Paint.Align.LEFT
-        paint.typeface = marker
-        paint.textSize = 10f * d
-        paint.fill(turquoise)
-        canvas.drawText("ZU", g[0] + 2f * d, g[1] - 5f * d, paint)
-        paint.fill(violet)
-        canvas.drawText("LU", g[2] + 4f * d, g[3] + 11f * d, paint)
-
-        val u = g[0] + value * (g[2] - g[0])
-        val v = g[1] + value * (g[3] - g[1])
-
-        paint.fill(Color.rgb(55, 60, 74))
-        canvas.drawCircle(u, v, 9f * d, paint)
-        paint.stroke(silk, 1.2f * d)
-        canvas.drawCircle(u, v, 9f * d, paint)
-        paint.stroke(Color.rgb(28, 31, 38), 1f * d)
-        for (i in -1..1) {
-            canvas.drawLine(u - 5f * d, v + i * 3f * d, u + 5f * d, v + i * 3f * d, paint)
-        }
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
-                val g = groove(width.toFloat(), height.toFloat())
-                val dx = g[2] - g[0]
-                val dy = g[3] - g[1]
-                val t = ((event.x - g[0]) * dx + (event.y - g[1]) * dy) / (dx * dx + dy * dy)
-                value = t.coerceIn(0f, 1f)
-            }
-        }
-        invalidate()
-        return true
-    }
-}
-
 class SegmentedABRecView(context: Context) : View(context) {
 
     val cmdId = "abRec"
@@ -540,66 +470,6 @@ class FlyFaderView(context: Context) : View(context) {
     }
 }
 
-class MixFaderView(context: Context) : View(context) {
-
-    val cmdId = "mix"
-
-    private val d = resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val marker = markerFont(context)
-
-    var value = 1f
-        private set
-
-    var onValueChange: ((Float) -> Unit)? = null
-
-    override fun onDraw(canvas: Canvas) {
-        val w = width.toFloat()
-        val h = height.toFloat()
-        val m = 6f * d
-
-        paint.fill(Color.rgb(30, 33, 40))
-        canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
-        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 83)
-
-        val cy = h / 2f
-        val gx0 = m + 18f * d
-        paint.stroke(Color.rgb(18, 20, 25), 5f * d)
-        canvas.drawLine(gx0, cy, w - m, cy, paint)
-        paint.stroke(Color.rgb(60, 66, 80), 1f * d)
-        canvas.drawLine(gx0, cy, w - m, cy, paint)
-
-        paint.fill(cream)
-        paint.textAlign = Paint.Align.LEFT
-        paint.typeface = marker
-        paint.textSize = 8f * d
-        canvas.drawText("MIX", m, cy + 3f * d, paint)
-
-        val kx = gx0 + value * (w - m - gx0)
-        paint.fill(Color.rgb(55, 60, 74))
-        canvas.drawRoundRect(kx - 4f * d, cy - 9f * d, kx + 4f * d, cy + 9f * d, 3f * d, 3f * d, paint)
-        paint.stroke(silk, 1.2f * d)
-        canvas.drawRoundRect(kx - 4f * d, cy - 9f * d, kx + 4f * d, cy + 9f * d, 3f * d, 3f * d, paint)
-        paint.stroke(Color.rgb(28, 31, 38), 1f * d)
-        canvas.drawLine(kx, cy - 6f * d, kx, cy + 6f * d, paint)
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
-                val w = width.toFloat()
-                val m = 6f * d
-                val gx0 = m + 18f * d
-                value = ((event.x - gx0) / (w - m - gx0)).coerceIn(0f, 1f)
-                onValueChange?.invoke(value)
-            }
-        }
-        invalidate()
-        return true
-    }
-}
-
 class GlitchScopeView(context: Context) : View(context) {
 
     private val d = resources.displayMetrics.density
@@ -652,5 +522,84 @@ class GlitchScopeView(context: Context) : View(context) {
         canvas.drawText("BEND", w - 5f * d, h - 4f * d, paint)
 
         if (running) postInvalidateOnAnimation()
+    }
+}
+
+class VFaderView(
+    context: Context,
+    private val label: String,
+    private val marks: List<Pair<Float, String>> = emptyList()
+) : View(context) {
+
+    val cmdId = "vfader_$label"
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
+    var onValueChange: ((Float) -> Unit)? = null
+
+    var value = 0.5f
+        set(v) {
+            field = v.coerceIn(0f, 1f)
+            invalidate()
+        }
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val m = 8f * d
+
+        paint.fill(Color.rgb(30, 33, 40))
+        canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 73)
+
+        val cx = w * 0.42f
+        paint.stroke(Color.rgb(18, 20, 25), 5f * d)
+        canvas.drawLine(cx, m, cx, h - m, paint)
+        paint.stroke(Color.rgb(60, 66, 80), 1f * d)
+        canvas.drawLine(cx, m, cx, h - m, paint)
+
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = marker
+        paint.textSize = 8f * d
+        for ((p, txt) in marks) {
+            val my = (h - m) - p * (h - 2f * m)
+            paint.stroke(Color.rgb(90, 97, 114), 1f * d)
+            canvas.drawLine(cx + 4f * d, my, cx + 9f * d, my, paint)
+            paint.fill(Color.rgb(120, 128, 144))
+            canvas.drawText(txt, cx + 11f * d, my + 3f * d, paint)
+        }
+
+        val ky = (h - m) - value * (h - 2f * m)
+        paint.fill(Color.rgb(55, 60, 74))
+        canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
+        paint.stroke(silk, 1.2f * d)
+        canvas.drawRoundRect(cx - 11f * d, ky - 5f * d, cx + 11f * d, ky + 5f * d, 3f * d, 3f * d, paint)
+        paint.stroke(Color.rgb(28, 31, 38), 1f * d)
+        canvas.drawLine(cx - 7f * d, ky, cx + 7f * d, ky, paint)
+
+        canvas.save()
+        canvas.rotate(-90f, cx, h * 0.16f)
+        paint.fill(silk)
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        paint.textSize = 9f * d
+        canvas.drawText(label, cx, h * 0.16f + 3f * d, paint)
+        canvas.restore()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
+                val h = height.toFloat()
+                val m = 8f * d
+                value = 1f - ((event.y - m) / (h - 2f * m)).coerceIn(0f, 1f)
+                onValueChange?.invoke(value)
+            }
+        }
+        invalidate()
+        return true
     }
 }

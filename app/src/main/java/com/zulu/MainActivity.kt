@@ -41,9 +41,10 @@ class MainActivity : Activity() {
     private lateinit var segAB: SegmentedABRecView
     private lateinit var padGrid: PadGridView
     private lateinit var zuLu: ZuLuSelector
-    private lateinit var diagFader: DiagFaderView
+    private lateinit var zuLuFader: VFaderView
     private lateinit var flyFader: FlyFaderView
-    private lateinit var mixFader: MixFaderView
+    private lateinit var mixFader: VFaderView
+    private lateinit var tempoFader: VFaderView
     private lateinit var glitchScope: GlitchScopeView
     private lateinit var btnStart: Button
     private lateinit var btnMute: Button
@@ -140,9 +141,15 @@ class MainActivity : Activity() {
         segAB = SegmentedABRecView(this)
         padGrid = PadGridView(this)
         zuLu = ZuLuSelector(this)
-        diagFader = DiagFaderView(this)
+        zuLuFader = VFaderView(this, "ZU/LU")
         flyFader = FlyFaderView(this)
-        mixFader = MixFaderView(this)
+        mixFader = VFaderView(this, "MIX")
+        mixFader.value = 1f
+        tempoFader = VFaderView(
+            this, "TEMPO",
+            listOf(0f to "20", 0.301f to "40", 0.602f to "80", 0.903f to "160")
+        )
+        tempoFader.value = 0.778f
         glitchScope = GlitchScopeView(this)
         glitchScope.visibility = View.GONE
 
@@ -185,7 +192,7 @@ class MainActivity : Activity() {
         }
 
         btnStart = makeButton("START", green)
-        btnMute = makeButton("MUTE", silk)
+        btnMute = makeRoundButton("MUTE", silk, 10f)
         btnTap = makeButton("\u25cf", amber)
         btnShift = makeRoundButton("SHIFT", silk, 10f)
         btnMenu = makeRoundButton("\u2699", silk, 16f)
@@ -234,6 +241,7 @@ class MainActivity : Activity() {
                 for (i in 1 until recent.size) sum += recent[i] - recent[i - 1]
                 bpmDial.bpm = (60000.0 * (recent.size - 1) / sum).toFloat()
                 engine.nativeSetBpm(bpmDial.bpm)
+                tempoFader.value = (Math.log10(bpmDial.bpm.toDouble() / 20.0)).toFloat()
             }
             if (taps.size > 8) taps.removeAt(0)
         }
@@ -321,7 +329,6 @@ class MainActivity : Activity() {
         val row1 = LinearLayout(this)
         row1.orientation = LinearLayout.HORIZONTAL
         row1.gravity = Gravity.CENTER_VERTICAL
-        row1.addView(btnFx, LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt()))
         row1.addView(
             vuMeter,
             LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
@@ -329,7 +336,6 @@ class MainActivity : Activity() {
         val dialParams = LinearLayout.LayoutParams((64 * d).toInt(), (46 * d).toInt())
         dialParams.setMargins((6 * d).toInt(), 0, 0, 0)
         row1.addView(bpmDial, dialParams)
-        row1.addView(btnTap, wrapParams((4 * d).toInt()))
         row1.addView(btnStart, wrapParams((4 * d).toInt()))
         val menuParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
         menuParams.setMargins((6 * d).toInt(), 0, 0, 0)
@@ -375,36 +381,23 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (34 * d).toInt())
         )
 
-        val row5 = FrameLayout(this)
+        val roundRow = LinearLayout(this)
+        roundRow.orientation = LinearLayout.HORIZONTAL
+        roundRow.gravity = Gravity.CENTER
+        val roundParams = LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt())
+        roundParams.setMargins((4 * d).toInt(), 0, (4 * d).toInt(), 0)
+        roundRow.addView(btnMute, roundParams)
+        roundRow.addView(btnTap, roundParams)
+        roundRow.addView(btnFx, roundParams)
+
         val faderRow = LinearLayout(this)
         faderRow.orientation = LinearLayout.HORIZONTAL
         faderRow.setPadding(0, (8 * d).toInt(), 0, (8 * d).toInt())
-        faderRow.addView(
-            diagFader,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-        )
-        val flyParams = LinearLayout.LayoutParams((34 * d).toInt(), LinearLayout.LayoutParams.MATCH_PARENT)
-        flyParams.setMargins((4 * d).toInt(), 0, 0, 0)
-        faderRow.addView(flyFader, flyParams)
-        row5.addView(
-            faderRow,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-        val muteParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.TOP or Gravity.START
-        )
-        muteParams.setMargins((12 * d).toInt(), (10 * d).toInt(), 0, 0)
-        row5.addView(btnMute, muteParams)
-        val mixParams = FrameLayout.LayoutParams(
-            (120 * d).toInt(), (26 * d).toInt(), Gravity.BOTTOM or Gravity.END
-        )
-        mixParams.setMargins(0, 0, (44 * d).toInt(), (10 * d).toInt())
-        row5.addView(mixFader, mixParams)
+        for (f in listOf(zuLuFader, flyFader, mixFader, tempoFader)) {
+            val fp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+            fp.setMargins((3 * d).toInt(), 0, (3 * d).toInt(), 0)
+            faderRow.addView(f, fp)
+        }
         wireFaders()
 
         val column = LinearLayout(this)
@@ -414,11 +407,16 @@ class MainActivity : Activity() {
         column.addView(row2, columnRowParams(d))
         column.addView(row3, columnRowParams(d))
         column.addView(row4, columnRowParams(d))
-        val row5Params = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, (106 * d).toInt()
+        val roundRowParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (46 * d).toInt()
         )
-        row5Params.topMargin = (12 * d).toInt()
-        column.addView(row5, row5Params)
+        roundRowParams.topMargin = (8 * d).toInt()
+        column.addView(roundRow, roundRowParams)
+        val faderRowParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        )
+        faderRowParams.topMargin = (10 * d).toInt()
+        column.addView(faderRow, faderRowParams)
 
         val content = LinearLayout(this)
         content.orientation = LinearLayout.HORIZONTAL
@@ -1069,6 +1067,11 @@ class MainActivity : Activity() {
         flyFader.onValueChange = { v, st ->
             engine.nativeSetFly(v)
             engine.nativeSetStutter(st)
+        }
+        tempoFader.onValueChange = { v ->
+            val b = (20f * Math.pow(10.0, v.toDouble()).toFloat()).coerceIn(40f, 200f)
+            bpmDial.bpm = b
+            engine.nativeSetBpm(b)
         }
     }
 }
