@@ -7,12 +7,22 @@ android {
     namespace 'com.zulu'
     compileSdk 34
 
+    signingConfigs {
+        zulu {
+            storeFile rootProject.file('signing/zulu.p12')
+            storeType 'PKCS12'
+            storePassword 'zuluzulu2000'
+            keyAlias 'zulu'
+            keyPassword 'zuluzulu2000'
+        }
+    }
+
     defaultConfig {
         applicationId "com.zulu"
         minSdk 24
         targetSdk 33
-        versionCode 18
-        versionName "0.18"
+        versionCode 19
+        versionName "0.19"
         ndk { abiFilters 'arm64-v8a' }
         externalNativeBuild {
             cmake {
@@ -30,6 +40,16 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = '17' }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.zulu
+        }
+        release {
+            signingConfig signingConfigs.zulu
+            minifyEnabled false
+        }
+    }
 }
 
 dependencies {
