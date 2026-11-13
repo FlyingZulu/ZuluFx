@@ -1076,7 +1076,7 @@ class MainActivity : Activity() {
             engine.nativeSetRoot(activeRoot)
             mixFader.value = json.getDouble("mix").toFloat()
             engine.nativeSetMix(mixFader.value)
-            flyFader.value = json.getDouble("fly").toFloat()
+            flyFader.setValue(json.getDouble("fly").toFloat())
             engine.nativeSetFly(flyFader.value)
             val sm = json.optInt("soloMask", 0)
             for (g in 0 until 4) soloGroups[g] = (sm and (1 shl g)) != 0

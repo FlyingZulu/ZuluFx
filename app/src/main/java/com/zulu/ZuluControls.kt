@@ -373,6 +373,11 @@ class FlyFaderView(context: Context) : View(context) {
     var value = 0f
         private set
 
+    fun setValue(v: Float) {
+        value = v.coerceIn(0f, 1f)
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
