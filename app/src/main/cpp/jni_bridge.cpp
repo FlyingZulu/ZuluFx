@@ -62,7 +62,13 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetArpSlices(JNIEnv*, jobject, jint n) { if (g) g->setArpSlices(n); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetSoloMask(JNIEnv*, jobject, jint m) { if (g) g->setSoloMask(m); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeRecordBank(JNIEnv*, jobject, jint bank, jint steps, jboolean wet) { if (g) g->recordBank(bank, steps, wet); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeResample(JNIEnv*, jobject, jint bank, jint steps) { if (g) g->startResample(bank, steps); }
 
 JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeToggleBank(JNIEnv*, jobject, jint bank) { if (g) g->toggleBank(bank); }

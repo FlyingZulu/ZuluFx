@@ -43,7 +43,6 @@ class MainActivity : Activity() {
     private lateinit var flyFader: FlyFaderView
     private lateinit var mixFader: VFaderView
     private lateinit var glitchScope: GlitchScopeView
-    private lateinit var btnStart: Button
     private lateinit var btnMute: Button
     private lateinit var btnShift: Button
     private lateinit var btnFx: Button
@@ -110,7 +109,10 @@ class MainActivity : Activity() {
     private val red = Color.rgb(255, 90, 70)
 
     private var playing = false
+    private var simulLock = false
+    private var resampling = false
     private var muteOn = false
+    private val soloGroups = booleanArrayOf(false, false, false, false)
     private var shiftHeld = false
     private var shiftLocked = false
     private var recHeld = false
@@ -191,7 +193,6 @@ class MainActivity : Activity() {
             }
         }
 
-        btnStart = makeButton("START", green)
         btnMute = makeRoundButton("MUTE", silk, 10f)
         btnShift = makeRoundButton("SHIFT", silk, 10f)
         btnFx = makeRoundButton("FX", amber, 12f)
@@ -221,18 +222,8 @@ class MainActivity : Activity() {
             false
         }
 
-        btnStart.setOnClickListener {
-            if (!playing) {
-                playing = engine.nativeStart(false)
-                btnStart.text = if (playing) "STOP" else "ERREUR"
-            } else {
-                engine.nativeStop()
-                playing = false
-                btnStart.text = "START"
-                vuMeter.levelL = 0f
-                vuMeter.levelR = 0f
-            }
-        }
+        vuMeter.onPressed = { _ -> checkSimulStart() }
+        bpmLcd.onPressed = { _ -> checkSimulStart() }
 
         bpmLcd.onBpmChange = { b -> engine.nativeSetBpm(b) }
 
@@ -262,14 +253,23 @@ class MainActivity : Activity() {
         btnMute.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    muteOn = true
-                    btnMute.text = "MUTE \u25cf"
-                    engine.nativeSetMute(true)
+                    if (shiftActive()) {
+                        resampling = true
+                        startResampleUI()
+                    } else {
+                        muteOn = true
+                        btnMute.text = "MUTE \u25cf"
+                        engine.nativeSetMute(true)
+                    }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    muteOn = false
-                    btnMute.text = "MUTE"
-                    engine.nativeSetMute(false)
+                    if (resampling) {
+                        resampling = false
+                    } else {
+                        muteOn = false
+                        btnMute.text = "MUTE"
+                        engine.nativeSetMute(false)
+                    }
                 }
             }
             true
@@ -321,6 +321,7 @@ class MainActivity : Activity() {
                     fxConsumed = true
                     startLoopRecording(n)
                 }
+                padGrid.padCount == 12 && n in 9..12 -> toggleSolo(n - 9)
                 n <= 8 -> {
                     if (engine.nativeBankHasLoop(n - 1)) {
                         engine.nativeToggleBank(n - 1)
@@ -346,7 +347,6 @@ class MainActivity : Activity() {
         val vuParams = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
         vuParams.setMargins((6 * d).toInt(), 0, 0, 0)
         row1.addView(vuMeter, vuParams)
-        row1.addView(btnStart, wrapParams((4 * d).toInt()))
 
         val bpmRow = LinearLayout(this)
         bpmRow.gravity = Gravity.END
@@ -408,13 +408,15 @@ class MainActivity : Activity() {
         leftColumn.addView(padGrid, gridParams)
 
         vuMeter.onLongPress = {
-            mirrored = !mirrored
-            content.layoutDirection =
-                if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            if (!simulLock) {
+                mirrored = !mirrored
+                content.layoutDirection =
+                    if (mirrored) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            }
         }
 
         vuMeter.onDoubleTap = {
-            if (shiftActive()) {
+            if (!simulLock && shiftActive()) {
                 openScalePanel()
             } else {
                 padGrid.padCount = when (padGrid.padCount) {
@@ -610,6 +612,45 @@ class MainActivity : Activity() {
     }
 
     private fun shiftActive() = shiftHeld || shiftLocked
+
+    private fun checkSimulStart() {
+        if (!simulLock && vuMeter.pressed && bpmLcd.pressed) {
+            simulLock = true
+            bpmLcd.inputEnabled = false
+            togglePlay()
+        } else if (simulLock && !vuMeter.pressed && !bpmLcd.pressed) {
+            simulLock = false
+            bpmLcd.inputEnabled = true
+        }
+    }
+
+    private fun toggleSolo(group: Int) {
+        soloGroups[group] = !soloGroups[group]
+        var mask = 0
+        for (g in 0 until 4) if (soloGroups[g]) mask = mask or (1 shl g)
+        engine.nativeSetSoloMask(mask)
+        padGrid.soloMask = mask
+    }
+
+    private fun startResampleUI() {
+        val bank = (0 until 8).firstOrNull { !engine.nativeBankHasLoop(it) } ?: return
+        engine.nativeResample(bank, loopLenSteps)
+        padGrid.recPad = bank
+        val ms = (loopLenSteps * 60000f / bpmLcd.bpm.coerceAtLeast(40f)).toLong()
+        recEndHandler.removeCallbacksAndMessages(null)
+        recEndHandler.postDelayed({ padGrid.recPad = -1 }, ms + 200)
+    }
+
+    private fun togglePlay() {
+        if (!playing) {
+            playing = engine.nativeStart(false)
+        } else {
+            engine.nativeStop()
+            playing = false
+            vuMeter.levelL = 0f
+            vuMeter.levelR = 0f
+        }
+    }
 
     private fun refreshShift() {
         padGrid.shiftMode = shiftActive()

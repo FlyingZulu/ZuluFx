@@ -17,7 +17,9 @@ class AudioEngine {
     external fun nativeSetRoot(r: Int)
     external fun nativeSetArp(on: Boolean, mode: Int, rate: Int, oct: Int, gate: Int, octJump: Boolean)
     external fun nativeSetArpSlices(n: Int)
+    external fun nativeSetSoloMask(m: Int)
     external fun nativeRecordBank(bank: Int, steps: Int, wet: Boolean)
+    external fun nativeResample(bank: Int, steps: Int)
     external fun nativeToggleBank(bank: Int)
     external fun nativeBankHasLoop(bank: Int): Boolean
     external fun nativeJumpSlice(slice: Int, total: Int)

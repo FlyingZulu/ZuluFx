@@ -71,6 +71,10 @@ class BarVuView(context: Context) : View(context) {
     var onDoubleTap: (() -> Unit)? = null
     var onLongPress: (() -> Unit)? = null
 
+    var pressed = false
+        private set
+    var onPressed: ((Boolean) -> Unit)? = null
+
     private var lastTap = 0L
     private var longPressPending = false
 
@@ -120,6 +124,8 @@ class BarVuView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 val now = System.currentTimeMillis()
                 longPressPending = true
+                pressed = true
+                onPressed?.invoke(true)
                 postDelayed({
                     if (longPressPending) {
                         longPressPending = false
@@ -133,7 +139,13 @@ class BarVuView(context: Context) : View(context) {
                     lastTap = now
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> longPressPending = false
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                longPressPending = false
+                if (pressed) {
+                    pressed = false
+                    onPressed?.invoke(false)
+                }
+            }
         }
         return true
     }
@@ -154,6 +166,16 @@ class BpmLcdView(context: Context) : View(context) {
             invalidate()
         }
 
+    var inputEnabled = true
+
+    var pressed = false
+        private set
+    var onPressed: ((Boolean) -> Unit)? = null
+
+    private val taps = ArrayList<Long>()
+    private var downY = 0f
+    private var downTime = 0L
+    private var moved = false
     private var dragY = 0f
 
     override fun onDraw(canvas: Canvas) {
@@ -180,12 +202,44 @@ class BpmLcdView(context: Context) : View(context) {
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> dragY = event.y
-            MotionEvent.ACTION_MOVE -> {
-                val dy = dragY - event.y
+            MotionEvent.ACTION_DOWN -> {
                 dragY = event.y
-                bpm += dy * 0.4f
-                onBpmChange?.invoke(bpm)
+                downY = event.y
+                downTime = System.currentTimeMillis()
+                moved = false
+                pressed = true
+                onPressed?.invoke(true)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (Math.abs(event.y - downY) > 8f * d) moved = true
+                if (moved && inputEnabled) {
+                    val dy = dragY - event.y
+                    dragY = event.y
+                    bpm += dy * 0.4f
+                    onBpmChange?.invoke(bpm)
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                pressed = false
+                onPressed?.invoke(false)
+                val dt = System.currentTimeMillis() - downTime
+                if (inputEnabled && !moved && dt < 300) {
+                    val now = System.currentTimeMillis()
+                    if (taps.isNotEmpty() && now - taps.last() > 2000) taps.clear()
+                    taps.add(now)
+                    if (taps.size >= 2) {
+                        val recent = taps.takeLast(4)
+                        var sum = 0L
+                        for (i in 1 until recent.size) sum += recent[i] - recent[i - 1]
+                        bpm = (60000.0 * (recent.size - 1) / sum).toFloat()
+                        onBpmChange?.invoke(bpm)
+                    }
+                    if (taps.size > 8) taps.removeAt(0)
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                pressed = false
+                onPressed?.invoke(false)
             }
         }
         return true
@@ -214,6 +268,9 @@ class PadGridView(context: Context) : View(context) {
     var recPad = -1
         set(value) { field = value; invalidate() }
 
+    var soloMask = 0
+        set(value) { field = value; invalidate() }
+
     var onPadTouch: ((Int) -> Unit)? = null
 
     private var flash = -1
@@ -233,6 +290,8 @@ class PadGridView(context: Context) : View(context) {
             val row = i / 4
             val l = gap + col * (padW + gap)
             val t = gap + row * (padH + gap)
+            val soloPad = padCount == 12 && i >= 8
+            val soloOn = soloPad && (soloMask and (1 shl (i - 8))) != 0
             val lit = (shiftMode && activeBank == i + 1) || flash == i
             val rec = shiftMode && recPad == i
 
@@ -240,6 +299,7 @@ class PadGridView(context: Context) : View(context) {
                 when {
                     rec && blinkOn -> Color.rgb(255, 90, 70)
                     rec -> Color.rgb(120, 40, 34)
+                    soloOn -> Color.rgb(0, 229, 255)
                     lit -> Color.rgb(255, 176, 0)
                     else -> Color.rgb(40, 44, 54)
                 }
@@ -254,6 +314,12 @@ class PadGridView(context: Context) : View(context) {
                 paint.typeface = marker
                 paint.textSize = padH * 0.5f
                 canvas.drawText("${i + 1}", l + padW / 2f, t + padH * 0.7f, paint)
+            } else if (soloPad) {
+                paint.fill(if (soloOn) ink else silk)
+                paint.textAlign = Paint.Align.CENTER
+                paint.typeface = marker
+                paint.textSize = padH * 0.42f
+                canvas.drawText("S", l + padW / 2f, t + padH * 0.68f, paint)
             } else {
                 paint.fill(if (lit) ink else Color.rgb(70, 76, 90))
                 canvas.drawCircle(l + padW / 2f, t + padH / 2f, 2.5f * d, paint)

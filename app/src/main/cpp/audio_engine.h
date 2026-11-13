@@ -28,8 +28,10 @@ public:
         arpOct.store(oct); arpGate.store(gate); arpOctJump.store(octJump);
     }
     void setArpSlices(int n) { arpSlices.store(n); }
+    void setSoloMask(int m) { soloMask.store(m); }
 
     void recordBank(int bank, int steps, bool wet);
+    void startResample(int bank, int steps);
     void toggleBank(int bank);
     bool bankHasLoop(int bank) const;
     void jumpSlice(int slice, int total);
@@ -63,6 +65,7 @@ private:
     std::atomic<int> arpSlices{8};
     std::atomic<int> arpGate{1};
     std::atomic<bool> arpOctJump{false};
+    std::atomic<int> soloMask{0};
     std::atomic<float> levelL{0.0f}, levelR{0.0f};
 
     bool mic = false;
@@ -108,6 +111,8 @@ private:
     int totalFrames = 0;
     int recBank = -1;
     bool recWet = false;
+    int resBank = -1;
+    int resPos = 0;
     std::atomic<int> loopSliceReq{-1};
     std::atomic<int> loopSliceTotal{0};
     static constexpr float kLoopGain = 0.9f;

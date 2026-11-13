@@ -315,6 +315,30 @@ void AudioEngine::recordBank(int bank, int steps, bool wet) {
     recWet = wet;
 }
 
+void AudioEngine::startResample(int bank, int steps) {
+    if (bank < 0 || bank >= kNumBanks) return;
+    if (resBank >= 0) return;
+    if (steps < 1) steps = 1;
+    if (steps > kMaxSteps) steps = kMaxSteps;
+    float b = fmaxf(bpm.load(), 40.f);
+    int n = (int)((60.f / b) * steps * fs);
+    if (n < 4800) n = 4800;
+    LoopBank& lb = banks[bank];
+    if (lb.samples > 0) return;
+    if (!lb.buf || lb.cap < n) {
+        if (totalFrames + n > kTotalFrameBudget) return;
+        totalFrames += n;
+        delete[] lb.buf;
+        lb.cap = n;
+        lb.buf = new float[(size_t)n * 2];
+    }
+    lb.samples = n;
+    lb.pos = 0;
+    lb.playing = false;
+    resBank = bank;
+    resPos = 0;
+}
+
 void AudioEngine::toggleBank(int bank) {
     if (bank < 0 || bank >= kNumBanks) return;
     if (banks[bank].samples > 0) banks[bank].playing = !banks[bank].playing;
@@ -418,9 +442,11 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
 
         float loopL = 0.f, loopR = 0.f;
         int req = loopSliceReq.exchange(-1);
+        int sm = soloMask.load();
         for (int k = 0; k < kNumBanks; k++) {
             LoopBank& lb = banks[k];
             if (!lb.playing || lb.samples <= 0) continue;
+            if (sm != 0 && (sm & (1 << (k / 2))) == 0) continue;
             if (req >= 0) {
                 int tot = loopSliceTotal.load();
                 if (tot > 0) lb.pos = (int)((float)req / tot * lb.samples);
@@ -467,6 +493,20 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         float outR = liveR + loopR * kLoopGain;
         if (outL > 1.f) outL = 1.f; if (outL < -1.f) outL = -1.f;
         if (outR > 1.f) outR = 1.f; if (outR < -1.f) outR = -1.f;
+
+        if (resBank >= 0) {
+            LoopBank& rb = banks[resBank];
+            if (rb.buf) {
+                rb.buf[2 * resPos] = outL;
+                rb.buf[2 * resPos + 1] = outR;
+            }
+            resPos++;
+            if (resPos >= rb.samples) {
+                rb.playing = true;
+                rb.pos = 0;
+                resBank = -1;
+            }
+        }
 
         float pL = fabsf(outL), pR = fabsf(outR);
         float cl = levelL.load(), cr = levelR.load();
