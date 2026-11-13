@@ -13,7 +13,7 @@ class ZuluPad(context: Context) : View(context) {
 
     constructor(context: Context, attrs: AttributeSet?) : this(context)
 
-    enum class AxisState { OFF, MOM }
+    enum class AxisState { OFF, MOM, HOLD }
 
     val cmdId = "pad"
 
@@ -81,6 +81,11 @@ class ZuluPad(context: Context) : View(context) {
 
     private var fingerA = -1
     private var fingerB = -1
+
+    private var restAx = ax
+    private var restAy = ay
+    private var restBx = bx
+    private var restBy = by
 
     private var merged = false
     private var lastMergeTap = 0L
@@ -194,9 +199,9 @@ class ZuluPad(context: Context) : View(context) {
             targetBy = targetAy
         }
 
-        drawCursor(canvas, ax * w + jax, (1f - ay) * h + jay, yellow, "A", stateA == AxisState.MOM,
+        drawCursor(canvas, ax * w + jax, (1f - ay) * h + jay, yellow, "A", stateA != AxisState.OFF,
             "${(ax * 100).toInt()} \u00b7 ${(ay * 100).toInt()}")
-        drawCursor(canvas, bx * w + jbx, (1f - by) * h + jby, pink, "B", stateB == AxisState.MOM,
+        drawCursor(canvas, bx * w + jbx, (1f - by) * h + jby, pink, "B", stateB != AxisState.OFF,
             "${(bx * 100).toInt()} \u00b7 ${(by * 100).toInt()}")
 
         if (merged) {
@@ -295,18 +300,45 @@ class ZuluPad(context: Context) : View(context) {
                 }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(true)
                 if (fingerA == -1 && fingerB == -1) {
-                    if (stateA == AxisState.MOM) fingerA = id
-                    else if (stateB == AxisState.MOM) fingerB = id
-                } else if (fingerA == -1 && stateA == AxisState.MOM) {
+                    if (stateA != AxisState.OFF) {
+                        if (stateA == AxisState.MOM) {
+                            restAx = targetAx; restAy = targetAy
+                        }
+                        fingerA = id
+                    } else if (stateB != AxisState.OFF) {
+                        if (stateB == AxisState.MOM) {
+                            restBx = targetBx; restBy = targetBy
+                        }
+                        fingerB = id
+                    }
+                } else if (fingerA == -1 && stateA != AxisState.OFF) {
+                    if (stateA == AxisState.MOM) {
+                        restAx = targetAx; restAy = targetAy
+                    }
                     fingerA = id
-                } else if (fingerB == -1 && stateB == AxisState.MOM) {
+                } else if (fingerB == -1 && stateB != AxisState.OFF) {
+                    if (stateB == AxisState.MOM) {
+                        restBx = targetBx; restBy = targetBy
+                    }
                     fingerB = id
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val id = event.getPointerId(event.actionIndex)
-                if (id == fingerA) fingerA = -1
-                if (id == fingerB) fingerB = -1
+                if (id == fingerA) {
+                    fingerA = -1
+                    if (stateA == AxisState.MOM) {
+                        targetAx = restAx
+                        targetAy = restAy
+                    }
+                }
+                if (id == fingerB) {
+                    fingerB = -1
+                    if (stateB == AxisState.MOM) {
+                        targetBx = restBx
+                        targetBy = restBy
+                    }
+                }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(false)
                 stripLongRunnable?.let { removeCallbacks(it) }
                 stripLongRunnable = null
@@ -314,6 +346,14 @@ class ZuluPad(context: Context) : View(context) {
             MotionEvent.ACTION_CANCEL -> {
                 fingerA = -1
                 fingerB = -1
+                if (stateA == AxisState.MOM) {
+                    targetAx = restAx
+                    targetAy = restAy
+                }
+                if (stateB == AxisState.MOM) {
+                    targetBx = restBx
+                    targetBy = restBy
+                }
                 onBendTouch?.invoke(false)
                 stripLongRunnable?.let { removeCallbacks(it) }
                 stripLongRunnable = null

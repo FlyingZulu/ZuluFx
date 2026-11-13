@@ -128,6 +128,10 @@ class MainActivity : Activity() {
     private var blinkOn = true
     private var axisAOn = true
     private var axisBOn = true
+    private var axisAHold = false
+    private var axisBHold = false
+    private var fDownAt = 0L
+    private var zDownAt = 0L
     private var mirrored = false
     private lateinit var content: LinearLayout
     private var lastShiftUp = 0L
@@ -292,28 +296,50 @@ class MainActivity : Activity() {
         btnF.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (fxHeld) loopWetA = true else toggleAxis(true)
+                    fDownAt = System.currentTimeMillis()
+                    if (fxHeld) loopWetA = true
                     refreshBlink()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     loopWetA = false
+                    if (!fxHeld) {
+                        if (System.currentTimeMillis() - fDownAt >= 400) {
+                            axisAHold = !axisAHold
+                            if (axisAOn) {
+                                pad.stateA = if (axisAHold) ZuluPad.AxisState.HOLD else ZuluPad.AxisState.MOM
+                            }
+                        } else {
+                            toggleAxis(true)
+                        }
+                    }
                     refreshBlink()
                 }
             }
-            false
+            true
         }
         btnZ.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (fxHeld) loopWetB = true else toggleAxis(false)
+                    zDownAt = System.currentTimeMillis()
+                    if (fxHeld) loopWetB = true
                     refreshBlink()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     loopWetB = false
+                    if (!fxHeld) {
+                        if (System.currentTimeMillis() - zDownAt >= 400) {
+                            axisBHold = !axisBHold
+                            if (axisBOn) {
+                                pad.stateB = if (axisBHold) ZuluPad.AxisState.HOLD else ZuluPad.AxisState.MOM
+                            }
+                        } else {
+                            toggleAxis(false)
+                        }
+                    }
                     refreshBlink()
                 }
             }
-            false
+            true
         }
         btnRec.setOnTouchListener { _, e ->
             when (e.actionMasked) {
@@ -633,13 +659,27 @@ class MainActivity : Activity() {
     private fun toggleAxis(axisA: Boolean) {
         if (axisA) {
             axisAOn = !axisAOn
+            pad.stateA = when {
+                !axisAOn -> ZuluPad.AxisState.OFF
+                axisAHold -> ZuluPad.AxisState.HOLD
+                else -> ZuluPad.AxisState.MOM
+            }
         } else {
             axisBOn = !axisBOn
+            pad.stateB = when {
+                !axisBOn -> ZuluPad.AxisState.OFF
+                axisBHold -> ZuluPad.AxisState.HOLD
+                else -> ZuluPad.AxisState.MOM
+            }
         }
+        updateAxisButtons()
+    }
+
+    private fun updateAxisButtons() {
         btnF.setTextColor(if (axisAOn) yellow else silk)
+        btnF.text = if (axisAHold) "F\u00b7H" else "F"
         btnZ.setTextColor(if (axisBOn) pink else silk)
-        pad.stateA = if (axisAOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
-        pad.stateB = if (axisBOn) ZuluPad.AxisState.MOM else ZuluPad.AxisState.OFF
+        btnZ.text = if (axisBHold) "Z\u00b7H" else "Z"
     }
 
     private fun shiftActive() = shiftHeld || shiftLocked
