@@ -4,21 +4,25 @@ import android.app.Activity
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.TextView
+import android.widget.Button
+import android.widget.LinearLayout
+
+class AudioEngine {
+    external fun nativeStart(): Boolean
+    external fun nativeStop()
+
+    companion object {
+        init {
+            System.loadLibrary("zulu")
+        }
+    }
+}
 
 class MainActivity : Activity() {
 
+    private val engine = AudioEngine()
+    private var playing = false
+    private lateinit var startButton: Button
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        val title = TextView(this).apply {
-            text = "ZULU\n\nPremier démarrage réussi"
-            setTextColor(Color.WHITE)
-            textSize = 24f
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.rgb(11, 12, 16))
-        }
-
-        setContentView(title)
-    }
-}
+        super.onCreate(savedInstance
