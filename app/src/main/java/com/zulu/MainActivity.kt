@@ -15,6 +15,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -29,12 +30,27 @@ class MainActivity : Activity() {
     private lateinit var zuLu: ZuLuSelector
     private lateinit var diagFader: DiagFaderView
     private lateinit var flyFader: FlyFaderView
+    private lateinit var mixFader: MixFaderView
     private lateinit var glitchScope: GlitchScopeView
     private lateinit var btnStart: Button
     private lateinit var btnMute: Button
     private lateinit var btnShift: Button
     private lateinit var btnMenu: Button
     private lateinit var btnTap: Button
+    private lateinit var btnFx: Button
+    private lateinit var fxOverlay: FrameLayout
+
+    private var fxOpen = false
+    private var activeFx = -1
+    private val fxButtons = ArrayList<Button>()
+
+    private val fxSections = listOf(
+        "FILTRE" to listOf("LPF", "HPF", "BPF", "NOTCH", "PHASER"),
+        "MODULATION" to listOf("TREMOLO", "AUTOPAN", "FLANGER", "CHORUS", "RING"),
+        "TEMPS" to listOf("DELAY", "ECHO", "REVERB", "FREEZE"),
+        "TEXTURE" to listOf("CRUSH", "DRIVE", "LO-FI", "GATER"),
+        "SYNTH" to listOf("SAW", "SQUARE", "FM", "NOISE")
+    )
 
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
@@ -79,6 +95,7 @@ class MainActivity : Activity() {
         zuLu = ZuLuSelector(this)
         diagFader = DiagFaderView(this)
         flyFader = FlyFaderView(this)
+        mixFader = MixFaderView(this)
         glitchScope = GlitchScopeView(this)
         glitchScope.visibility = View.GONE
 
@@ -99,6 +116,11 @@ class MainActivity : Activity() {
         btnTap = makeButton("\u25cf", amber)
         btnShift = makeRoundButton("SHIFT", silk, 10f)
         btnMenu = makeRoundButton("\u2699", silk, 16f)
+        btnFx = makeRoundButton("FX", amber, 12f)
+
+        btnFx.setOnClickListener {
+            if (fxOpen) closeFx() else openFx()
+        }
 
         btnStart.setOnClickListener {
             playing = !playing
@@ -181,6 +203,9 @@ class MainActivity : Activity() {
         row1.addView(bpmDial, dialParams)
         row1.addView(btnTap, wrapParams((4 * d).toInt()))
         row1.addView(btnStart, wrapParams((4 * d).toInt()))
+        val fxParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
+        fxParams.setMargins((6 * d).toInt(), 0, 0, 0)
+        row1.addView(btnFx, fxParams)
         val menuParams = LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt())
         menuParams.setMargins((6 * d).toInt(), 0, 0, 0)
         row1.addView(btnMenu, menuParams)
@@ -233,6 +258,11 @@ class MainActivity : Activity() {
         )
         muteParams.setMargins((12 * d).toInt(), (10 * d).toInt(), 0, 0)
         row5.addView(btnMute, muteParams)
+        val mixParams = FrameLayout.LayoutParams(
+            (120 * d).toInt(), (26 * d).toInt(), Gravity.BOTTOM or Gravity.END
+        )
+        mixParams.setMargins(0, 0, (44 * d).toInt(), (8 * d).toInt())
+        row5.addView(mixFader, mixParams)
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
@@ -264,7 +294,7 @@ class MainActivity : Activity() {
         val scopeParams = FrameLayout.LayoutParams(
             (110 * d).toInt(), (64 * d).toInt(), Gravity.TOP or Gravity.END
         )
-        scopeParams.setMargins(0, (10 * d).toInt(), (10 * d).toInt(), 0)
+        scopeParams.setMargins(0, (26 * d).toInt(), (10 * d).toInt(), 0)
         padPane.addView(glitchScope, scopeParams)
 
         content.addView(padPane, padParams)
@@ -282,9 +312,18 @@ class MainActivity : Activity() {
             }
         }
 
+        buildFxPanel(d)
+
         val root = FrameLayout(this)
         root.addView(
             content,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        root.addView(
+            fxOverlay,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -410,6 +449,100 @@ class MainActivity : Activity() {
             pad.bendActive = false
             glitchScope.stop()
         }
+    }
+
+    private fun buildFxPanel(d: Float) {
+        fxOverlay = FrameLayout(this)
+        fxOverlay.setBackgroundColor(Color.argb(190, 8, 9, 12))
+        fxOverlay.visibility = View.GONE
+        fxOverlay.setOnClickListener { closeFx() }
+
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        val panelBg = GradientDrawable()
+        panelBg.setColor(Color.rgb(24, 26, 32))
+        panelBg.setStroke((1 * d).toInt(), Color.rgb(75, 82, 98))
+        panelBg.cornerRadius = 8 * d
+        panel.background = panelBg
+        panel.setPadding((14 * d).toInt(), (10 * d).toInt(), (14 * d).toInt(), (12 * d).toInt())
+
+        val titleRow = LinearLayout(this)
+        titleRow.gravity = Gravity.CENTER_VERTICAL
+        val title = TextView(this)
+        title.text = "FX SELECT"
+        title.setTextColor(Color.rgb(236, 224, 196))
+        title.textSize = 16f
+        title.typeface = markerFont(this)
+        titleRow.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val close = Button(this)
+        close.text = "\u00d7"
+        close.setTextColor(silk)
+        close.textSize = 16f
+        close.minHeight = 0
+        close.minimumHeight = 0
+        close.minimumWidth = 0
+        close.setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        close.typeface = markerFont(this)
+        close.background = buttonBackground(false)
+        close.setOnClickListener { closeFx() }
+        titleRow.addView(close)
+        panel.addView(titleRow)
+
+        val scroll = android.widget.ScrollView(this)
+        scroll.isVerticalScrollBarEnabled = false
+        val list = LinearLayout(this)
+        list.orientation = LinearLayout.VERTICAL
+        scroll.addView(list)
+
+        var globalIdx = 0
+        for ((section, effects) in fxSections) {
+            val header = TextView(this)
+            header.text = section
+            header.setTextColor(amber)
+            header.textSize = 11f
+            header.typeface = markerFont(this)
+            header.setPadding(0, (10 * d).toInt(), 0, (4 * d).toInt())
+            list.addView(header)
+
+            var row: LinearLayout? = null
+            for (fx in effects) {
+                if (row == null || row.childCount == 4) {
+                    row = LinearLayout(this)
+                    list.addView(row)
+                }
+                val b = makeButton(fx, silk)
+                val idx = globalIdx
+                b.setOnClickListener {
+                    activeFx = idx
+                    pad.activePreset = idx % 9
+                    refreshFxHighlight()
+                }
+                fxButtons.add(b)
+                row.addView(b, wrapParams((4 * d).toInt()))
+                globalIdx++
+            }
+        }
+
+        val panelParams = FrameLayout.LayoutParams(
+            (430 * d).toInt(), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+        )
+        fxOverlay.addView(panel, panelParams)
+        fxOverlay.addView(scroll, FrameLayout.LayoutParams(0, 0))
+    }
+
+    private fun refreshFxHighlight() {
+        for ((i, b) in fxButtons.withIndex()) b.setTextColor(if (i == activeFx) amber else silk)
+    }
+
+    private fun openFx() {
+        fxOpen = true
+        refreshFxHighlight()
+        fxOverlay.visibility = View.VISIBLE
+    }
+
+    private fun closeFx() {
+        fxOpen = false
+        fxOverlay.visibility = View.GONE
     }
 
     private fun placeholderWaveform(n: Int = 256): FloatArray {

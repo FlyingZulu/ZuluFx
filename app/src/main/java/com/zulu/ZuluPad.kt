@@ -41,6 +41,18 @@ class ZuluPad(context: Context) : View(context) {
 
     var waveform: FloatArray? = null
 
+    var activePreset = -1
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    var onPresetTouch: ((Int) -> Unit)? = null
+
+    private val presetSlots = 9
+
+    private fun presetStripHeight(): Float = 20f * d
+
     var bendActive = false
         set(value) {
             field = value
@@ -63,6 +75,7 @@ class ZuluPad(context: Context) : View(context) {
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
     private val offColor = Color.rgb(90, 96, 108)
+    private val amber = Color.rgb(255, 176, 0)
     private val marker = markerFont(context)
 
     override fun onDraw(canvas: Canvas) {
@@ -98,6 +111,30 @@ class ZuluPad(context: Context) : View(context) {
         for (i in 1..3) {
             canvas.drawLine(w * i / 4f, 0f, w * i / 4f, h, paint)
             canvas.drawLine(0f, h * i / 4f, w, h * i / 4f, paint)
+        }
+
+        val strip = presetStripHeight()
+        paint.style = Paint.Style.FILL
+        paint.color = Color.argb(200, 24, 26, 32)
+        canvas.drawRect(0f, 0f, w, strip, paint)
+        paint.stroke(Color.rgb(60, 66, 80), 1f * d)
+        canvas.drawLine(0f, strip, w, strip, paint)
+        val cellW = w / presetSlots
+        paint.textAlign = Paint.Align.CENTER
+        paint.typeface = marker
+        paint.textSize = 10f * d
+        for (i in 0 until presetSlots) {
+            val cx = cellW * (i + 0.5f)
+            if (i > 0) canvas.drawLine(cellW * i, 2f * d, cellW * i, strip - 2f * d, paint)
+            paint.style = Paint.Style.FILL
+            paint.color = if (i == activePreset) amber else Color.rgb(120, 128, 144)
+            canvas.drawText((i + 1).toString(), cx, strip - 6f * d, paint)
+            if (i == activePreset) {
+                paint.color = amber
+                paint.alpha = 40
+                canvas.drawRect(cellW * i + 1f, 1f, cellW * (i + 1) - 1f, strip - 1f, paint)
+                paint.alpha = 255
+            }
         }
 
         paint.strokeWidth = 1f * d
@@ -182,6 +219,13 @@ class ZuluPad(context: Context) : View(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val id = event.getPointerId(event.actionIndex)
+                if (event.getY(event.actionIndex) < presetStripHeight()) {
+                    activePreset = (event.getX(event.actionIndex) / width * presetSlots)
+                        .toInt().coerceIn(0, presetSlots - 1)
+                    onPresetTouch?.invoke(activePreset)
+                    invalidate()
+                    return true
+                }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(true)
                 if (fingerA == -1 && fingerB == -1) {
                     if (stateA == AxisState.MOM) fingerA = id

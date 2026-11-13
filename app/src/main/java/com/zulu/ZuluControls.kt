@@ -515,6 +515,63 @@ class FlyFaderView(context: Context) : View(context) {
     }
 }
 
+class MixFaderView(context: Context) : View(context) {
+
+    val cmdId = "mix"
+
+    private val d = resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val marker = markerFont(context)
+
+    var value = 1f
+        private set
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val m = 6f * d
+
+        paint.fill(Color.rgb(30, 33, 40))
+        canvas.drawRoundRect(0f, 0f, w, h, 8f * d, 8f * d, paint)
+        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
+        drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 8f * d, 83)
+
+        val cy = h / 2f
+        val gx0 = m + 18f * d
+        paint.stroke(Color.rgb(18, 20, 25), 5f * d)
+        canvas.drawLine(gx0, cy, w - m, cy, paint)
+        paint.stroke(Color.rgb(60, 66, 80), 1f * d)
+        canvas.drawLine(gx0, cy, w - m, cy, paint)
+
+        paint.fill(cream)
+        paint.textAlign = Paint.Align.LEFT
+        paint.typeface = marker
+        paint.textSize = 8f * d
+        canvas.drawText("MIX", m, cy + 3f * d, paint)
+
+        val kx = gx0 + value * (w - m - gx0)
+        paint.fill(Color.rgb(55, 60, 74))
+        canvas.drawRoundRect(kx - 4f * d, cy - 9f * d, kx + 4f * d, cy + 9f * d, 3f * d, 3f * d, paint)
+        paint.stroke(silk, 1.2f * d)
+        canvas.drawRoundRect(kx - 4f * d, cy - 9f * d, kx + 4f * d, cy + 9f * d, 3f * d, 3f * d, paint)
+        paint.stroke(Color.rgb(28, 31, 38), 1f * d)
+        canvas.drawLine(kx, cy - 6f * d, kx, cy + 6f * d, paint)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
+                val w = width.toFloat()
+                val m = 6f * d
+                val gx0 = m + 18f * d
+                value = ((event.x - gx0) / (w - m - gx0)).coerceIn(0f, 1f)
+            }
+        }
+        invalidate()
+        return true
+    }
+}
+
 class GlitchScopeView(context: Context) : View(context) {
 
     private val d = resources.displayMetrics.density
