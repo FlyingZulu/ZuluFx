@@ -49,6 +49,8 @@ class ZuluPad(context: Context) : View(context) {
 
     var onPresetTouch: ((Int) -> Unit)? = null
 
+    var onAxisChange: ((Float, Float, Float, Float) -> Unit)? = null
+
     private val presetSlots = 9
 
     private fun presetStripHeight(): Float = 20f * d
@@ -263,6 +265,7 @@ class ZuluPad(context: Context) : View(context) {
             targetBx = (event.getX(idxB) / width).coerceIn(0f, 1f)
             targetBy = (1f - event.getY(idxB) / height).coerceIn(0f, 1f)
         }
+        onAxisChange?.invoke(targetAx, targetAy, targetBx, targetBy)
 
         invalidate()
         return true

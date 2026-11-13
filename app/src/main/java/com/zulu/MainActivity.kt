@@ -22,6 +22,18 @@ import kotlin.math.sin
 
 class MainActivity : Activity() {
 
+    private val engine = AudioEngine()
+    private val levels = FloatArray(2)
+    private val vuHandler = Handler(Looper.getMainLooper())
+    private val vuRunnable = object : Runnable {
+        override fun run() {
+            engine.nativeGetLevels(levels)
+            vuMeter.levelL = Math.sqrt(levels[0].toDouble()).toFloat()
+            vuMeter.levelR = Math.sqrt(levels[1].toDouble()).toFloat()
+            vuHandler.postDelayed(this, 50)
+        }
+    }
+
     private lateinit var pad: ZuluPad
     private lateinit var vuMeter: VuMeterView
     private lateinit var bpmDial: BpmDialView
@@ -100,6 +112,13 @@ class MainActivity : Activity() {
         glitchScope.visibility = View.GONE
 
         pad.waveform = placeholderWaveform()
+        pad.onAxisChange = { ax, ay, bx, by ->
+            engine.nativeSetAx(ax)
+            engine.nativeSetAy(ay)
+            engine.nativeSetBx(bx)
+            engine.nativeSetBy(by)
+        }
+        pad.onPresetTouch = { i -> engine.nativeSetFilterType(i % 4) }
         pad.onBendTouch = { down ->
             val bend = down && shiftLocked
             pad.bendActive = bend
@@ -123,8 +142,16 @@ class MainActivity : Activity() {
         }
 
         btnStart.setOnClickListener {
-            playing = !playing
-            btnStart.text = if (playing) "STOP" else "START"
+            if (!playing) {
+                playing = engine.nativeStart(false)
+                btnStart.text = if (playing) "STOP" else "ERREUR"
+            } else {
+                engine.nativeStop()
+                playing = false
+                btnStart.text = "START"
+                vuMeter.levelL = 0f
+                vuMeter.levelR = 0f
+            }
         }
 
         btnTap.setOnClickListener {
@@ -136,6 +163,7 @@ class MainActivity : Activity() {
                 var sum = 0L
                 for (i in 1 until recent.size) sum += recent[i] - recent[i - 1]
                 bpmDial.bpm = (60000.0 * (recent.size - 1) / sum).toFloat()
+                engine.nativeSetBpm(bpmDial.bpm)
             }
             if (taps.size > 8) taps.removeAt(0)
         }
@@ -168,10 +196,12 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_DOWN -> {
                     muteOn = true
                     btnMute.text = "MUTE \u25cf"
+                    engine.nativeSetMute(true)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     muteOn = false
                     btnMute.text = "MUTE"
+                    engine.nativeSetMute(false)
                 }
             }
             true
@@ -263,6 +293,7 @@ class MainActivity : Activity() {
         )
         mixParams.setMargins(0, 0, (44 * d).toInt(), (8 * d).toInt())
         row5.addView(mixFader, mixParams)
+        wireFaders()
 
         val column = LinearLayout(this)
         column.orientation = LinearLayout.VERTICAL
@@ -370,6 +401,7 @@ class MainActivity : Activity() {
 
         setContentView(root)
         blinkHandler.post(blinkRunnable)
+        vuHandler.post(vuRunnable)
     }
 
     private fun columnRowParams(d: Float): LinearLayout.LayoutParams {
@@ -584,5 +616,18 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         blinkHandler.removeCallbacks(blinkRunnable)
+        vuHandler.removeCallbacks(vuRunnable)
+        if (playing) {
+            engine.nativeStop()
+            playing = false
+        }
+    }
+
+    private fun wireFaders() {
+        mixFader.onValueChange = { v -> engine.nativeSetMix(v) }
+        flyFader.onValueChange = { v, st ->
+            engine.nativeSetFly(v)
+            engine.nativeSetStutter(st)
+        }
     }
 }

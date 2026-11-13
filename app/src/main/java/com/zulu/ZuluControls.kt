@@ -453,6 +453,8 @@ class FlyFaderView(context: Context) : View(context) {
     val stutter: Boolean
         get() = value >= 0.75f
 
+    var onValueChange: ((Float, Boolean) -> Unit)? = null
+
     private val d = resources.displayMetrics.density
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val marker = markerFont(context)
@@ -508,6 +510,7 @@ class FlyFaderView(context: Context) : View(context) {
                 val h = height.toFloat()
                 val m = 8f * d
                 value = 1f - ((event.y - m) / (h - 2f * m)).coerceIn(0f, 1f)
+                onValueChange?.invoke(value, stutter)
             }
         }
         invalidate()
@@ -525,6 +528,8 @@ class MixFaderView(context: Context) : View(context) {
 
     var value = 1f
         private set
+
+    var onValueChange: ((Float) -> Unit)? = null
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -565,6 +570,7 @@ class MixFaderView(context: Context) : View(context) {
                 val m = 6f * d
                 val gx0 = m + 18f * d
                 value = ((event.x - gx0) / (w - m - gx0)).coerceIn(0f, 1f)
+                onValueChange?.invoke(value)
             }
         }
         invalidate()
