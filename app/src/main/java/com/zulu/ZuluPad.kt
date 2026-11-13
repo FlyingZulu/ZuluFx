@@ -48,12 +48,17 @@ class ZuluPad(context: Context) : View(context) {
             invalidate()
         }
 
+    var userPresets = BooleanArray(9)
+
     var onPresetTouch: ((Int) -> Unit)? = null
+    var onPresetLongTouch: ((Int) -> Unit)? = null
     var onArpTouch: (() -> Unit)? = null
 
     var onAxisChange: ((Float, Float, Float, Float) -> Unit)? = null
 
     private val presetSlots = 9
+    private var stripLongRunnable: Runnable? = null
+    private var stripLongCell = -1
 
     private fun presetStripHeight(): Float = 20f * d
 
@@ -138,6 +143,11 @@ class ZuluPad(context: Context) : View(context) {
             val lit = (i < presetSlots && i == activePreset) || (i == presetSlots && arpOn)
             paint.color = if (lit) amber else Color.rgb(120, 128, 144)
             canvas.drawText(if (i == presetSlots) "ARP" else (i + 1).toString(), cx, strip - 6f * d, paint)
+            if (i < presetSlots && userPresets[i]) {
+                paint.style = Paint.Style.FILL
+                paint.color = Color.rgb(236, 224, 196)
+                canvas.drawCircle(cx, strip - 2.5f * d, 1.5f * d, paint)
+            }
             if (lit) {
                 paint.color = amber
                 paint.alpha = 40
@@ -237,6 +247,10 @@ class ZuluPad(context: Context) : View(context) {
                     } else {
                         activePreset = cell
                         onPresetTouch?.invoke(activePreset)
+                        stripLongCell = cell
+                        stripLongRunnable = Runnable {
+                            if (cell == stripLongCell) onPresetLongTouch?.invoke(cell)
+                        }.also { postDelayed(it, 600) }
                     }
                     invalidate()
                     return true
@@ -256,11 +270,15 @@ class ZuluPad(context: Context) : View(context) {
                 if (id == fingerA) fingerA = -1
                 if (id == fingerB) fingerB = -1
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(false)
+                stripLongRunnable?.let { removeCallbacks(it) }
+                stripLongRunnable = null
             }
             MotionEvent.ACTION_CANCEL -> {
                 fingerA = -1
                 fingerB = -1
                 onBendTouch?.invoke(false)
+                stripLongRunnable?.let { removeCallbacks(it) }
+                stripLongRunnable = null
             }
         }
 

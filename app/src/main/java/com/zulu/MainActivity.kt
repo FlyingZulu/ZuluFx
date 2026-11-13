@@ -73,6 +73,22 @@ class MainActivity : Activity() {
     private var arpOctJump = false
     private var arpSlicesIdx = 2
     private val arpButtons = ArrayList<Button>()
+
+    private var activeFilter = 0
+    private val userPresets = arrayOfNulls<UserPreset>(9)
+
+    private data class UserPreset(
+        val filter: Int,
+        val scale: Int,
+        val root: Int,
+        val arpOn: Boolean,
+        val arpMode: Int,
+        val arpRate: Int,
+        val arpOct: Int,
+        val arpGate: Int,
+        val arpOctJump: Boolean,
+        val arpSlices: Int
+    )
     private val fxButtons = ArrayList<Button>()
 
     private val fxSections = listOf(
@@ -137,7 +153,16 @@ class MainActivity : Activity() {
             engine.nativeSetBx(bx)
             engine.nativeSetBy(by)
         }
-        pad.onPresetTouch = { i -> engine.nativeSetFilterType(i % 4) }
+        pad.onPresetTouch = { i ->
+            val p = userPresets[i]
+            if (p != null) {
+                applyUserPreset(p)
+            } else {
+                activeFilter = i % 4
+                engine.nativeSetFilterType(activeFilter)
+            }
+        }
+        pad.onPresetLongTouch = { i -> saveUserPreset(i) }
         pad.onArpTouch = {
             if (shiftActive()) {
                 openArpPanel()
@@ -648,6 +673,10 @@ class MainActivity : Activity() {
                 val idx = globalIdx
                 b.setOnClickListener {
                     activeFx = idx
+                    if (idx <= 3) {
+                        activeFilter = idx
+                        engine.nativeSetFilterType(idx)
+                    }
                     pad.activePreset = idx % 9
                     refreshFxHighlight()
                 }
@@ -939,6 +968,43 @@ class MainActivity : Activity() {
 
     private fun closeArpPanel() {
         arpOverlay.visibility = View.GONE
+    }
+
+    private fun saveUserPreset(slot: Int) {
+        if (slot < 0 || slot > 8) return
+        userPresets[slot] = UserPreset(
+            filter = activeFilter,
+            scale = activeScale,
+            root = activeRoot,
+            arpOn = arpOn,
+            arpMode = arpMode,
+            arpRate = arpRateIdx,
+            arpOct = arpOctIdx,
+            arpGate = arpGateIdx,
+            arpOctJump = arpOctJump,
+            arpSlices = arpSlicesIdx
+        )
+        pad.userPresets[slot] = true
+        pad.invalidate()
+    }
+
+    private fun applyUserPreset(p: UserPreset) {
+        activeFilter = p.filter
+        engine.nativeSetFilterType(p.filter)
+        activeScale = p.scale
+        activeRoot = p.root
+        engine.nativeSetScale(p.scale)
+        engine.nativeSetRoot(p.root)
+        arpOn = p.arpOn
+        arpMode = p.arpMode
+        arpRateIdx = p.arpRate
+        arpOctIdx = p.arpOct
+        arpGateIdx = p.arpGate
+        arpOctJump = p.arpOctJump
+        arpSlicesIdx = p.arpSlices
+        pad.arpOn = arpOn
+        pushArp()
+        refreshScaleHighlight()
     }
 
     private fun versionLabel(): String = try {
