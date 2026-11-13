@@ -5,6 +5,60 @@
 #include "dsp/biquad.hpp"
 #include "dsp/simplelfo.hpp"
 
+struct FreeVerb {
+    float* comb[8] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    int combSize[8] = {0};
+    int combIdx[8] = {0};
+    float combFilt[8] = {0};
+    float* ap[4] = {nullptr, nullptr, nullptr, nullptr};
+    int apSize[4] = {0};
+    int apIdx[4] = {0};
+
+    ~FreeVerb() {
+        for (int i = 0; i < 8; i++) delete[] comb[i];
+        for (int i = 0; i < 4; i++) delete[] ap[i];
+    }
+
+    void init(float fs, float scale) {
+        static const int combT[8] = {1557, 1617, 1491, 1422, 1277, 1356, 1188, 1116};
+        static const int apT[4] = {556, 441, 341, 225};
+        float s = fs / 44100.f * scale;
+        for (int i = 0; i < 8; i++) {
+            combSize[i] = (int)(combT[i] * s);
+            comb[i] = new float[combSize[i]]();
+            combIdx[i] = 0;
+            combFilt[i] = 0.f;
+        }
+        for (int i = 0; i < 4; i++) {
+            apSize[i] = (int)(apT[i] * s);
+            ap[i] = new float[apSize[i]]();
+            apIdx[i] = 0;
+        }
+    }
+
+    float process(float x) {
+        const float damp1 = 0.2f, damp2 = 0.8f, fb = 0.72f;
+        float input = x * 0.015f;
+        float out = 0.f;
+        for (int i = 0; i < 8; i++) {
+            float y = comb[i][combIdx[i]];
+            combFilt[i] = y * damp2 + combFilt[i] * damp1;
+            comb[i][combIdx[i]] = input + combFilt[i] * fb;
+            if (++combIdx[i] >= combSize[i]) combIdx[i] = 0;
+            out += y;
+        }
+        out *= 0.25f;
+        for (int i = 0; i < 4; i++) {
+            float bufout = ap[i][apIdx[i]];
+            float output = -out + bufout;
+            ap[i][apIdx[i]] = out + bufout * 0.5f;
+            if (++apIdx[i] >= apSize[i]) apIdx[i] = 0;
+            out = output;
+        }
+        return out;
+    }
+};
+
 class AudioEngine : public oboe::AudioStreamDataCallback {
 public:
     bool start(bool useMic);
@@ -29,6 +83,10 @@ public:
     }
     void setArpSlices(int n) { arpSlices.store(n); }
     void setArpXy(float x, bool t) { arpXy.store(x); arpXyTouch.store(t); }
+    void setAssign(int axis, int p) { if (axis == 0) assignX.store(p); else assignY.store(p); }
+    void setBend(bool b, float x, float level) {
+        bend.store(b); bendX.store(x); bendLevel.store(level);
+    }
     void setSoloMask(int m) { soloMask.store(m); }
 
     void recordBank(int bank, int steps, bool wet);
@@ -72,6 +130,11 @@ private:
     std::atomic<int> soloMask{0};
     std::atomic<float> arpXy{0.5f};
     std::atomic<bool> arpXyTouch{false};
+    std::atomic<int> assignX{0};
+    std::atomic<int> assignY{1};
+    std::atomic<bool> bend{false};
+    std::atomic<float> bendX{0.5f};
+    std::atomic<float> bendLevel{0.5f};
     std::atomic<float> levelL{0.0f}, levelR{0.0f};
 
     bool mic = false;
@@ -85,6 +148,22 @@ private:
     float kickF = 0.f, zapF = 0.f;
     float prevNoise = 0.f;
     unsigned int noiseState = 22222;
+
+    FreeVerb reverbL, reverbR;
+    float revWetS = 0.f;
+    float crushBitsS = 16.f;
+    float crushRateS = 1.f;
+    float bendDriveS = 1.f;
+    int crushHold = 0;
+    float crushHeld = 0.f;
+    int bendTicks = 0;
+    int bendNext = 100;
+    float bendWalk = 0.f;
+    float blipPhase = 0.f;
+    float blipInc = 0.f;
+    float blipW = 0.f;
+    void applyAssign(int p, float v, float& fc, float& q, float& lr, float& ld,
+                     float& rw, float& bt, float& rt, float& dr);
 
     float genSample(float fsr, float bpm);
     float degreeToSemi(int deg) const;

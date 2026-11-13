@@ -18,6 +18,8 @@ class AudioEngine {
     external fun nativeSetArp(on: Boolean, mode: Int, rate: Int, oct: Int, gate: Int, octJump: Boolean)
     external fun nativeSetArpSlices(n: Int)
     external fun nativeSetArpXy(x: Float, touch: Boolean)
+    external fun nativeSetAssign(axis: Int, p: Int)
+    external fun nativeSetBend(b: Boolean, x: Float, level: Float)
     external fun nativeSetSoloMask(m: Int)
     external fun nativeBankFrames(bank: Int): Int
     external fun nativeCopyBank(bank: Int, dst: FloatArray): Int

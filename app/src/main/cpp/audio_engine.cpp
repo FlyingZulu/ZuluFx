@@ -282,6 +282,8 @@ bool AudioEngine::start(bool useMic) {
 
     out->setBufferSizeInFrames(out->getFramesPerBurst() * 2);
     fs = (float)out->getSampleRate();
+    reverbL.init(fs, 1.f);
+    reverbR.init(fs, 1.017f);
     micBuf.assign(4096, 0.f);
 
     lfo.reset();
@@ -299,6 +301,22 @@ void AudioEngine::stop() {
 
 float AudioEngine::runFilter(float xn) {
     return filter.process(xn);
+}
+
+void AudioEngine::applyAssign(int p, float v, float& fc, float& q, float& lr, float& ld,
+                              float& rw, float& bt, float& rt, float& dr) {
+    if (v < 0.f) v = 0.f; if (v > 1.f) v = 1.f;
+    switch (p) {
+        case 0: fc = 80.f * powf(100.f, v); break;
+        case 1: q = 0.7f + v * 12.f; break;
+        case 2: rw = v; break;
+        case 3: bt = 1.f + (float)((int)(v * 15.f + 0.5f)); break;
+        case 4: rt = 1.f + (float)((int)(v * 31.f + 0.5f)); break;
+        case 5: lr = 0.05f * powf(200.f, v); break;
+        case 6: ld = v; break;
+        case 7: dr = 1.f + v * v * 8.f; break;
+        default: break;
+    }
 }
 
 void AudioEngine::recordBank(int bank, int steps, bool wet) {
@@ -433,15 +451,68 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
         }
 
         if ((coeffClock++ & 31) == 0) {
-            float tAx = clamp01(ax.load());
-            float tAy = clamp01(ay.load());
-            float tBx = clamp01(bx.load());
-            float tBy = clamp01(by.load());
+            float fcT = 80.f * powf(100.f, clamp01(ax.load()));
+            float qT = 0.7f + clamp01(ay.load()) * 12.f;
+            float lrT = 0.05f * powf(200.f, clamp01(bx.load()));
+            float ldT = clamp01(by.load());
+            float rwT = 0.f, btT = 16.f, rtT = 1.f, drT = 1.f;
+            applyAssign(assignX.load(), ax.load(), fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+            applyAssign(assignY.load(), ay.load(), fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
 
-            fcSmoothed += 0.2f * (80.f * powf(100.f, tAx) - fcSmoothed);
-            qSmoothed  += 0.2f * (0.7f + tAy * 12.f - qSmoothed);
-            lfoRateSmoothed  += 0.2f * (0.05f * powf(200.f, tBx) - lfoRateSmoothed);
-            lfoDepthSmoothed += 0.2f * (tBy - lfoDepthSmoothed);
+            if (bend.load()) {
+                float bxv = clamp01(bendX.load());
+                float byv = clamp01(bendLevel.load());
+                float wSoft = (1.f - bxv) * (1.f - byv);
+                float wBlip = bxv * (1.f - byv);
+                float wRand = (1.f - bxv) * byv;
+                float wStorm = bxv * byv;
+                float chaos = wRand + wStorm;
+                blipW = wBlip;
+
+                noiseState = noiseState * 1103515245u + 12345u;
+                float fr = (float)(noiseState >> 16) / 65535.f;
+                bendWalk += (fr - 0.5f) * (0.02f + 0.14f * chaos);
+                if (bendWalk > 0.7f) bendWalk = 0.7f;
+                if (bendWalk < -0.7f) bendWalk = -0.7f;
+                fcT *= 1.f + bendWalk * (0.15f + 0.85f * chaos);
+                qT += fabsf(bendWalk) * (2.f + 10.f * wStorm);
+                drT += wStorm * 6.f;
+                blipInc = (3.f + 25.f * bxv) / fs;
+
+                if (++bendTicks >= bendNext) {
+                    bendTicks = 0;
+                    noiseState = noiseState * 1103515245u + 12345u;
+                    unsigned int r = noiseState >> 16;
+                    bendNext = 20 + (int)((1.f - chaos) * 400.f) + (int)(r % 200u);
+                    if (chaos > 0.2f && (r % 100u) < (unsigned)(chaos * 100.f)) {
+                        filterType.store((int)(r % 4u));
+                        fcT = 80.f * powf(100.f, (float)(r % 97u) / 97.f);
+                    }
+                    if (wRand > 0.15f) {
+                        btT = fminf(btT, 1.f + (float)(r % 12u));
+                        rtT = fmaxf(rtT, (float)(r % 20u) + 1.f);
+                    }
+                    if (wStorm > 0.15f) {
+                        btT = fminf(btT, 2.f + (float)(r % 3u));
+                        rtT = fmaxf(rtT, (float)(r % 16u) + 1.f);
+                    }
+                    rwT = fmaxf(rwT, chaos * 0.8f * (float)(r % 89u) / 89.f);
+                }
+            } else {
+                bendTicks = 0;
+                bendNext = 100;
+                blipInc = 0.f;
+                blipW = 0.f;
+            }
+            bendDriveS = drT;
+
+            fcSmoothed += 0.2f * (fcT - fcSmoothed);
+            qSmoothed  += 0.2f * (qT - qSmoothed);
+            lfoRateSmoothed  += 0.2f * (lrT - lfoRateSmoothed);
+            lfoDepthSmoothed += 0.2f * (ldT - lfoDepthSmoothed);
+            revWetS += 0.2f * (rwT - revWetS);
+            crushBitsS = btT;
+            crushRateS = rtT;
 
             float fc = fcSmoothed * (1.f + lfoDepthSmoothed * lfo.sine_bi());
             fc = fminf(fmaxf(fc, 20.f), fs * 0.45f);
@@ -463,6 +534,33 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
 
         float m = clamp01(mix.load());
         float smp = inS * (1.f - m) + wet * m;
+
+        if (bendDriveS > 1.01f) smp = tanhf(smp * bendDriveS) * 0.8f;
+
+        if (blipInc > 0.f) {
+            blipPhase += blipInc;
+            if (blipPhase >= 1.f) blipPhase -= 1.f;
+            float g = (blipPhase < 0.55f) ? 1.f : 0.12f;
+            smp *= 1.f - blipW * (1.f - g);
+        }
+
+        crushHold++;
+        if (crushHold >= (int)crushRateS) {
+            crushHold = 0;
+            crushHeld = smp;
+        }
+        if (crushBitsS < 15.5f || crushRateS > 1.5f) {
+            float lvq = powf(2.f, crushBitsS - 1.f);
+            smp = floorf(crushHeld * lvq + 0.5f) / lvq;
+            if (smp > 1.f) smp = 1.f;
+            if (smp < -1.f) smp = -1.f;
+        }
+
+        if (revWetS > 0.002f) {
+            float rl = reverbL.process(smp);
+            float rr = reverbR.process(smp);
+            smp = smp * (1.f - revWetS) + (rl + rr) * revWetS;
+        }
 
         float liveL = smp, liveR = smp;
 

@@ -68,6 +68,11 @@ class MainActivity : Activity() {
     private var fxHeld = false
     private var fxConsumed = false
     private var activeFx = -1
+    private val assignNames = listOf("CUTOFF", "RESO", "REV", "BITS", "VIT.", "LFO V.", "LFO P.", "DRIVE")
+    private var assignXIdx = 0
+    private var assignYIdx = 1
+    private var btnAssignX: Button? = null
+    private var btnAssignY: Button? = null
     private var loopLenSteps = 8
     private var loopWetA = false
     private var loopWetB = false
@@ -96,7 +101,9 @@ class MainActivity : Activity() {
         val arpOct: Int,
         val arpGate: Int,
         val arpOctJump: Boolean,
-        val arpSlices: Int
+        val arpSlices: Int,
+        val assignX: Int,
+        val assignY: Int
     )
     private val fxButtons = ArrayList<Button>()
 
@@ -181,12 +188,17 @@ class MainActivity : Activity() {
             if (!t) engine.nativeSetArpXy(padAxisX, false)
         }
         pad.onPresetTouch = { i ->
-            val p = userPresets[i]
-            if (p != null) {
-                applyUserPreset(p)
+            if (fxHeld) {
+                fxConsumed = true
+                saveUserPreset(i)
             } else {
-                activeFilter = i % 4
-                engine.nativeSetFilterType(activeFilter)
+                val p = userPresets[i]
+                if (p != null) {
+                    applyUserPreset(p)
+                } else {
+                    activeFilter = i % 4
+                    engine.nativeSetFilterType(activeFilter)
+                }
             }
         }
         pad.onPresetLongTouch = { i -> saveUserPreset(i) }
@@ -204,11 +216,27 @@ class MainActivity : Activity() {
             val bend = down && shiftLocked
             pad.bendActive = bend
             if (bend) {
+                if (activeFx < 0) {
+                    val r = (0..3).random()
+                    activeFilter = r
+                    engine.nativeSetFilterType(r)
+                    activeFx = r
+                    assignXIdx = (0..6).random()
+                    assignYIdx = (0..6).random()
+                    engine.nativeSetAssign(0, assignXIdx)
+                    engine.nativeSetAssign(1, assignYIdx)
+                    refreshAssignLabels()
+                    refreshFxHighlight()
+                }
                 glitchScope.visibility = View.VISIBLE
                 glitchScope.start()
             } else {
+                engine.nativeSetBend(false, 0.5f, 0.5f)
                 glitchScope.stop()
             }
+        }
+        pad.onBendPos = { x, y ->
+            if (pad.bendActive) engine.nativeSetBend(true, x, y)
         }
 
         btnMute = makeRoundButton("MUTE", silk, 10f)
@@ -808,6 +836,33 @@ class MainActivity : Activity() {
             }
         }
 
+        val assignHeader = TextView(this)
+        assignHeader.text = "ASSIGNATION AXES"
+        assignHeader.setTextColor(amber)
+        assignHeader.textSize = 11f
+        assignHeader.typeface = markerFont(this)
+        assignHeader.setPadding(0, (10 * d).toInt(), 0, (4 * d).toInt())
+        list.addView(assignHeader)
+
+        val assignRow = LinearLayout(this)
+        val bax = makeButton("X : CUTOFF", yellow)
+        bax.setOnClickListener {
+            assignXIdx = (assignXIdx + 1) % assignNames.size
+            engine.nativeSetAssign(0, assignXIdx)
+            refreshAssignLabels()
+        }
+        val bay = makeButton("Y : RESO", pink)
+        bay.setOnClickListener {
+            assignYIdx = (assignYIdx + 1) % assignNames.size
+            engine.nativeSetAssign(1, assignYIdx)
+            refreshAssignLabels()
+        }
+        btnAssignX = bax
+        btnAssignY = bay
+        assignRow.addView(bax, wrapParams((4 * d).toInt()))
+        assignRow.addView(bay, wrapParams((4 * d).toInt()))
+        list.addView(assignRow)
+
         val panelParams = FrameLayout.LayoutParams(
             (430 * d).toInt(), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER
         )
@@ -817,6 +872,11 @@ class MainActivity : Activity() {
 
     private fun refreshFxHighlight() {
         for ((i, b) in fxButtons.withIndex()) b.setTextColor(if (i == activeFx) amber else silk)
+    }
+
+    private fun refreshAssignLabels() {
+        btnAssignX?.text = "X : ${assignNames[assignXIdx]}"
+        btnAssignY?.text = "Y : ${assignNames[assignYIdx]}"
     }
 
     private fun openFx() {
@@ -1063,6 +1123,8 @@ class MainActivity : Activity() {
             json.put("filter", activeFilter)
             json.put("scale", activeScale)
             json.put("root", activeRoot)
+            json.put("assignX", assignXIdx)
+            json.put("assignY", assignYIdx)
             json.put("mix", mixFader.value)
             json.put("fly", flyFader.value)
             json.put("soloMask", soloGroups.fold(0) { m, on -> (m shl 1) or if (on) 1 else 0 })
@@ -1083,6 +1145,8 @@ class MainActivity : Activity() {
                             .put("arpGate", p.arpGate)
                             .put("arpOctJump", p.arpOctJump)
                             .put("arpSlices", p.arpSlices)
+                            .put("assignX", p.assignX)
+                            .put("assignY", p.assignY)
                     )
                 }
             }
@@ -1124,6 +1188,11 @@ class MainActivity : Activity() {
             activeRoot = json.optInt("root", 9)
             engine.nativeSetScale(activeScale)
             engine.nativeSetRoot(activeRoot)
+            assignXIdx = json.optInt("assignX", 0)
+            assignYIdx = json.optInt("assignY", 1)
+            engine.nativeSetAssign(0, assignXIdx)
+            engine.nativeSetAssign(1, assignYIdx)
+            refreshAssignLabels()
             mixFader.value = json.getDouble("mix").toFloat()
             engine.nativeSetMix(mixFader.value)
             flyFader.setValue(json.getDouble("fly").toFloat())
@@ -1149,7 +1218,9 @@ class MainActivity : Activity() {
                         arpOct = o.getInt("arpOct"),
                         arpGate = o.getInt("arpGate"),
                         arpOctJump = o.getBoolean("arpOctJump"),
-                        arpSlices = o.getInt("arpSlices")
+                        arpSlices = o.optInt("arpSlices", 2),
+                        assignX = o.optInt("assignX", 0),
+                        assignY = o.optInt("assignY", 1)
                     )
                     pad.userPresets[i] = true
                 }
@@ -1338,7 +1409,9 @@ class MainActivity : Activity() {
             arpOct = arpOctIdx,
             arpGate = arpGateIdx,
             arpOctJump = arpOctJump,
-            arpSlices = arpSlicesIdx
+            arpSlices = arpSlicesIdx,
+            assignX = assignXIdx,
+            assignY = assignYIdx
         )
         pad.userPresets[slot] = true
         pad.invalidate()
@@ -1358,9 +1431,14 @@ class MainActivity : Activity() {
         arpGateIdx = p.arpGate
         arpOctJump = p.arpOctJump
         arpSlicesIdx = p.arpSlices
+        assignXIdx = p.assignX
+        assignYIdx = p.assignY
+        engine.nativeSetAssign(0, p.assignX)
+        engine.nativeSetAssign(1, p.assignY)
         pad.arpOn = arpOn
         pushArp()
         refreshScaleHighlight()
+        refreshAssignLabels()
     }
 
     private fun versionLabel(): String = try {

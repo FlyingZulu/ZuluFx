@@ -70,6 +70,7 @@ class ZuluPad(context: Context) : View(context) {
         }
 
     var onBendTouch: ((Boolean) -> Unit)? = null
+    var onBendPos: ((Float, Float) -> Unit)? = null
 
     private val rnd = java.util.Random()
     private var glitchClock = 0
@@ -371,6 +372,7 @@ class ZuluPad(context: Context) : View(context) {
             targetBx = (event.getX(idxB) / width).coerceIn(0f, 1f)
             targetBy = (1f - event.getY(idxB) / height).coerceIn(0f, 1f)
         }
+        if (bendActive) onBendPos?.invoke(targetAx, targetAy)
         onAxisChange?.invoke(targetAx, targetAy, targetBx, targetBy)
 
         val touched = fingerA != -1 || fingerB != -1

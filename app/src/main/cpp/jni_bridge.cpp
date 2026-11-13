@@ -65,6 +65,12 @@ JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetArpXy(JNIEnv*, jobject, jfloat x, jboolean t) { if (g) g->setArpXy(x, t); }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetAssign(JNIEnv*, jobject, jint axis, jint p) { if (g) g->setAssign(axis, p); }
+
+JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetBend(JNIEnv*, jobject, jboolean b, jfloat x, jfloat lv) { if (g) g->setBend(b, x, lv); }
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetSoloMask(JNIEnv*, jobject, jint m) { if (g) g->setSoloMask(m); }
 
 JNIEXPORT void JNICALL
