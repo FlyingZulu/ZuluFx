@@ -73,6 +73,8 @@ class MainActivity : Activity() {
     private lateinit var btnZu: Button
     private lateinit var btnLu: Button
     private lateinit var btnUndo: Button
+    private lateinit var btnArp: Button
+    private lateinit var btnPlay: Button
     private lateinit var fxOverlay: FrameLayout
     private lateinit var scaleOverlay: FrameLayout
     private lateinit var projOverlay: FrameLayout
@@ -83,6 +85,8 @@ class MainActivity : Activity() {
 
     private var fxOpen = false
     private var fxHeld = false
+    private val fxHeldClear = Runnable { fxHeld = false }
+    private var editFxMode = false
     private var fxConsumed = false
     private var activeFx = -1
     private val assignNames = listOf("CUTOFF", "RESO", "REV", "BITS", "VIT.", "LFO V.", "LFO P.", "DRIVE")
@@ -107,6 +111,7 @@ class MainActivity : Activity() {
     private var activeFilter = 0
     private var padAxisX = 0.5f
     private val userPresets = arrayOfNulls<UserPreset>(9)
+    private var btnPunch: Button? = null
 
     private data class Snap(
         val ax: Float,
@@ -209,7 +214,11 @@ class MainActivity : Activity() {
         val arpOctJump: Boolean,
         val arpSlices: Int,
         val assignX: Int,
-        val assignY: Int
+        val assignY: Int,
+        val fxOn: BooleanArray,
+        val fxParams: Array<FloatArray>,
+        val fxAssign: Array<IntArray>,
+        val lfoTg: IntArray
     )
     private val fxButtons = ArrayList<Button>()
     private val fxButtonCols = ArrayList<Int>()
@@ -353,6 +362,13 @@ class MainActivity : Activity() {
         pad.onBendPos = { x, y ->
             if (pad.bendActive) engine.nativeSetBend(true, x, y)
         }
+        pad.shiftCheck = { shiftActive() }
+        pad.onFrictionCycle = {
+            pad.billardFriction = (pad.billardFriction + 1) % 5
+            val lbl = listOf("\u221e", "0.5 s", "1 s", "2 s", "4 s")[pad.billardFriction]
+            Toast.makeText(this, "INERTIE $lbl", Toast.LENGTH_SHORT).show()
+            refreshMenu()
+        }
 
         btnMute = makeRoundButton("MUTE", silk, 10f)
         btnShift = makeRoundButton("SHIFT", silk, 10f)
@@ -367,6 +383,10 @@ class MainActivity : Activity() {
             engine.nativeUndo()
             Toast.makeText(this, "UNDO REC", Toast.LENGTH_SHORT).show()
         }
+        btnArp = makeRoundButton("ARP", pink, 10f)
+        btnArp.setOnClickListener { arpTap() }
+        btnPlay = makeRoundButton("PLAY", green, 10f)
+        btnPlay.setOnClickListener { togglePlay() }
 
         btnZu.setOnTouchListener { _, e ->
             when (e.actionMasked) {
@@ -417,10 +437,12 @@ class MainActivity : Activity() {
         btnFx.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    blinkHandler.removeCallbacks(fxHeldClear)
                     fxHeld = true
                     fxConsumed = false
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> fxHeld = false
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                    blinkHandler.postDelayed(fxHeldClear, 900)
             }
             false
         }
@@ -585,8 +607,8 @@ class MainActivity : Activity() {
         val vuModule = LinearLayout(this)
         vuModule.orientation = LinearLayout.VERTICAL
         vuModule.gravity = Gravity.CENTER_HORIZONTAL
-        vuModule.addView(vuMeter, LinearLayout.LayoutParams((48 * d).toInt(), (40 * d).toInt()))
-        val lcdParams = LinearLayout.LayoutParams((110 * d).toInt(), (24 * d).toInt())
+        vuModule.addView(vuMeter, LinearLayout.LayoutParams((96 * d).toInt(), (52 * d).toInt()))
+        val lcdParams = LinearLayout.LayoutParams((96 * d).toInt(), (22 * d).toInt())
         lcdParams.topMargin = (4 * d).toInt()
         vuModule.addView(bpmLcd, lcdParams)
 
@@ -594,6 +616,7 @@ class MainActivity : Activity() {
         row1.orientation = LinearLayout.HORIZONTAL
         row1.gravity = Gravity.CENTER_VERTICAL
         row1.addView(btnFx, LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt()))
+        row1.addView(btnArp, LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt()))
         val sqParams = LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt())
         sqParams.setMargins((4 * d).toInt(), 0, 0, 0)
         row1.addView(btnF, sqParams)
@@ -601,13 +624,16 @@ class MainActivity : Activity() {
         val recParams = LinearLayout.LayoutParams((40 * d).toInt(), (40 * d).toInt())
         recParams.setMargins((4 * d).toInt(), 0, 0, 0)
         row1.addView(btnRec, recParams)
+        row1.addView(btnUndo, LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt()))
+        row1.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         val vuWrap = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        vuWrap.setMargins((6 * d).toInt(), 0, 0, 0)
+        vuWrap.setMargins((4 * d).toInt(), 0, 0, 0)
         row1.addView(vuModule, vuWrap)
-        row1.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        row1.addView(btnUndo, LinearLayout.LayoutParams((36 * d).toInt(), (36 * d).toInt()))
+        val playParams = LinearLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt())
+        playParams.setMargins((6 * d).toInt(), 0, 0, 0)
+        row1.addView(btnPlay, playParams)
 
         val zuLuBtns = LinearLayout(this)
         zuLuBtns.orientation = LinearLayout.HORIZONTAL
@@ -678,13 +704,13 @@ class MainActivity : Activity() {
             bp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
             presetRow.addView(b, bp)
         }
-        val ab = makeButton("ARP", pink)
-        ab.textSize = 11f
-        ab.setOnClickListener { arpTap() }
-        arpBtn = ab
-        val abp = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
-        abp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
-        presetRow.addView(ab, abp)
+        val pb = makeButton("PUNCH", yellow)
+        pb.textSize = 11f
+        pb.setOnClickListener { setPunchMode(true) }
+        btnPunch = pb
+        val pbp = LinearLayout.LayoutParams(0, (26 * d).toInt(), 1f)
+        pbp.setMargins((2 * d).toInt(), 0, (2 * d).toInt(), 0)
+        presetRow.addView(pb, pbp)
 
         val leftColumn = LinearLayout(this)
         leftColumn.orientation = LinearLayout.VERTICAL
@@ -907,6 +933,7 @@ class MainActivity : Activity() {
         if (!playing) {
             Toast.makeText(this, "AUDIO : demarrage impossible", Toast.LENGTH_LONG).show()
         }
+        refreshPlayBtn()
     }
 
     private fun wrapParams(marginStart: Int): LinearLayout.LayoutParams {
@@ -1048,6 +1075,12 @@ class MainActivity : Activity() {
             vuMeter.levelR = 0f
             Toast.makeText(this, "MOTEUR OFF", Toast.LENGTH_SHORT).show()
         }
+        refreshPlayBtn()
+    }
+
+    private fun refreshPlayBtn() {
+        btnPlay.text = if (playing) "STOP" else "PLAY"
+        btnPlay.setTextColor(if (playing) red else green)
     }
 
     private fun refreshShift() {
@@ -1096,6 +1129,19 @@ class MainActivity : Activity() {
         titleRow.addView(close)
         panel.addView(titleRow)
 
+        val editB = makeButton("EDIT", silk)
+        editB.textSize = 11f
+        editB.setOnClickListener {
+            editFxMode = !editFxMode
+            editB.setTextColor(if (editFxMode) amber else silk)
+        }
+        panel.addView(
+            editB,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (4 * d).toInt() }
+        )
+
         val scroll = android.widget.ScrollView(this)
         scroll.isVerticalScrollBarEnabled = false
         val list = LinearLayout(this)
@@ -1140,7 +1186,7 @@ class MainActivity : Activity() {
                                 engine.nativeSetFilterType(num)
                             }
                             'X' -> {
-                                if (shiftActive() && fxParamDefs.containsKey(num)) {
+                                if ((shiftActive() || editFxMode) && fxParamDefs.containsKey(num)) {
                                     openParamPage(num)
                                 } else {
                                     fxActive[num] = !fxActive[num]
@@ -1509,6 +1555,10 @@ class MainActivity : Activity() {
                             .put("arpSlices", p.arpSlices)
                             .put("assignX", p.assignX)
                             .put("assignY", p.assignY)
+                            .put("fxOn", JSONArray(p.fxOn.map { if (it) 1 else 0 }))
+                            .put("fxP", JSONArray(p.fxParams.map { JSONArray(it.toList()) }))
+                            .put("fxA", JSONArray(p.fxAssign.map { JSONArray(it.toList()) }))
+                            .put("lfoTg", JSONArray(p.lfoTg.toList()))
                     )
                 }
             }
@@ -1643,7 +1693,31 @@ class MainActivity : Activity() {
                         arpOctJump = o.getBoolean("arpOctJump"),
                         arpSlices = o.optInt("arpSlices", 2),
                         assignX = o.optInt("assignX", 0),
-                        assignY = o.optInt("assignY", 1)
+                        assignY = o.optInt("assignY", 1),
+                        fxOn = BooleanArray(33) { f ->
+                            val a = o.optJSONArray("fxOn")
+                            a != null && f < a.length() && a.optInt(f, 0) == 1
+                        },
+                        fxParams = Array(33) { f ->
+                            val a = o.optJSONArray("fxP")
+                            FloatArray(8) { k ->
+                                if (a != null && f < a.length())
+                                    a.optJSONArray(f)?.optDouble(k, 0.0)?.toFloat() ?: 0f
+                                else 0f
+                            }
+                        },
+                        fxAssign = Array(33) { f ->
+                            val a = o.optJSONArray("fxA")
+                            IntArray(8) { k ->
+                                if (a != null && f < a.length())
+                                    a.optJSONArray(f)?.optInt(k, 0) ?: 0
+                                else 0
+                            }
+                        },
+                        lfoTg = IntArray(2) { l ->
+                            val a = o.optJSONArray("lfoTg")
+                            if (a != null && l < a.length()) a.optInt(l, -1) else -1
+                        }
                     )
                     pad.userPresets[i] = true
                 }
@@ -2048,7 +2122,11 @@ class MainActivity : Activity() {
             arpOctJump = arpOctJump,
             arpSlices = arpSlicesIdx,
             assignX = assignXIdx,
-            assignY = assignYIdx
+            assignY = assignYIdx,
+            fxOn = fxActive.copyOf(),
+            fxParams = Array(33) { fxParamVals[it].copyOf() },
+            fxAssign = Array(33) { fxParamAssign[it].copyOf() },
+            lfoTg = lfoTargets.copyOf()
         )
         pad.userPresets[slot] = true
         pad.invalidate()
@@ -2072,10 +2150,39 @@ class MainActivity : Activity() {
         assignYIdx = p.assignY
         engine.nativeSetAssign(0, p.assignX)
         engine.nativeSetAssign(1, p.assignY)
+        for (f in 0 until 33) {
+            if (fxActive[f] != p.fxOn[f]) {
+                fxActive[f] = p.fxOn[f]
+                engine.nativeSetFx(f, fxActive[f])
+            }
+            for (k in 0 until 8) {
+                fxParamVals[f][k] = p.fxParams[f][k]
+                engine.nativeSetFxParam(f, k, fxParamVals[f][k])
+            }
+        }
+        for (f in 0 until 33) for (k in 0 until 8) fxParamAssign[f][k] = p.fxAssign[f][k]
+        var xT = -1
+        val lT = intArrayOf(-1, -1)
+        for (f in 0 until 33) for (k in 0 until 8) {
+            when (p.fxAssign[f][k]) {
+                1 -> if (xT < 0) xT = 8 + f * 8 + k
+                2 -> if (lT[0] < 0) lT[0] = 8 + f * 8 + k
+                3 -> if (lT[1] < 0) lT[1] = 8 + f * 8 + k
+            }
+        }
+        if (xT >= 0) engine.nativeSetAssign(0, xT)
+        for (l in 0..1) {
+            if (lT[l] >= 0) {
+                lfoTargets[l] = lT[l]
+                pushLfo(l)
+            }
+        }
         pad.arpOn = arpOn
         pushArp()
         refreshScaleHighlight()
         refreshAssignLabels()
+        refreshFxHighlight()
+        paramView?.refresh()
     }
 
     private fun versionLabel(): String = try {
@@ -2490,6 +2597,7 @@ class MainActivity : Activity() {
         if (fxHeld) {
             fxConsumed = true
             saveUserPreset(i)
+            Toast.makeText(this, "PRESET ${i + 1} SAUV\u00c9", Toast.LENGTH_SHORT).show()
         } else {
             val p = userPresets[i]
             if (p != null) {
@@ -2533,6 +2641,7 @@ class MainActivity : Activity() {
             )
         }
         arpBtn?.setTextColor(if (arpOn) amber else silk)
+        btnPunch?.setTextColor(if (punchMode) amber else yellow)
     }
 
     private fun openParamPage(fx: Int) {

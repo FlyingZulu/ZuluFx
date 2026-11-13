@@ -268,9 +268,9 @@ class BarVuView(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
 
-        paint.fill(Color.rgb(30, 33, 40))
+        paint.fill(Color.rgb(52, 56, 68))
         canvas.drawRoundRect(0f, 0f, w, h, 6f * d, 6f * d, paint)
-        paint.stroke(Color.rgb(75, 82, 98), 1f * d)
+        paint.stroke(Color.rgb(130, 138, 156), 1f * d)
         drawSketchyRoundRect(canvas, paint, 0.8f * d, 0.8f * d, w - 0.8f * d, h - 0.8f * d, 6f * d, 17)
 
         val m = 4f * d
@@ -286,10 +286,10 @@ class BarVuView(context: Context) : View(context) {
         for (i in 0 until segs) {
             paint.fill(
                 when {
-                    i >= lit -> Color.rgb(38, 42, 52)
-                    i >= segs * 85 / 100 -> Color.rgb(220, 70, 50)
-                    i >= segs * 65 / 100 -> amber
-                    else -> Color.rgb(90, 200, 90)
+                    i >= lit -> Color.rgb(78, 84, 100)
+                    i >= segs * 85 / 100 -> Color.rgb(255, 96, 70)
+                    i >= segs * 65 / 100 -> Color.rgb(255, 205, 40)
+                    else -> Color.rgb(110, 255, 120)
                 }
             )
             canvas.drawRoundRect(

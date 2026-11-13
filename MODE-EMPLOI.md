@@ -1,4 +1,4 @@
-# ZULU — MODE D'EMPLOI (mémo v0.27)
+# ZULU — MODE D'EMPLOI (mémo v0.28)
 
 Aide-mémoire des gestes et fonctions principales. Tout se joue au doigt, pensé pour le LIVE.
 
@@ -12,10 +12,11 @@ relance le moteur (un message MOTEUR ON/OFF s'affiche).
 
 - **Pad XY (gauche)** : pièce maîtresse. Curseur jaune = axe **F**, curseur rose = axe **Z**.
   Fond : mandala discret qui respire avec le son (turquoise = doux, chaud/rouge = agressif).
-- **Rangée du haut du pad** : 9 boutons banques FX/synth user presets + **ARP**.
+- **Rangée du haut du pad** : 9 boutons banques FX/synth user presets + **PUNCH**
+  (ouvre la grille punch-in FX).
 - **Bord du pad** : **MUTE** (en bas) et **SHIFT** juste au-dessus.
-- **Ligne du haut à droite** : **FX** (rond), **F** (axe F), **Z** (axe Z), **REC** (rond),
-  **VU-mètre 2 aiguilles** + **cadran BPM** style Casio, **UNDO** (à droite).
+- **Ligne du haut à droite** : **FX** (rond), **ARP** (rond), **F**, **Z**, **REC**, **UNDO**
+  (à la file), **VU-mètre agrandi** + **cadran BPM** style Casio, **PLAY/STOP** (rond, à droite).
 - **Dessous** : 12 pads scènes/banques (8 samples + 4 solo par paires de colonnes),
   **orange**, dernière rangée **rose magenta**. Un badge en haut à droite de la grille
   affiche toujours le mode : **SCÈNE** (ambre) / **MOTION** (turquoise) / **SAMPLES**
@@ -33,7 +34,8 @@ colorés** : FILTRE (turquoise), MODULATION (violet), TEMPS (vert), TEXTURE (amb
 RESONANCE (rose), GRANULAIRE (cream), TRANSITIONS (jaune), SYNTH (orange).
 - **Tap** = ON/OFF (le bouton passe ambre quand il est actif) ; pour un SYNTH, tap =
   le charger, puis **jouer sur le pad XY**.
-- **SHIFT + tap** = page de réglages de l'effet (tirettes).
+- **SHIFT + tap** ou **EDIT** (bouton dans la fenêtre, puis tap sur l'effet) = page de
+  réglages de l'effet (tirettes).
 - **Tap hors de la fenêtre** ou **×** = fermer.
 
 ## Gestes essentiels
@@ -48,7 +50,10 @@ RESONANCE (rose), GRANULAIRE (cream), TRANSITIONS (jaune), SYNTH (orange).
 | Tap tempo | tapoter le cadran BPM |
 | SHIFT + pad banque | REC banque (longueur = réglage en cours) |
 | FX maintenu + pad banque | régler la longueur de boucle (1-14 temps) |
-| FX maintenu + banque 1-9 | sauvegarder un user preset |
+| FX maintenu (ou tapé) + banque 1-9 | sauvegarder le duo d'effets dans la banque
+  (effets actifs + réglages + assignations d'axes) ; message PRESET X SAUVÉ |
+| SHIFT + double-tap sur le pad | cycle d'INERTIE : ∞ (glisse sans fin) → 0,5 → 1 → 2 → 4 s
+  (aussi dans le MENU, rangée BILLARD) |
 | Appui long pad banque | éditeur de pas (pitch/vélocité par pas) |
 | SHIFT + MUTE | resampling (réenregistre la sortie en banque) |
 | Banques basses (mode 12 pads) | SOLO par paires de colonnes (aucun solo = silence) |

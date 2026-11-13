@@ -150,6 +150,8 @@ class ZuluPad(context: Context) : View(context) {
     var billardFriction = 2
 
     var onBendTouch: ((Boolean) -> Unit)? = null
+    var shiftCheck: (() -> Boolean)? = null
+    var onFrictionCycle: (() -> Unit)? = null
     var onBendPos: ((Float, Float) -> Unit)? = null
 
     private val rnd = java.util.Random()
@@ -166,6 +168,10 @@ class ZuluPad(context: Context) : View(context) {
 
     private var merged = false
     private var lastMergeTap = 0L
+    private var dAx = 0f
+    private var dAy = 0f
+    private var dBx = 0f
+    private var dBy = 0f
     private var lastTouched = false
     private var pinchInitSpread = 0f
     private var pinchFused = false
@@ -290,6 +296,10 @@ class ZuluPad(context: Context) : View(context) {
             if (billardFriction > 0) {
                 velAx *= 0.99f; velAy *= 0.99f
                 velBx *= 0.99f; velBy *= 0.99f
+                if (maxOf(abs(velAx), abs(velAy), abs(velBx), abs(velBy)) < 0.0008f) {
+                    velAx = 0f; velAy = 0f; velBx = 0f; velBy = 0f
+                    billardTicks = 0
+                }
             }
             onAxisChange?.invoke(targetAx, targetAy, targetBx, targetBy)
             if (billardTicks == 0) {
@@ -363,6 +373,11 @@ class ZuluPad(context: Context) : View(context) {
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                     billardTicks = 0
                     val now = System.currentTimeMillis()
+                    if (now - lastMergeTap < 450 && shiftCheck?.invoke() == true) {
+                        lastMergeTap = 0L
+                        onFrictionCycle?.invoke()
+                        return true
+                    }
                     val tx = event.x
                     val ty = event.y
                     val caX = ax * width
@@ -437,9 +452,11 @@ class ZuluPad(context: Context) : View(context) {
                 val id = event.getPointerId(event.actionIndex)
                 if (id == fingerA) {
                     fingerA = -1
+                    startGlide(true, dAx, dAy)
                 }
                 if (id == fingerB) {
                     fingerB = -1
+                    startGlide(false, dBx, dBy)
                 }
                 if (fingerA == -1 && fingerB == -1) onBendTouch?.invoke(false)
                 if (event.pointerCount <= 1) {
@@ -460,12 +477,20 @@ class ZuluPad(context: Context) : View(context) {
         val idxB = event.findPointerIndex(fingerB)
 
         if (idxA >= 0) {
-            targetAx = (event.getX(idxA) / width).coerceIn(0f, 1f)
-            targetAy = (1f - event.getY(idxA) / height).coerceIn(0f, 1f)
+            val nx = (event.getX(idxA) / width).coerceIn(0f, 1f)
+            val ny = (1f - event.getY(idxA) / height).coerceIn(0f, 1f)
+            dAx = nx - targetAx
+            dAy = ny - targetAy
+            targetAx = nx
+            targetAy = ny
         }
         if (idxB >= 0) {
-            targetBx = (event.getX(idxB) / width).coerceIn(0f, 1f)
-            targetBy = (1f - event.getY(idxB) / height).coerceIn(0f, 1f)
+            val nx = (event.getX(idxB) / width).coerceIn(0f, 1f)
+            val ny = (1f - event.getY(idxB) / height).coerceIn(0f, 1f)
+            dBx = nx - targetBx
+            dBy = ny - targetBy
+            targetBx = nx
+            targetBy = ny
         }
         if (merged) {
             targetBx = targetAx
@@ -492,6 +517,28 @@ class ZuluPad(context: Context) : View(context) {
         targetAy = my
         targetBx = mx
         targetBy = my
+    }
+
+    private fun startGlide(isA: Boolean, vx: Float, vy: Float) {
+        val sp = Math.hypot(vx.toDouble(), vy.toDouble()).toFloat()
+        if (sp < 0.012f) return
+        val cx = vx.coerceIn(-0.045f, 0.045f)
+        val cy = vy.coerceIn(-0.045f, 0.045f)
+        if (isA) {
+            velAx = cx; velAy = cy
+        } else {
+            velBx = cx; velBy = cy
+        }
+        if (merged) {
+            velBx = velAx; velBy = velAy
+        }
+        billardTicks = when (billardFriction) {
+            0 -> -1
+            1 -> 30
+            2 -> 60
+            3 -> 120
+            else -> 240
+        }
     }
 
     private fun unfuse() {
