@@ -852,7 +852,7 @@ class PunchPadView(context: Context) : View(context) {
 
     private var labels = listOf("REV", "DLY", "ECH", "RPT", "STP", "FRZ", "SCR", "TDO", "CRS")
     private val colNames = listOf("ZULU", "APHX", "HGTN", "SKRX", "DOOM", "WAIT", "RHED", "BOC", "DAFT", "W/Y")
-    var collectionIndex = 0
+    private var colIdx = 0
     var onCollectionChange: ((Int) -> Unit)? = null
     private var headerH = 0f
     private val active = BooleanArray(9)
@@ -896,7 +896,7 @@ class PunchPadView(context: Context) : View(context) {
     }
 
     fun setCollectionIndex(i: Int) {
-        collectionIndex = i
+        colIdx = i
         invalidate()
     }
 
@@ -949,7 +949,7 @@ class PunchPadView(context: Context) : View(context) {
                     if (e.actionMasked == MotionEvent.ACTION_DOWN) {
                         val chip = (e.getX(i) / (width / colNames.size.toFloat())).toInt()
                             .coerceIn(0, colNames.size - 1)
-                        if (chip != collectionIndex) onCollectionChange?.invoke(chip)
+                        if (chip != colIdx) onCollectionChange?.invoke(chip)
                     }
                     return true
                 }
@@ -992,11 +992,11 @@ class PunchPadView(context: Context) : View(context) {
         c.drawLine(0f, headerH, w, headerH, pGrid)
         val chw = w / colNames.size
         for (i in colNames.indices) {
-            pChip.color = if (i == collectionIndex) amber else Color.rgb(105, 111, 128)
+            pChip.color = if (i == colIdx) amber else Color.rgb(105, 111, 128)
             pChip.textSize = minOf(headerH * 0.45f, chw / (colNames[i].length * 0.85f))
             c.drawText(colNames[i], chw * i + chw / 2f, headerH * 0.68f, pChip)
         }
-        if (collectionIndex in colNames.indices) {
+        if (colIdx in colNames.indices) {
             c.drawLine(chw * collectionIndex + chw * 0.15f, headerH - 4f,
                 chw * (collectionIndex + 1) - chw * 0.15f, headerH - 4f, pOnBorder)
         }
