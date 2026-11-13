@@ -258,10 +258,15 @@ class MainActivity : Activity() {
             padGrid.padCount = when (padGrid.padCount) {
                 8 -> 10
                 10 -> 12
+                12 -> 14
                 else -> 8
             }
             row3Params.height =
-                ((if (padGrid.padCount > 8) 96 else 80) * d).toInt()
+                ((when (padGrid.padCount) {
+                    14 -> 112
+                    12, 10 -> 96
+                    else -> 80
+                }) * d).toInt()
             column.requestLayout()
         }
 

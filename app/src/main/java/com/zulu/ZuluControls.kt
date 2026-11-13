@@ -209,7 +209,7 @@ class PadGridView(context: Context) : View(context) {
 
     private var flash = -1
 
-    private val rows: Int get() = if (padCount > 8) 3 else 2
+    private val rows: Int get() = (padCount + 3) / 4
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
