@@ -213,17 +213,21 @@ class MainActivity : Activity() {
         val content = LinearLayout(this)
         content.orientation = LinearLayout.HORIZONTAL
         content.setBackgroundColor(Color.rgb(18, 20, 25))
-        content.addView(
-            pad,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
-        )
+        val padParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT)
+        content.addView(pad, padParams)
         content.addView(
             column,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
         )
+
+        content.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            val side = v.height
+            val padWidth = (side * 1.1f).toInt()
+            if (side > 0 && pad.width != padWidth) {
+                padParams.width = padWidth
+                content.requestLayout()
+            }
+        }
 
         val root = FrameLayout(this)
         root.addView(
