@@ -283,16 +283,15 @@ class ZuLuSelector(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        val gap = 4f * d
-        drawHalf(canvas, 0f, w / 2f - gap / 2f, "ZU", turquoise, side == 1, 51)
-        drawHalf(canvas, w / 2f + gap / 2f, w, "LU", violet, side == 2, 52)
+        drawHalf(canvas, 0f, w / 2f, "ZU", turquoise, side == 1, 51)
+        drawHalf(canvas, w / 2f, w, "LU", violet, side == 2, 52)
     }
 
     private fun drawHalf(canvas: Canvas, l: Float, r: Float, label: String, color: Int, on: Boolean, seed: Int) {
         paint.fill(if (on) color else Color.rgb(40, 44, 54))
-        canvas.drawRoundRect(l, 0f, r, height.toFloat(), 4f * d, 4f * d, paint)
+        canvas.drawRoundRect(l, 0f, r, height.toFloat(), 6f * d, 6f * d, paint)
         paint.stroke(Color.rgb(75, 82, 98), 1f * d)
-        drawSketchyRoundRect(canvas, paint, l, 0f, r, height.toFloat(), 4f * d, seed)
+        drawSketchyRoundRect(canvas, paint, l, 0f, r, height.toFloat(), 6f * d, seed)
         paint.fill(if (on) ink else color)
         paint.textAlign = Paint.Align.CENTER
         paint.typeface = marker
