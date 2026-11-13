@@ -632,7 +632,7 @@ void AudioEngine::setFx(int fx, bool on) {
     if (fx < 0 || fx >= kNumFx) return;
     static const float defWet[kNumFx] = {
         0.4f, 0.45f, 0.6f, 0.5f, 0.6f, 0.5f, 0.5f, 0.4f, 0.7f, 0.8f, 1.0f, 0.6f, 1.0f,
-        0.7f, 0.7f, 0.6f, 0.5f, 0.5f, 0.8f, 0.6f, 0.65f, 0.8f, 0.5f, 0.75f,
+        0.7f, 0.7f, 0.6f, 0.5f, 0.5f, 0.8f, 0.6f, 0.85f, 0.8f, 0.5f, 0.75f,
         0.8f, 1.0f, 0.7f,
         0.7f, 0.8f, 0.7f, 0.7f, 0.65f, 0.6f,
         0.6f,
@@ -2192,37 +2192,53 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 grainBuf[2 * gWrite] = outL;
                 grainBuf[2 * gWrite + 1] = outR;
                 float gl = 0.f, gr = 0.f;
-                for (int v = 0; v < 4; v++) {
+                float fol = fxP(20, 1);
+                for (int v = 0; v < 6; v++) {
                     if (!gOn2[v] && !(ecoMode.load(std::memory_order_relaxed) && v >= 2)) {
                         noiseState = noiseState * 1103515245u + 12345u;
                         unsigned r = noiseState >> 16;
-                        gLen2[v] = (0.09f * fs + (float)(r % 2400u)) * (0.4f + 1.2f * fxP(20, 0));
-                        if ((r % 4u) == 0u) gOff2 = (int)((4800u + (r >> 8) % 38400u) * (0.3f + 1.4f * fxP(20, 2)));
-                        gPos2[v] = (float)((gWrite - gOff2 + kGrainMax) % kGrainMax);
+                        gLen2[v] = (0.04f * fs + (float)(r % 2400u)) * (0.3f + 1.3f * fxP(20, 0));
+                        noiseState = noiseState * 1103515245u + 12345u;
+                        unsigned r2 = noiseState >> 16;
+                        if ((r2 % 100u) < (unsigned)(30.f + 50.f * fol)) {
+                            gOffV2[v] = gLastOff2;
+                        } else {
+                            gOffV2[v] = (int)((2400u + (r2 >> 6) % 40000u) * (0.25f + 1.5f * fxP(20, 2)));
+                            gLastOff2 = gOffV2[v];
+                        }
+                        gPos2[v] = (float)((gWrite - gOffV2[v] + kGrainMax) % kGrainMax);
                         gAge2[v] = 0.f;
                         noiseState = noiseState * 1103515245u + 12345u;
-                        int deg = (int)((noiseState >> 16) % 9u) - 4;
-                        float semi = degreeToSemi(deg);
-                        gRate2[v] = powf(2.f, semi / 12.f);
-                        if ((noiseState >> 20) % (unsigned)(3 + (int)(4.f * fxP(20, 1))) == 0u) gRate2[v] = -gRate2[v];
+                        unsigned r3 = noiseState >> 16;
+                        static const int jungSemi[10] = {0, 12, -12, 7, 3, 10, -5, 15, 5, 24};
+                        int semi = jungSemi[r3 % 10u];
+                        if ((r3 >> 8) % 3u == 0u) semi = (int)(((float)(r3 % 25u) - 12.f) * (0.3f + 1.2f * fol));
+                        gRate2[v] = powf(2.f, (float)semi / 12.f);
+                        if ((noiseState >> 20) % (unsigned)(2 + (int)(3.f * fol)) == 0u) gRate2[v] = -gRate2[v];
+                        gPan2[v] = 0.15f + 0.7f * (float)((noiseState >> 12) % 1000u) / 1000.f;
                         gOn2[v] = true;
                     }
                     float ph = gAge2[v] / gLen2[v];
                     float env = sinf(3.14159265f * ph);
+                    env = env * env;
                     int i0 = (int)gPos2[v];
                     float fr = gPos2[v] - (float)i0;
                     int i1 = (i0 + 1) % kGrainMax;
-                    gl += (grainBuf[2 * i0] * (1.f - fr) + grainBuf[2 * i1] * fr) * env;
-                    gr += (grainBuf[2 * i0 + 1] * (1.f - fr) + grainBuf[2 * i1 + 1] * fr) * env;
+                    float sl = (grainBuf[2 * i0] * (1.f - fr) + grainBuf[2 * i1] * fr) * env;
+                    float sr = (grainBuf[2 * i0 + 1] * (1.f - fr) + grainBuf[2 * i1 + 1] * fr) * env;
+                    float sm = (sl + sr) * 0.5f;
+                    float pn = gPan2[v];
+                    gl += sm * (1.f - pn) * 1.4f;
+                    gr += sm * pn * 1.4f;
                     gPos2[v] += gRate2[v];
                     if (gPos2[v] >= (float)kGrainMax) gPos2[v] -= (float)kGrainMax;
                     if (gPos2[v] < 0.f) gPos2[v] += (float)kGrainMax;
                     gAge2[v] += fsr;
                     if (gAge2[v] >= gLen2[v]) gOn2[v] = false;
                 }
-                float lv20 = w * (0.4f + 1.2f * fxP(20, 3));
-                outL = outL * (1.f - w) + gl * 0.55f * lv20;
-                outR = outR * (1.f - w) + gr * 0.55f * lv20;
+                float lv20 = w * (0.5f + 1.3f * fxP(20, 3));
+                outL = outL * (1.f - w) + tanhf(gl * 1.1f) * 0.9f * lv20;
+                outR = outR * (1.f - w) + tanhf(gr * 1.1f) * 0.9f * lv20;
                 gWrite = (gWrite + 1) % kGrainMax;
             }
         }

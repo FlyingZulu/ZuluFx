@@ -317,7 +317,7 @@ class MainActivity : Activity() {
         17 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
         18 to floatArrayOf(0.5f, 0.5f, 0f, 0.5f),
         19 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
-        20 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
+        20 to floatArrayOf(0.45f, 0.6f, 0.5f, 0.7f),
         21 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
         22 to floatArrayOf(0.5f, 0.5f, 0.5f, 0.5f),
         23 to floatArrayOf(0.25f, 0.5f, 0.5f, 0.5f),

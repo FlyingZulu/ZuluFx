@@ -494,6 +494,18 @@ d'autres très corsés.
 - **Chaque démarrage** est neutre : remise à zéro aussi des axes
   multi-assign, reverse de boucles, snapshots actifs et latches de punch.
 
+## JUNGLE : granulaire choppe drum'n'bass (v0.41)
+
+- JUNGLE (section GRANULAIRE) est refait de fond en comble : 6 grains
+  simultanés, chacun pioché à un endroit différent du son, avec de gros
+  sauts de pitch (octaves, quintes, +24) et un pan stéréo aléatoire par
+  grain. Le mix passe en remplacement franc du son, plus de voile discret.
+- **FOLIE** augmente la densité de répétitions stutter (le même bout de
+  son rejoué à des hauteurs différentes, façon jungle) et la proba de
+  lecture à l'envers.
+- Tirettes : TAILLE (durée des grains), FOLIE (chaos/stutter), SAUT
+  (distance de lecture dans le passé), NIVEAU.
+
 ## À venir (v0.34+)
 
 - Vendoring réel de Plaits (Mutable Instruments, MIT) — cette passe utilise
