@@ -1,8 +1,13 @@
 package com.zulu
 
 import android.app.Activity
+import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
 
 class MainActivity : Activity() {
@@ -19,19 +24,21 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
 
-        pad = findViewById(R.id.zuluPad)
-        btnF = findViewById(R.id.btnF)
-        btnZ = findViewById(R.id.btnZ)
-        btnStart = findViewById(R.id.btnStart)
-        btnMute = findViewById(R.id.btnMute)
-        tvFx = findViewById(R.id.tvFx)
-        tvFy = findViewById(R.id.tvFy)
-        tvZx = findViewById(R.id.tvZx)
-        tvZy = findViewById(R.id.tvZy)
+        val d = resources.displayMetrics.density
 
-        // Bascule AXIS F
+        pad = ZuluPad(this)
+
+        btnF = Button(this).apply { text = "F: ON" }
+        btnZ = Button(this).apply { text = "Z: ON" }
+        btnStart = Button(this).apply { text = "START" }
+        btnMute = Button(this).apply { text = "MUTE" }
+
+        tvFx = makeText(d, Color.rgb(245, 255, 90))
+        tvFy = makeText(d, Color.rgb(245, 255, 90))
+        tvZx = makeText(d, Color.rgb(255, 125, 205))
+        tvZy = makeText(d, Color.rgb(255, 125, 205))
+
         btnF.setOnClickListener {
             if (pad.stateF == ZuluPad.AxisState.MOM) {
                 pad.stateF = ZuluPad.AxisState.OFF
@@ -42,7 +49,6 @@ class MainActivity : Activity() {
             }
         }
 
-        // Bascule AXIS Z
         btnZ.setOnClickListener {
             if (pad.stateZ == ZuluPad.AxisState.MOM) {
                 pad.stateZ = ZuluPad.AxisState.OFF
@@ -53,31 +59,68 @@ class MainActivity : Activity() {
             }
         }
 
-        // Bouton START
         btnStart.setOnClickListener {
             // TODO: logique START
         }
 
-        // Bouton MUTE
         btnMute.setOnClickListener {
             // TODO: logique MUTE
         }
 
-        // Mise à jour des textes
+        val column = LinearLayout(this)
+        column.orientation = LinearLayout.VERTICAL
+        column.gravity = Gravity.TOP
+        column.setPadding(
+            (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt()
+        )
+
+        val btnParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        column.addView(btnF, btnParams)
+        column.addView(btnZ, btnParams)
+        column.addView(btnStart, btnParams)
+        column.addView(btnMute, btnParams)
+        column.addView(tvFx)
+        column.addView(tvFy)
+        column.addView(tvZx)
+        column.addView(tvZy)
+
+        val root = LinearLayout(this)
+        root.orientation = LinearLayout.HORIZONTAL
+        root.setBackgroundColor(Color.rgb(11, 12, 16))
+
+        val padParams = LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.MATCH_PARENT, 1f
+        )
+        val columnParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.MATCH_PARENT
+        )
+        root.addView(pad, padParams)
+        root.addView(column, columnParams)
+
+        setContentView(root)
         updateTexts()
+    }
+
+    private fun makeText(d: Float, color: Int): TextView {
+        val t = TextView(this)
+        t.textSize = 14f
+        t.setTextColor(color)
+        return t
     }
 
     private fun updateTexts() {
         if (isDestroyed || isFinishing) return
-        // Rafraîchit les valeurs affichées
         runOnUiThread {
-            tvFx.text = "Fx: ${pad.fx.toInt()}"
-            tvFy.text = "Fy: ${pad.fy.toInt()}"
-            tvZx.text = "Zx: ${pad.zx.toInt()}"
-            tvZy.text = "Zy: ${pad.zy.toInt()}"
+            tvFx.text = "Fx: ${(pad.fx * 100).toInt()}"
+            tvFy.text = "Fy: ${(pad.fy * 100).toInt()}"
+            tvZx.text = "Zx: ${(pad.zx * 100).toInt()}"
+            tvZy.text = "Zy: ${(pad.zy * 100).toInt()}"
         }
-        // Rafraîchissement périodique
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        Handler(Looper.getMainLooper()).postDelayed({
             updateTexts()
         }, 100)
     }
