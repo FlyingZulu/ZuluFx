@@ -417,7 +417,8 @@ class MainActivity : Activity() {
         val fxOn: BooleanArray,
         val fxParams: Array<FloatArray>,
         val fxAssign: Array<IntArray>,
-        val lfoTg: IntArray
+        val lfoTg: IntArray,
+        val gen: Int = -1
     )
     private val fxButtons = ArrayList<Button>()
     private val fxButtonCols = ArrayList<Int>()
@@ -571,6 +572,11 @@ class MainActivity : Activity() {
     private var lastEditBank = -1
     private var lastEditAt = 0L
     private lateinit var drumGrid: DrumGridView
+    private lateinit var miniKeys: MiniKeysView
+    private lateinit var toolsMenu: FrameLayout
+    private val keysBanks = HashSet<Int>()
+    private val keysGens = HashSet<Int>()
+    private val keysHeld = HashSet<Int>()
     private lateinit var modeBadge: ModeBadgeView
     private lateinit var inKnob: LineInKnob
     private val menuDrumButtons = ArrayList<Button>()
@@ -1050,6 +1056,26 @@ class MainActivity : Activity() {
                 }
                 padGrid.padCount == 12 && n in 9..12 -> toggleSolo(n - 9)
                 padGrid.padMode != 2 && n - 1 < 14 && snapPads[n - 1] != null -> recallSnap(n - 1)
+                toolPage == 3 && n <= 8 -> {
+                    val b = n - 1
+                    if (!engine.nativeBankHasLoop(b)) {
+                        Toast.makeText(this, "B$n VIDE", Toast.LENGTH_SHORT).show()
+                    } else if (keysBanks.contains(b)) {
+                        keysBanks.remove(b)
+                        if (!bankOn[b]) {
+                            engine.nativeToggleBank(b)
+                            bankOn[b] = true
+                        }
+                        Toast.makeText(this, "B$n D\u00c9TACH\u00c9E \u2014 BOUCLE R\u00c9ANIM\u00c9E", Toast.LENGTH_SHORT).show()
+                    } else {
+                        if (bankOn[b]) {
+                            engine.nativeToggleBank(b)
+                            bankOn[b] = false
+                        }
+                        keysBanks.add(b)
+                        Toast.makeText(this, "CLAVIER \u2192 B$n (LOOP COUP\u00c9E)", Toast.LENGTH_SHORT).show()
+                    }
+                }
                 n <= 8 -> {
                     playerBank = n - 1
                     if (engine.nativeBankHasLoop(n - 1)) {
@@ -1327,6 +1353,101 @@ class MainActivity : Activity() {
         punchView = punch
         padPane.addView(
             punch,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        miniKeys = MiniKeysView(this)
+        miniKeys.visibility = View.GONE
+        miniKeys.onKey = { k, down -> keyEvent(k, down) }
+        padPane.addView(
+            miniKeys,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
+        toolsMenu = FrameLayout(this)
+        toolsMenu.visibility = View.GONE
+        toolsMenu.setBackgroundColor(Color.argb(215, 8, 9, 13))
+        val tmBox = LinearLayout(this)
+        tmBox.orientation = LinearLayout.VERTICAL
+        tmBox.gravity = Gravity.CENTER
+        val tmGrid = LinearLayout(this)
+        tmGrid.orientation = LinearLayout.VERTICAL
+        run {
+            val r1 = LinearLayout(this)
+            r1.orientation = LinearLayout.HORIZONTAL
+            val r2 = LinearLayout(this)
+            r2.orientation = LinearLayout.HORIZONTAL
+            val wp = LinearLayout.LayoutParams((170 * d).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            for (r in listOf(r1, r2)) tmGrid.addView(r, wp)
+            val tp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+            for ((label, col, pg) in listOf(
+                Triple("ARP", turquoise, 1),
+                Triple("GRID", green, 2)
+            )) {
+                val b = makeButton(label, col)
+                b.textSize = 13f
+                b.typeface = markerFont(this)
+                b.setOnClickListener {
+                    toolsMenu.visibility = View.GONE
+                    toolPage = pg
+                    showToolPage()
+                }
+                r1.addView(b, tp)
+            }
+            for ((label, col, pg) in listOf(
+                Triple("CLAVIER", amber, 3),
+                Triple("COMM", pink, -1)
+            )) {
+                val b = makeButton(label, col)
+                b.textSize = 13f
+                b.typeface = markerFont(this)
+                b.setOnClickListener {
+                    toolsMenu.visibility = View.GONE
+                    if (pg >= 0) {
+                        toolPage = pg
+                        showToolPage()
+                    } else {
+                        openCommDialog()
+                    }
+                }
+                r2.addView(b, tp)
+            }
+        }
+        tmBox.addView(tmGrid)
+        toolsMenu.addView(
+            tmBox,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            )
+        )
+        val tmClose = Button(this)
+        tmClose.text = "\u00d7"
+        tmClose.setTextColor(silk)
+        tmClose.textSize = 16f
+        tmClose.minHeight = 0
+        tmClose.minimumHeight = 0
+        tmClose.setPadding((10 * d).toInt(), 0, (10 * d).toInt(), 0)
+        tmClose.typeface = markerFont(this)
+        tmClose.background = buttonBackground(false)
+        tmClose.setOnClickListener { toolsMenu.visibility = View.GONE }
+        toolsMenu.addView(
+            tmClose,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.END
+            )
+        )
+        padPane.addView(
+            toolsMenu,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -2533,6 +2654,7 @@ class MainActivity : Activity() {
                             .put("fxP", JSONArray(p.fxParams.map { JSONArray(it.toList()) }))
                             .put("fxA", JSONArray(p.fxAssign.map { JSONArray(it.toList()) }))
                             .put("lfoTg", JSONArray(p.lfoTg.toList()))
+                            .put("gen", p.gen)
                     )
                 }
             }
@@ -2745,7 +2867,8 @@ class MainActivity : Activity() {
                         lfoTg = IntArray(2) { l ->
                             val a = o.optJSONArray("lfoTg")
                             if (a != null && l < a.length()) a.optInt(l, -1) else -1
-                        }
+                        },
+                        gen = o.optInt("gen", -1)
                     )
                     pad.userPresets[i] = true
                 }
@@ -3384,7 +3507,8 @@ class MainActivity : Activity() {
             fxOn = fxActive.copyOf(),
             fxParams = Array(84) { fxParamVals[it].copyOf() },
             fxAssign = Array(84) { fxParamAssign[it].copyOf() },
-            lfoTg = lfoTargets.copyOf()
+            lfoTg = lfoTargets.copyOf(),
+            gen = genIdx
         )
         pad.userPresets[slot] = true
         pad.invalidate()
@@ -3421,6 +3545,10 @@ class MainActivity : Activity() {
         }
         for (f in 0 until 84) for (k in 0 until 8)
             if (f < p.fxAssign.size) fxParamAssign[f][k] = p.fxAssign[f][k]
+        if (p.gen >= 0) {
+            genIdx = p.gen
+            engine.nativeSetGen(p.gen)
+        }
         var xT = -1
         val lT = intArrayOf(-1, -1)
         for (f in 0 until 84) for (k in 0 until 8) {
@@ -3468,6 +3596,20 @@ class MainActivity : Activity() {
         padGrid.blinkOn = blinkOn
         btnRec.setTextColor(if ((recHeld || recArmed || recActive) && blinkOn) Color.WHITE else red)
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
+        if (toolPage == 3) {
+            for (i in 0 until 9) {
+                val b = presetBtns.getOrNull(i) ?: continue
+                val g = userPresets[i]?.gen ?: -1
+                if (g >= 0) {
+                    b.alpha = if (blinkOn) 1f else 0.5f
+                    b.setTextColor(if (keysGens.contains(g)) amber else silk)
+                } else {
+                    b.alpha = 0.35f
+                }
+            }
+        } else {
+            for (i in 0 until 9) presetBtns.getOrNull(i)?.alpha = 1f
+        }
     }
 
     private val recEndRunnable = Runnable {
@@ -4872,6 +5014,20 @@ class MainActivity : Activity() {
             commitLen(i + 1)
             return
         }
+        if (toolPage == 3) {
+            val p = userPresets[i]
+            if (p != null && p.gen >= 0) {
+                if (keysGens.contains(p.gen)) {
+                    keysGens.remove(p.gen)
+                    Toast.makeText(this, "SLOT ${i + 1} D\u00c9TACH\u00c9 DU CLAVIER", Toast.LENGTH_SHORT).show()
+                } else {
+                    keysGens.add(p.gen)
+                    Toast.makeText(this, "CLAVIER \u2192 SLOT ${i + 1}", Toast.LENGTH_SHORT).show()
+                }
+                refreshBlink()
+                return
+            }
+        }
         if (heldBankPad in 1..8) {
             assignBankFx(heldBankPad - 1)
             return
@@ -4964,8 +5120,8 @@ class MainActivity : Activity() {
                 showToolPage()
             }
         } else {
-            toolPage = (toolPage + 1) % 3
-            showToolPage()
+            toolsMenu.visibility =
+                if (toolsMenu.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
         refreshPresetRow()
     }
@@ -4973,6 +5129,50 @@ class MainActivity : Activity() {
     private fun showToolPage() {
         arpOverlay.visibility = if (toolPage == 1) View.VISIBLE else View.GONE
         drumGrid.visibility = if (toolPage == 2) View.VISIBLE else View.GONE
+        miniKeys.visibility = if (toolPage == 3) View.VISIBLE else View.GONE
+        if (toolPage != 3) {
+            miniKeys.releaseAll()
+            keysHeld.clear()
+            for (b in keysBanks) {
+                if (!bankOn[b]) {
+                    engine.nativeToggleBank(b)
+                    bankOn[b] = true
+                }
+            }
+            keysBanks.clear()
+            keysGens.clear()
+        }
+        refreshPresetRow()
+        refreshBlink()
+    }
+
+    private fun keyEvent(k: Int, down: Boolean) {
+        if (down) {
+            for (b in keysBanks) engine.nativeDrumHit(b, -1, 1, (k - 12).toFloat())
+        }
+        if (keysGens.isEmpty()) return
+        val drumGens = keysGens.any {
+            it == 5 || it == 6 || it == 7 || it == 16 || it == 20 || it == 22 || it == 23
+        }
+        if (down && drumGens) {
+            for (g in keysGens) {
+                if (g == 5 || g == 6 || g == 7 || g == 16 || g == 20 || g == 22 || g == 23) {
+                    engine.nativeGenHit(g, (k % 12) / 11.99f, 0.5f)
+                }
+            }
+        }
+        val melodic = keysGens.any {
+            !(it == 5 || it == 6 || it == 7 || it == 16 || it == 20 || it == 22 || it == 23)
+        }
+        if (melodic) {
+            if (down) keysHeld.add(k) else keysHeld.remove(k)
+            if (keysHeld.isNotEmpty()) {
+                engine.nativeSetAx(keysHeld.max() / 25f)
+                engine.nativeSetGenTouch(true)
+            } else {
+                engine.nativeSetGenTouch(false)
+            }
+        }
     }
 
     private fun refreshPresetRow() {

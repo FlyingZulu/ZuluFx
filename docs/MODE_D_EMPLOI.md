@@ -21,7 +21,8 @@
 
 ## Boutons principaux
 - **FX** : ouvre la page FX. Dans la page : TAP = ON/OFF · SHIFT+TAP = RÉGLAGES · SYNTH = jouer sur le pad. Appui long sur FX : route/retire l'effet du MASTER.
-- **TOOLS** : ouvre l'ARPEGGIATEUR et le navigateur LFO (destinations LFO/ARP visibles et routables).
+- **TOOLS** : ouvre le menu des outils en grille — ARP, GRID (percussions/samples joués en grille, SHIFT+TOOLS change le mode), CLAVIER, COMMUNICATION.
+- **CLAVIER (outil)** : 2 octaves à la place du pad. Multi-cibles : taper un pad loop = la loop est coupée et jouée par le clavier (pitch aux touches) ; re-taper = détachée et la boucle repart. Taper un slot 1–9 qui clignote = son synthé/drum est joué par le clavier (les slots compatibles clignotent). Plusieurs cibles simultanées (synthé + loops ensemble). Couper l'outil (re-taper CLAVIER ou ×) détache tout et réanime les boucles.
 - **PLAY / STOP** : démarre/arrête la lecture.
 - **REC** : protocole d'enregistrement (voir ci-dessous).
 - **MUTE** : coupe la sortie (MUTE ● = actif).

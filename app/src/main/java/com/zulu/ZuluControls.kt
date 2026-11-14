@@ -1768,3 +1768,122 @@ class ModeBadgeView(context: Context) : View(context) {
         return super.onTouchEvent(event)
     }
 }
+
+class MiniKeysView(context: Context) : View(context) {
+    var onKey: ((Int, Boolean) -> Unit)? = null
+    var onOctave: (() -> Unit)? = null
+    var octaves = 2
+    var baseOctave = 3
+
+    private val pressed = HashSet<Int>()
+    private val whiteKey = Paint()
+    private val blackKey = Paint()
+    private val pressKey = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val labelP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(165, 172, 185)
+        typeface = markerFont(context)
+        textAlign = Paint.Align.CENTER
+    }
+
+    private val whiteOf = intArrayOf(0, 2, 4, 5, 7, 9, 11)
+    private val blackOf = mapOf(1 to 0, 3 to 1, 6 to 2, 8 to 3, 10 to 4)
+
+    fun keySemis(): IntRange = 0 until 12 * octaves
+
+    fun releaseAll() {
+        for (k in pressed.toList()) onKey?.invoke(k, false)
+        pressed.clear()
+        invalidate()
+    }
+
+    private fun keyAt(x: Float, y: Float): Int {
+        val n = 12 * octaves
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val whites = whiteOf.size * octaves
+        val ww = w / whites
+        val wi = (x / ww).toInt().coerceIn(0, whites - 1)
+        val oct = wi / 7
+        val semi = whiteOf[wi % 7] + 12 * oct
+        val blackSemi = semi + 1
+        val isBlack = blackOf.containsKey(blackSemi % 12) && semi < n - 1
+        if (isBlack && y < h * 0.62f) {
+            val bx = (oct * 7 + blackOf[blackSemi % 12]!! + 1) * ww
+            val inBlack = x > bx - ww * 0.32f && x < bx + ww * 0.32f
+            if (inBlack) return blackSemi.coerceIn(0, n - 1)
+        }
+        return semi.coerceIn(0, n - 1)
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val i = e.actionIndex
+                val k = keyAt(e.getX(i), e.getY(i))
+                if (k !in pressed) {
+                    pressed.add(k)
+                    onKey?.invoke(k, true)
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val alive = HashSet<Int>()
+                for (i in 0 until e.pointerCount) {
+                    alive.add(keyAt(e.getX(i), e.getY(i)))
+                }
+                for (k in pressed.toList()) {
+                    if (k !in alive) {
+                        pressed.remove(k)
+                        onKey?.invoke(k, false)
+                    }
+                }
+                for (k in alive) {
+                    if (k !in pressed) {
+                        pressed.add(k)
+                        onKey?.invoke(k, true)
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                val i = e.actionIndex
+                val k = keyAt(e.getX(i), e.getY(i))
+                pressed.remove(k)
+                onKey?.invoke(k, false)
+            }
+            MotionEvent.ACTION_CANCEL -> releaseAll()
+        }
+        invalidate()
+        return true
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val d = context.resources.displayMetrics.density
+        c.drawRect(0f, 0f, w, h, Paint().apply { color = Color.rgb(14, 15, 20) })
+        val whites = whiteOf.size * octaves
+        val ww = w / whites
+        whiteKey.color = Color.rgb(225, 228, 235)
+        blackKey.color = Color.rgb(35, 38, 48)
+        pressKey.color = Color.rgb(255, 190, 0)
+        labelP.textSize = 8f * d
+        for (i in 0 until whites) {
+            val x = i * ww
+            val semi = whiteOf[i % 7] + 12 * (i / 7)
+            val paint = if (semi in pressed) pressKey else whiteKey
+            c.drawRect(x + 1f, 0f, x + ww - 1f, h, paint)
+            if (semi % 12 == 0) {
+                labelP.color = Color.rgb(100, 106, 120)
+                c.drawText("C${baseOctave + i / 7}", x + ww / 2f, h - 4f * d, labelP)
+            }
+        }
+        for (oct in 0 until octaves) {
+            for ((bw, bi) in blackOf) {
+                val semi = bw + 12 * oct
+                if (semi >= 12 * octaves) continue
+                val x = (oct * 7 + bi + 1) * ww
+                val paint = if (semi in pressed) pressKey else blackKey
+                c.drawRect(x - ww * 0.3f, 0f, x + ww * 0.3f, h * 0.6f, paint)
+            }
+        }
+    }
+}
