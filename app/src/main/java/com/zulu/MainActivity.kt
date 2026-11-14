@@ -3703,11 +3703,11 @@ class MainActivity : Activity() {
                 }
 
                 val btnRow = LinearLayout(this)
-                val chopB = makeButton("HACHIS : " + chopNames[lk.chop.coerceIn(0, 5)], silk)
+                val chopB = makeButton("SACCADE : " + chopNames[lk.chop.coerceIn(0, 5)], silk)
                 chopB.setOnClickListener {
                     val nc = (lk.chop + 1) % 6
                     ls[li] = lk.copy(chop = nc)
-                    chopB.text = "HACHIS : " + chopNames[nc]
+                    chopB.text = "SACCADE : " + chopNames[nc]
                     pushLinks()
                     rebuild()
                 }
