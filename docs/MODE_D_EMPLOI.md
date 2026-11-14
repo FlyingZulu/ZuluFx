@@ -7,7 +7,7 @@
 
 ## Organisation de l'écran
 - **Haut gauche** : pad XY tactile (cercles A et B = axes F et Z).
-- **Barre haute** : boutons FX, OUTILS, PLAY, REC, MUTE, SHIFT, UNDO, VU-mètre, écran BPM.
+- **Barre haute** : boutons FX, TOOLS, PLAY, REC, MUTE, SHIFT, UNDO, VU-mètre, écran BPM.
 - **Gauche** : faders ZU/LU, FLY, MIX, entrée ligne (LINE-IN).
 - **Centre** : grille de 12 pads (banques), éditeur de pas, PUNCH, sélecteur FX.
 - **Panneaux** (ouverture par bouton) : FX SELECT, GAMME, PROJET, ARPEGGIATEUR/LFO, SAMPLE, PANIQUE.
@@ -21,7 +21,7 @@
 
 ## Boutons principaux
 - **FX** : ouvre la page FX. Dans la page : TAP = ON/OFF · SHIFT+TAP = RÉGLAGES · SYNTH = jouer sur le pad. Appui long sur FX : route/retire l'effet du MASTER.
-- **OUTILS** : ouvre l'ARPEGGIATEUR et le navigateur LFO (destinations LFO/ARP visibles et routables).
+- **TOOLS** : ouvre l'ARPEGGIATEUR et le navigateur LFO (destinations LFO/ARP visibles et routables).
 - **PLAY / STOP** : démarre/arrête la lecture.
 - **REC** : protocole d'enregistrement (voir ci-dessous).
 - **MUTE** : coupe la sortie (MUTE ● = actif).

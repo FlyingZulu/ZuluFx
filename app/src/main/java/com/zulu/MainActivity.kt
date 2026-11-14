@@ -706,7 +706,7 @@ class MainActivity : Activity() {
             engine.nativeUndo()
             Toast.makeText(this, "UNDO REC", Toast.LENGTH_SHORT).show()
         }
-        btnArp = makeRoundButton("OUTILS", pink, 7f)
+        btnArp = makeRoundButton("TOOLS", pink, 7f)
         btnArp.setOnClickListener { arpTap() }
         btnPlay = makeRoundButton("PLAY", green, 10f)
         btnPlay.setOnClickListener { togglePlay() }
@@ -3685,7 +3685,7 @@ class MainActivity : Activity() {
                     return sb
                 }
 
-                slider("INTENSIT\u00c9") { v ->
+                slider("INTENSIT\u00c9", lk.amount) { v ->
                     ls[li] = lk.copy(amount = v)
                     pushLinks()
                 }
