@@ -212,6 +212,149 @@ float AudioEngine::genSample(float fsr, float bpm) {
         return genNoteLp;
     }
 
+    if (t == 20 || t == 21 || t == 22 || t == 23) {
+        int gslot = (t == 20) ? 80 : (t == 21) ? 81 : (t == 22) ? 82 : 83;
+        if (arpOn.load()) {
+            if (envAtkRate > 0.f) {
+                env += envAtkRate * fsr;
+                if (env >= 1.f) { env = 1.f; envAtkRate = 0.f; }
+            } else if (env > 0.f) {
+                env -= envRate * fsr;
+                if (env < 0.f) env = 0.f;
+            }
+        } else if (genTouch.load()) {
+            env += fsr / (0.004f + 0.2f * fxP(gslot, 1));
+            if (env > 1.f) env = 1.f;
+        } else {
+            env -= envRate * fsr;
+            if (env < 0.f) env = 0.f;
+        }
+        if (env < 0.0005f) { plukPrev = 0.f; return 0.f; }
+        float s = 0.f;
+        if (t == 20) {
+            if (!arpOn.load()) {
+                int deg = (int)(ax.load(std::memory_order_relaxed) * 24.99f);
+                baseF = 38.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor() *
+                    powf(2.f, fxP(80, 0) * 2.f);
+            }
+            float punch = 0.25f + 1.75f * fxP(80, 1);
+            float f = baseF * (1.f + punch * env * env * env * 3.5f);
+            oscPhase += f * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            float body = sinf(6.2831853f * oscPhase);
+            body = tanhf(body * (1.5f + 2.5f * fxP(80, 1))) * 0.75f;
+            kik8Click *= 1.f - fminf(1.f, 900.f * fsr);
+            noiseState = noiseState * 1103515245u + 12345u;
+            float nz = (float)(noiseState >> 16) / 32768.f - 1.f;
+            float hp = nz - kik8Lp;
+            kik8Lp += 0.4f * (nz - kik8Lp);
+            s = (body + hp * kik8Click * 0.9f) * env;
+        } else if (t == 21) {
+            if (!arpOn.load()) {
+                int deg = (int)(ax.load(std::memory_order_relaxed) * 24.99f);
+                baseF = 110.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor() *
+                    powf(2.f, (fxP(81, 0) - 0.5f) * 2.f);
+            }
+            float mode = fxP(81, 2);
+            float vw = fxP(81, 1);
+            bool robot = mode < 0.5f;
+            float vib = 0.f;
+            if (!robot) {
+                voyVibPh += 5.2f * fsr;
+                if (voyVibPh >= 1.f) voyVibPh -= 1.f;
+                vib = sinf(6.2831853f * voyVibPh) * 0.006f;
+            }
+            voyPh += (baseF * (1.f + vib)) * fsr;
+            if (voyPh >= 1.f) voyPh -= 1.f;
+            float exc = robot ? (voyPh < 0.5f ? 1.f : -1.f) : (voyPh * 2.f - 1.f);
+            noiseState = noiseState * 1103515245u + 12345u;
+            float breath = ((float)(noiseState >> 16) / 32768.f - 1.f) *
+                (robot ? 0.02f : 0.10f);
+            exc = exc * 0.55f + breath;
+            float vs = robot ? vw * 4.99f : vw * 4.f;
+            int vi = (int)vs;
+            float fr = vs - (float)vi;
+            static const float vowF[5][3] = {
+                {800.f, 1150.f, 2900.f},
+                {400.f, 2000.f, 2550.f},
+                {350.f, 2800.f, 3300.f},
+                {450.f, 800.f, 2830.f},
+                {325.f, 700.f, 2700.f}
+            };
+            static const float vowAmp[5][3] = {
+                {1.f, 0.5f, 0.2f},
+                {1.f, 0.35f, 0.15f},
+                {1.f, 0.3f, 0.15f},
+                {1.f, 0.6f, 0.1f},
+                {1.f, 0.7f, 0.08f}
+            };
+            float q = robot ? 22.f : 12.f;
+            s = 0.f;
+            for (int f3 = 0; f3 < 3; f3++) {
+                float fc0 = vowF[vi][f3];
+                float fc1 = vowF[vi + 1 < 5 ? vi + 1 : 4][f3];
+                float fc = fc0 + (fc1 - fc0) * fr;
+                float amp0 = vowAmp[vi][f3];
+                float amp1 = vowAmp[vi + 1 < 5 ? vi + 1 : 4][f3];
+                float c = 1.f - expf(-6.2831853f * fc * fsr);
+                voyF1[f3] += c * (exc - voyF1[f3]);
+                voyF1b[f3] += c * (voyF1[f3] - voyF1b[f3]);
+                float bp = (voyF1[f3] - voyF1b[f3]) * q * 0.5f;
+                s += bp * (amp0 + (amp1 - amp0) * fr);
+            }
+            s = tanhf(s * 0.6f) * env;
+        } else if (t == 22) {
+            if (!arpOn.load()) {
+                int deg = (int)(ax.load(std::memory_order_relaxed) * 24.99f);
+                baseF = 110.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor() *
+                    powf(2.f, (fxP(82, 0) - 0.5f) * 2.f);
+            }
+            static const float malR[8] = {
+                1.f, 2.32f, 4.05f, 6.2f, 8.9f, 12.1f, 15.8f, 19.9f
+            };
+            float spread = 1.f + fxP(82, 1) * 0.8f;
+            malTrig *= 1.f - fminf(1.f, 2200.f * fsr);
+            noiseState = noiseState * 1103515245u + 12345u;
+            float exc = ((float)(noiseState >> 16) / 32768.f - 1.f) * malTrig;
+            s = 0.f;
+            for (int p3 = 0; p3 < 8; p3++) {
+                float f = baseF * malR[p3] * (p3 == 0 ? 1.f : spread);
+                if (f > 0.45f * (1.f / fsr)) break;
+                float w = 6.2831853f * f * fsr;
+                float dec = env * (0.995f - 0.02f * fxP(82, 1)) - 0.1f * p3 * 0.02f;
+                if (dec < 0.9f) dec = 0.9f;
+                float r = dec;
+                float y = exc + 2.f * r * cosf(w) * malX[p3] - r * r * malY[p3];
+                malY[p3] = malX[p3];
+                malX[p3] = y;
+                s += y / (1.f + (float)p3 * 0.9f);
+            }
+            s = tanhf(s * 0.35f) * env;
+        } else {
+            if (!arpOn.load()) {
+                int deg = (int)(ax.load(std::memory_order_relaxed) * 24.99f);
+                baseF = 220.f * powf(2.f, degreeToSemi(deg) / 12.f) * pitchFactor() *
+                    powf(2.f, (fxP(83, 0) - 0.5f) * 2.f);
+            }
+            float mt = fxP(83, 1);
+            float ratio = 3.51f + mt * 1.53f;
+            float idx = 1.2f + mt * 4.5f;
+            oscPhase += baseF * fsr;
+            if (oscPhase >= 1.f) oscPhase -= 1.f;
+            fmPhase += baseF * ratio * fsr;
+            if (fmPhase >= 1.f) fmPhase -= 1.f;
+            float c1 = sinf(6.2831853f * oscPhase +
+                idx * sinf(6.2831853f * fmPhase));
+            float c2 = sinf(6.2831853f * oscPhase * 2.76f +
+                idx * 0.5f * sinf(6.2831853f * fmPhase * 1.41f));
+            s = (c1 * 0.8f + c2 * 0.2f * mt) * env;
+        }
+        plukPrev = env;
+        float lvl = 0.4f + 1.2f * fxP(gslot, 3);
+        genNoteLp += 0.4f * (s * lvl - genNoteLp);
+        return genNoteLp;
+    }
+
     bool melodic = (t == 0 || t == 12 || t == 13 || t == 14);
     if (melodic) {
         int gslot = 46 + t;
@@ -515,7 +658,7 @@ void AudioEngine::arpFire() {
 
     int t = genType.load();
     if ((t >= 1 && t <= 4) || t == 0 || t == 12 || t == 13 || t == 14 || t == 15 ||
-        t == 17 || t == 18 || t == 19) {
+        t == 17 || t == 18 || t == 19 || t == 20 || t == 21 || t == 22 || t == 23) {
         int deg = arpIdx;
         if (arpOctJump.load()) {
             noiseState = noiseState * 1103515245u + 12345u;
@@ -594,6 +737,12 @@ bool AudioEngine::start(bool useMic) {
     fs = (float)out->getSampleRate();
     reverbL.init(fs, 1.f);
     reverbR.init(fs, 1.017f);
+    plateL.init(fs, 0.62f);
+    plateR.init(fs, 0.637f);
+    shimL.init(fs, 1.15f);
+    shimR.init(fs, 1.167f);
+    gateL.init(fs, 0.85f);
+    gateR.init(fs, 0.867f);
     micBuf.assign(4096, 0.f);
 
     lfo.reset();
@@ -649,7 +798,8 @@ void AudioEngine::setFx(int fx, bool on) {
         0.8f, 0.8f, 0.8f,
         0.8f, 0.8f, 0.8f,
         1.0f, 1.0f, 1.0f, 1.0f,
-        1.0f, 1.0f
+        1.0f, 1.0f,
+        0.55f, 0.55f, 0.65f, 0.5f, 0.6f
     };
     fxWet[fx].store(on ? defWet[fx] : 0.f);
 }
@@ -755,6 +905,22 @@ void AudioEngine::genHit(int type, float x, float y) {
         plukTrig = true;
     } else if (type == 19) {
         envRate = 1.f / ((0.4f + 1.0f * fxP(71, 1)) * fs);
+    } else if (type == 20) {
+        envRate = 1.f / ((0.12f + 0.88f * fxP(80, 2)) * fs);
+        oscPhase = 0.f;
+        kik8Click = 1.f;
+        kik8Lp = 0.f;
+    } else if (type == 21) {
+        envRate = 1.f / ((0.25f + 0.9f * fxP(81, 1)) * fs);
+        voyPh = 0.f;
+        voyVibPh = 0.f;
+    } else if (type == 22) {
+        envRate = 1.f / ((0.08f + 1.3f * fxP(82, 2)) * fs);
+        malTrig = 1.f;
+    } else if (type == 23) {
+        envRate = 1.f / ((0.4f + 2.6f * fxP(83, 2)) * fs);
+        oscPhase = 0.f;
+        fmPhase = 0.f;
     }
 }
 
@@ -2981,6 +3147,105 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 dsLpR += tn * (dr - dsLpR);
                 outL = outL * (1.f - w) + dsLpL * lv * w;
                 outR = outR * (1.f - w) + dsLpR * lv * w;
+            }
+        }
+
+        {
+            float w = fxWet[46].load();
+            float b = fmaxf(bpm.load(), 40.f);
+            static const float tDivs[8] = {
+                0.25f, 0.33333f, 0.375f, 0.5f, 0.75f, 1.f, 1.5f, 2.f
+            };
+            int di = (int)(fxP(75, 0) * 7.99f);
+            int dly = (int)((60.f / b) * tDivs[di] * fs);
+            if (dly > kDelayMax - 2) dly = kDelayMax - 2;
+            if (dly < 2) dly = 2;
+            int rp = (tempoPos - dly + kDelayMax) % kDelayMax;
+            float dl = tempoBuf[2 * rp], dr = tempoBuf[2 * rp + 1];
+            float fb0 = 0.2f + 0.7f * fxP(75, 1);
+            float tn0 = 0.05f + 0.4f * fxP(75, 2);
+            tempoLpL += tn0 * (dl * fb0 - tempoLpL);
+            tempoLpR += tn0 * (dr * fb0 - tempoLpR);
+            tempoBuf[2 * tempoPos] = outL + tempoLpL;
+            tempoBuf[2 * tempoPos + 1] = outR + tempoLpR;
+            tempoPos = (tempoPos + 1) % kDelayMax;
+            if (w > 0.001f) {
+                float lv = w * (0.4f + 1.2f * fxP(75, 3));
+                outL = outL * (1.f - w * 0.5f) + dl * lv;
+                outR = outR * (1.f - w * 0.5f) + dr * lv;
+            }
+        }
+        {
+            float w = fxWet[47].load();
+            int dly = (int)((0.02f + 0.73f * fxP(76, 0)) * fs);
+            if (dly > kDelayMax - 2) dly = kDelayMax - 2;
+            if (dly < 2) dly = 2;
+            int rp = (pingPos - dly + kDelayMax) % kDelayMax;
+            float dl = pingBuf[2 * rp], dr = pingBuf[2 * rp + 1];
+            float fb1 = 0.2f + 0.7f * fxP(76, 1);
+            float tn1 = 0.05f + 0.35f * fxP(76, 2);
+            pingLpL += tn1 * (dr * fb1 - pingLpL);
+            pingLpR += tn1 * (dl * fb1 - pingLpR);
+            pingBuf[2 * pingPos] = outL + pingLpL;
+            pingBuf[2 * pingPos + 1] = outL + pingLpR;
+            pingPos = (pingPos + 1) % kDelayMax;
+            if (w > 0.001f) {
+                float lv = w * (0.4f + 1.2f * fxP(76, 3));
+                outL = outL * (1.f - w * 0.5f) + dl * lv;
+                outR = outR * (1.f - w * 0.5f) + dr * lv;
+            }
+        }
+        {
+            float w = fxWet[48].load();
+            if (w > 0.001f) {
+                float inL = outL, inR = outR;
+                plateL.damp = 0.1f + 0.6f * fxP(77, 1);
+                plateR.damp = plateL.damp;
+                float wl = plateL.process(inL);
+                float wr = plateR.process(inR);
+                float sz = 0.4f + 0.8f * fxP(77, 0);
+                float lv = w * (0.4f + 1.2f * fxP(77, 3)) * sz;
+                outL = outL * (1.f - w * 0.5f) + wl * lv;
+                outR = outR * (1.f - w * 0.5f) + wr * lv;
+            }
+        }
+        {
+            float w = fxWet[49].load();
+            if (w > 0.001f) {
+                float wl = shimL.process(outL);
+                float wr = shimR.process(outR);
+                shimWetL += (wl - shimWetL) * 0.02f;
+                shimWetR += (wr - shimWetR) * 0.02f;
+                float oc = fxP(78, 1);
+                float octL = fabsf(shimWetL) * 1.2f;
+                float octR = fabsf(shimWetR) * 1.2f;
+                float wetL = shimWetL * (1.f - oc) + octL * oc;
+                float wetR = shimWetR * (1.f - oc) + octR * oc;
+                float sz = 0.4f + 0.9f * fxP(78, 0);
+                float lv = w * (0.4f + 1.2f * fxP(78, 3)) * sz;
+                outL = outL * (1.f - w * 0.5f) + wetL * lv;
+                outR = outR * (1.f - w * 0.5f) + wetR * lv;
+            }
+        }
+        {
+            float w = fxWet[50].load();
+            if (w > 0.001f) {
+                float th = 0.02f + 0.3f * fxP(79, 1);
+                float holdS = (0.01f + 0.29f * fxP(79, 0)) * fs;
+                float peakL = fabsf(outL), peakR = fabsf(outR);
+                if (peakL > th) { gateHeldL = (int)holdS; gateEnvL += (1.f - gateEnvL) * 0.5f; }
+                else {
+                    if (gateHeldL > 0) gateHeldL--; else gateEnvL += (0.f - gateEnvL) * 0.02f;
+                }
+                if (peakR > th) { gateHeldR = (int)holdS; gateEnvR += (1.f - gateEnvR) * 0.5f; }
+                else {
+                    if (gateHeldR > 0) gateHeldR--; else gateEnvR += (0.f - gateEnvR) * 0.02f;
+                }
+                float wl = gateL.process(outL) * gateEnvL;
+                float wr = gateR.process(outR) * gateEnvR;
+                float lv = w * (0.5f + 1.1f * fxP(79, 3));
+                outL = outL * (1.f - w * 0.35f) + wl * lv;
+                outR = outR * (1.f - w * 0.35f) + wr * lv;
             }
         }
 

@@ -54,6 +54,14 @@
 - **Sauvegarde globale** : armer la sauvegarde puis taper un pad 1–4 (« GLOBAL n SAUVÉ »).
 - **Chargement global** : SHIFT + MUTE maintenu + pad 1–4 de la rangée du bas.
 
+## Nouveautés moteur (v0.42)
+- **Synthés** : KIK8 (kick 808 : TUNE/PUNCH/DECAY), VOY (voix formantique : MODE < 50 % = robotique, > 50 % = humain avec vibrato et souffle), MAL (percussion modale type marimba/bois), BELL (cloche FM inharmonique).
+- **Effets** : TEMPO (delay synchro BPM : 1/16, 1/16T, 1/16., 1/8, 1/8T, 1/4, 1/4., 1/2), PING (ping-pong stéréo), PLATE (réverb plaque), SHIM (shimmer, queue à l'octave), GATE (réverb gated).
+- Tous ont leurs tirettes (SHIFT+TAP), sont snapshotables et mappables sur les axes F/Z, les LFO et l'ARP.
+- **Punch-ins** : chaque déclenchement pousse les réglages complets de l'effet (tirettes) — un LFO branché dessus rend chaque punch-in légèrement différent. SHIFT + zone punch = page de réglages.
+- **Longueur de boucle** : pendant que REC est armé (destination choisie, avant le lancement), la rangée 1–9 règle la longueur. Optionnel.
+- **Boucles quantisées** : à l'arrêt manuel, la longueur est arrondie au temps le plus proche pour boucler proprement au tempo. Débrayable dans le menu (ENREGISTREMENT → BOUCLES QUANTISÉES).
+
 ## BPM
 - Glisser verticalement l'écran BPM = ajuster.
 - Tapper dessus en rythme = tap tempo.

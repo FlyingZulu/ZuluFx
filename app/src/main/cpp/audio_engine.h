@@ -36,8 +36,10 @@ struct FreeVerb {
         }
     }
 
+    float damp = 0.2f;
+
     float process(float x) {
-        const float damp1 = 0.2f, damp2 = 0.8f, fb = 0.72f;
+        const float damp1 = damp, damp2 = 1.f - damp, fb = 0.72f;
         float input = x * 0.015f;
         float out = 0.f;
         for (int i = 0; i < 8; i++) {
@@ -250,7 +252,7 @@ private:
     float qSmoothed = 0.7f;
     float lfoRateSmoothed = 2.0f;
     float lfoDepthSmoothed = 0.2f;
-    std::atomic<float> fxWet[46] = {};
+    std::atomic<float> fxWet[51] = {};
     std::atomic<float> paramManual[8] = {};
     std::atomic<unsigned int> paramManualMask{0};
     static constexpr int kDelayMax = 144000;
@@ -290,8 +292,8 @@ private:
     bool prevFreeze = false;
     int freezeLen = kFreezeMax;
     float compEnv = 0.f;
-    static constexpr int kNumFx = 46;
-    static constexpr int kNumSlots = 75;
+    static constexpr int kNumFx = 51;
+    static constexpr int kNumSlots = 84;
     std::atomic<float> fxParam[kNumSlots][8] = {};
     float fxMod[kNumSlots][8] = {};
     float fxAxisVal[kNumSlots][8] = {};
@@ -311,6 +313,26 @@ private:
     bool plukTrig = false;
     float gen303Lp = 0.f, gen303Lp2 = 0.f, gen303Res = 0.f;
     float stutMix = 0.f, freezePosF = 0.f, bouncePosF = 0.f, sprLfoPh = 0.f;
+
+    float tempoBuf[kDelayMax * 2] = {0.f};
+    int tempoPos = 0;
+    float tempoLpL = 0.f, tempoLpR = 0.f;
+    float pingBuf[kDelayMax * 2] = {0.f};
+    int pingPos = 0;
+    float pingLpL = 0.f, pingLpR = 0.f;
+    FreeVerb plateL, plateR;
+    FreeVerb shimL, shimR;
+    float shimWetL = 0.f, shimWetR = 0.f, shimPh = 0.f;
+    FreeVerb gateL, gateR;
+    float gateEnvL = 0.f, gateEnvR = 0.f;
+    float gateHeldL = 0.f, gateHeldR = 0.f;
+    int gateRelL = 0, gateRelR = 0;
+
+    float kik8Click = 0.f, kik8Lp = 0.f;
+    float voyPh = 0.f, voyVibPh = 0.f, voyMix = 0.f;
+    float voyF1[3] = {0.f}, voyF1b[3] = {0.f}, voyF2[3] = {0.f}, voyF2b[3] = {0.f};
+    float malX[8] = {0.f}, malY[8] = {0.f};
+    float malTrig = 0.f;
     std::atomic<bool> ecoMode{false};
     std::atomic<int> playerBank{0};
     float plyPhase = 0.f;
