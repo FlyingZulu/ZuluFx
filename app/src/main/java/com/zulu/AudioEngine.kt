@@ -1,0 +1,72 @@
+package com.zulu
+
+class AudioEngine {
+    external fun nativeStart(mic: Boolean): Boolean
+    external fun nativeStop()
+    external fun nativeSetFilterType(t: Int)
+    external fun nativeSetGen(t: Int)
+    external fun nativeSetAx(v: Float)
+    external fun nativeSetAy(v: Float)
+    external fun nativeSetBx(v: Float)
+    external fun nativeSetBy(v: Float)
+    external fun nativeSetMix(v: Float)
+    external fun nativeSetMute(m: Boolean)
+    external fun nativeSetFly(v: Float)
+    external fun nativeSetStutter(s: Boolean)
+    external fun nativeSetBpm(b: Float)
+    external fun nativeSetScale(s: Int)
+    external fun nativeSetRoot(r: Int)
+    external fun nativeSetArp(on: Boolean, mode: Int, rate: Int, oct: Int, gate: Int, octJump: Boolean)
+    external fun nativeSetArpSlices(n: Int)
+    external fun nativeSetArpTarget(target: Int, amount: Float)
+    external fun nativeSetLink(idx: Int, src: Int, dst: Int, amount: Float, prob: Float, chop: Int, delay: Float, soft: Float, on: Boolean)
+    external fun nativeSetArpXy(x: Float, touch: Boolean)
+    external fun nativeSetAssign(axis: Int, p: Int)
+    external fun nativeSetBend(b: Boolean, x: Float, level: Float)
+    external fun nativeSetSoloMask(m: Int)
+    external fun nativeSetSynth(wave: Int, atk: Float, dec: Float, oct: Int, pitch: Float, tune: Float)
+    external fun nativeSetFx(fx: Int, on: Boolean)
+    external fun nativeSetRecFlavor(f: Int)
+    external fun nativeSetParam(p: Int, v: Float, on: Boolean)
+    external fun nativeSetFxParam(fx: Int, k: Int, v: Float)
+    external fun nativeSetBankFxSend(bank: Int, on: Boolean)
+    external fun nativeSetPlayerBank(bank: Int)
+    external fun nativeSetInGain(v: Float)
+    external fun nativeSetInProfile(p: Int)
+    external fun nativeSetMasterEq(on: Boolean)
+    external fun nativeSetInBoost(v: Float)
+    external fun nativeSetOutBoost(v: Float)
+    external fun nativeSetOutLoud(on: Boolean)
+    external fun nativeSetAxisTargets(axis: Int, idxs: FloatArray, modes: FloatArray)
+    external fun nativeSetNetworkMode(mode: Int)
+    external fun nativeSetNetworkParams(chaos: Float, mod: Float, alias: Float, speed: Float)
+    external fun nativeDrumHit(bank: Int, slice: Int, total: Int, pitch: Float)
+    external fun nativeUndo()
+    external fun nativeCancelRec()
+    external fun nativeStopRec()
+    external fun nativeBankFrames(bank: Int): Int
+    external fun nativeCopyBank(bank: Int, dst: FloatArray): Int
+    external fun nativeLoadBank(bank: Int, src: FloatArray, frames: Int)
+    external fun nativeRecordBank(bank: Int, steps: Int, wet: Boolean)
+    external fun nativeResample(bank: Int, steps: Int)
+    external fun nativeSetStep(bank: Int, step: Int, pitch: Float, vel: Float)
+    external fun nativeSetStepCount(bank: Int, n: Int)
+    external fun nativeToggleBank(bank: Int)
+    external fun nativeBankHasLoop(bank: Int): Boolean
+    external fun nativeJumpSlice(slice: Int, total: Int)
+    external fun nativeIsLoopRecording(): Boolean
+    external fun nativeGetLevels(out: FloatArray)
+    external fun nativeGetInLevels(out: FloatArray)
+    external fun nativeSetMasterVolume(v: Float)
+    external fun nativeSetCustomLfo(idx: Int, shape: FloatArray, on: Boolean, rateIdx: Int, depth: Float, amount: Float, target: Int, wave: Int)
+    external fun nativeSetGenTouch(t: Boolean)
+    external fun nativeGenHit(type: Int, x: Float, y: Float)
+    external fun nativeSetEco(e: Boolean)
+    external fun nativeSetStretchMode(bank: Int, mode: Int)
+    external fun nativeSetSampleParam(bank: Int, k: Int, v: Float)
+    external fun nativeSetBankRev(bank: Int, rev: Boolean)
+
+    companion object {
+        init { System.loadLibrary("zulu") }
+    }
+}
