@@ -59,10 +59,14 @@ struct FreeVerb {
     }
 };
 
-class AudioEngine : public oboe::AudioStreamDataCallback {
+class AudioEngine : public oboe::AudioStreamDataCallback,
+                    public oboe::AudioStreamErrorCallback {
 public:
     bool start(bool useMic);
     void stop();
+
+    void onErrorBeforeClose(oboe::AudioStream*, oboe::Result) override {}
+    void onErrorAfterClose(oboe::AudioStream* stream, oboe::Result error) override;
 
     void setFilterType(int t) { filterType.store(t); }
     void setGen(int t) { genType.store(t); }
@@ -164,6 +168,7 @@ public:
 
 private:
     std::shared_ptr<oboe::AudioStream> out, in;
+    std::atomic<bool> restarting{false};
     dsp::BiQuad filter;
     dsp::SimpleLFO lfo;
 

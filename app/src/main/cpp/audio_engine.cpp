@@ -583,13 +583,14 @@ bool AudioEngine::start(bool useMic) {
       ->setSampleRate(48000)
       ->setChannelCount(2)
       ->setFormat(oboe::AudioFormat::Float)
-      ->setDataCallback(this);
+      ->setDataCallback(this)
+      ->setErrorCallback(this);
     if (ob.openStream(out) != oboe::Result::OK) {
         ob.setSharingMode(oboe::SharingMode::Shared);
         if (ob.openStream(out) != oboe::Result::OK) return false;
     }
 
-    out->setBufferSizeInFrames(out->getFramesPerBurst() * 2);
+    out->setBufferSizeInFrames(out->getFramesPerBurst() * 4);
     fs = (float)out->getSampleRate();
     reverbL.init(fs, 1.f);
     reverbR.init(fs, 1.017f);
@@ -606,6 +607,15 @@ bool AudioEngine::start(bool useMic) {
 void AudioEngine::stop() {
     if (out) { out->stop(); out->close(); out.reset(); }
     if (in)  { in->stop();  in->close();  in.reset(); }
+}
+
+void AudioEngine::onErrorAfterClose(oboe::AudioStream* stream, oboe::Result error) {
+    if (error == oboe::Result::ErrorClosed || stream == nullptr) return;
+    if (stream != out.get()) return;
+    if (restarting.exchange(true)) return;
+    stop();
+    start(mic);
+    restarting.store(false);
 }
 
 float AudioEngine::runFilter(float xn) {
