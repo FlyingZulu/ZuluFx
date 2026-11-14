@@ -275,6 +275,13 @@ internal fun drawSketchyRoundRect(
 fun markerFont(context: Context): Typeface =
     Typeface.createFromAsset(context.assets, "fonts/PermanentMarker-Regular.ttf")
 
+private fun tint(c: Int, t: Int, f: Float): Int {
+    val r = (Color.red(c) + (Color.red(t) - Color.red(c)) * f).toInt()
+    val g = (Color.green(c) + (Color.green(t) - Color.green(c)) * f).toInt()
+    val b = (Color.blue(c) + (Color.blue(t) - Color.blue(c)) * f).toInt()
+    return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
+}
+
 private fun Paint.fill(color: Int) {
     style = Paint.Style.FILL
     this.color = color
@@ -589,6 +596,9 @@ class PadGridView(context: Context) : View(context) {
     var snapSides = IntArray(14)
         set(value) { field = value; invalidate() }
 
+    var toolGlow = IntArray(0)
+        set(value) { field = value; invalidate() }
+
     var activeSnap = intArrayOf(-1, -1)
         set(value) { field = value; invalidate() }
 
@@ -626,18 +636,21 @@ class PadGridView(context: Context) : View(context) {
             val side = if (i < snapSides.size) snapSides[i] else 0
             val lastRow = row == rows - 1
 
-            paint.fill(
-                when {
-                    rec && blinkOn -> Color.rgb(255, 90, 70)
-                    rec -> Color.rgb(120, 40, 34)
-                    soloOn -> Color.rgb(0, 229, 255)
-                    lit -> Color.rgb(255, 244, 130)
-                    side == 1 -> Color.rgb(18, 58, 60)
-                    side == 2 -> Color.rgb(56, 38, 78)
-                    lastRow -> Color.rgb(198, 42, 140)
-                    else -> Color.rgb(196, 108, 20)
-                }
-            )
+            var pc = when {
+                rec && blinkOn -> Color.rgb(255, 90, 70)
+                rec -> Color.rgb(120, 40, 34)
+                soloOn -> Color.rgb(0, 229, 255)
+                lit -> Color.rgb(255, 244, 130)
+                side == 1 -> Color.rgb(18, 58, 60)
+                side == 2 -> Color.rgb(56, 38, 78)
+                lastRow -> Color.rgb(198, 42, 140)
+                else -> Color.rgb(196, 108, 20)
+            }
+            if (recArmed && !rec) pc = tint(pc, Color.rgb(255, 70, 55), 0.25f)
+            val tg = if (i < toolGlow.size) toolGlow[i] else 0
+            if (tg == 2) pc = Color.rgb(255, 70, 205)
+            else if (tg == 1) pc = tint(pc, Color.rgb(255, 70, 205), 0.22f)
+            paint.fill(pc)
             val rad = if (ZuluTheme.retro) 0f else 5f * d
             canvas.drawRoundRect(l, t, l + padW, t + padH, rad, rad, paint)
             paint.stroke(Color.rgb(75, 82, 98), 1f * d)

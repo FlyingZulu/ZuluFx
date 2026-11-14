@@ -3596,18 +3596,28 @@ class MainActivity : Activity() {
         padGrid.blinkOn = blinkOn
         btnRec.setTextColor(if ((recHeld || recArmed || recActive) && blinkOn) Color.WHITE else red)
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
-        if (toolPage == 3) {
+        if (toolPage == 2 || toolPage == 3) {
             for (i in 0 until 9) {
                 val b = presetBtns.getOrNull(i) ?: continue
                 val g = userPresets[i]?.gen ?: -1
                 if (g >= 0) {
                     b.alpha = if (blinkOn) 1f else 0.5f
-                    b.setTextColor(if (keysGens.contains(g)) amber else silk)
+                    b.setTextColor(if (keysGens.contains(g)) pink else silk)
                 } else {
                     b.alpha = 0.35f
                 }
             }
+            val glow = IntArray(padGrid.padCount)
+            for (i in 0 until min(8, padGrid.padCount)) {
+                if (engine.nativeBankHasLoop(i)) {
+                    glow[i] = if (keysBanks.contains(i)) 2 else 1
+                }
+            }
+            padGrid.toolGlow = glow
         } else {
+            padGrid.toolGlow = IntArray(0)
+            for (i in 0 until 9) presetBtns.getOrNull(i)?.alpha = 1f
+        }
             for (i in 0 until 9) presetBtns.getOrNull(i)?.alpha = 1f
         }
     }
