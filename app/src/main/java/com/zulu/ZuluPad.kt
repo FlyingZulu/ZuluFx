@@ -44,6 +44,11 @@ class ZuluPad(context: Context) : View(context) {
     private var fingerF = -1
     private var fingerZ = -1
 
+    val posFx: Float get() = fx
+    val posFy: Float get() = fy
+    val posZx: Float get() = zx
+    val posZy: Float get() = zy
+
     private val yellow = Color.rgb(245, 255, 90)
     private val pink = Color.rgb(255, 125, 205)
     private val offColor = Color.rgb(90, 96, 108)

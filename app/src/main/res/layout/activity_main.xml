@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/zulu_bg"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingEnd="12dp">
+
+        <Button
+            android:id="@+id/btnF"
+            android:layout_width="96dp"
+            android:layout_height="wrap_content"
+            android:text="F: ON" />
+
+        <Button
+            android:id="@+id/btnZ"
+            android:layout_width="96dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Z: ON" />
+
+        <Button
+            android:id="@+id/btnStart"
+            android:layout_width="96dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="START" />
+
+        <Button
+            android:id="@+id/btnMute"
+            android:layout_width="96dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="MUTE" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1">
+
+        <com.zulu.ZuluPad
+            android:id="@+id/zuluPad"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp">
+
+        <TextView
+            android:id="@+id/tvFx"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/zulu_text"
+            android:text="Fx: 0"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvFy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="@color/zulu_text"
+            android:text="Fy: 0"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvZx"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:textColor="@color/zulu_text"
+            android:text="Zx: 0"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvZy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="@color/zulu_text"
+            android:text="Zy: 0"
+            android:textSize="14sp" />
+    </LinearLayout>
+</LinearLayout>

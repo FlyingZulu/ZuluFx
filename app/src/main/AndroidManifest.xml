@@ -2,7 +2,7 @@
 
     <application
         android:label="Zulu"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        android:theme="@style/ZuluTheme">
 
         <activity
             android:name=".MainActivity"

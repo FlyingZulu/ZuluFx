@@ -67,17 +67,13 @@ class MainActivity : AppCompatActivity() {
         updateTexts()
     }
 
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
     private fun updateTexts() {
-        // Rafraîchit les valeurs affichées
-        runOnUiThread {
-            tvFx.text = "Fx: ${pad.fx.toInt()}"
-            tvFy.text = "Fy: ${pad.fy.toInt()}"
-            tvZx.text = "Zx: ${pad.zx.toInt()}"
-            tvZy.text = "Zy: ${pad.zy.toInt()}"
-        }
-        // Rafraîchissement périodique
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            updateTexts()
-        }, 100)
+        tvFx.text = "Fx: ${pad.posFx.toInt()}"
+        tvFy.text = "Fy: ${pad.posFy.toInt()}"
+        tvZx.text = "Zx: ${pad.posZx.toInt()}"
+        tvZy.text = "Zy: ${pad.posZy.toInt()}"
+        handler.postDelayed({ updateTexts() }, 100)
     }
 }

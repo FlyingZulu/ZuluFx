@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="ZuluTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/zulu_bg</item>
+        <item name="android:colorBackground">@color/zulu_bg</item>
+        <item name="colorAccent">@color/zulu_accent</item>
+    </style>
+</resources>
