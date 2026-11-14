@@ -3594,7 +3594,9 @@ class MainActivity : Activity() {
 
     private fun refreshBlink() {
         padGrid.blinkOn = blinkOn
+        padGrid.recLive = recActive
         btnRec.setTextColor(if ((recHeld || recArmed || recActive) && blinkOn) Color.WHITE else red)
+        arpBtn?.setTextColor(if (toolPage != 0 || toolsMenu.visibility == View.VISIBLE) Color.rgb(80, 170, 255) else if (arpOn) amber else silk)
         if (shiftLocked) btnShift.alpha = if (blinkOn) 1f else 0.55f
         if (toolPage == 2 || toolPage == 3) {
             for (i in 0 until 9) {
@@ -3602,7 +3604,7 @@ class MainActivity : Activity() {
                 val g = userPresets[i]?.gen ?: -1
                 if (g >= 0) {
                     b.alpha = if (blinkOn) 1f else 0.5f
-                    b.setTextColor(if (keysGens.contains(g)) pink else silk)
+                    b.setTextColor(if (keysGens.contains(g)) Color.rgb(80, 170, 255) else silk)
                 } else {
                     b.alpha = 0.35f
                 }
@@ -3616,8 +3618,6 @@ class MainActivity : Activity() {
             padGrid.toolGlow = glow
         } else {
             padGrid.toolGlow = IntArray(0)
-            for (i in 0 until 9) presetBtns.getOrNull(i)?.alpha = 1f
-        }
             for (i in 0 until 9) presetBtns.getOrNull(i)?.alpha = 1f
         }
     }
@@ -5197,7 +5197,7 @@ class MainActivity : Activity() {
                 }
             )
         }
-        arpBtn?.setTextColor(if (arpOn) amber else silk)
+        arpBtn?.setTextColor(if (toolPage != 0 || toolsMenu.visibility == View.VISIBLE) Color.rgb(80, 170, 255) else if (arpOn) amber else silk)
         btnPunch?.setTextColor(if (punchMode) amber else yellow)
     }
 

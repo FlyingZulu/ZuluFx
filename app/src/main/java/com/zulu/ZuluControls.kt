@@ -587,6 +587,9 @@ class PadGridView(context: Context) : View(context) {
     var recArmed = false
         set(value) { field = value; invalidate() }
 
+    var recLive = false
+        set(value) { field = value; invalidate() }
+
     var soloMask = 0
         set(value) { field = value; invalidate() }
 
@@ -636,7 +639,10 @@ class PadGridView(context: Context) : View(context) {
             val side = if (i < snapSides.size) snapSides[i] else 0
             val lastRow = row == rows - 1
 
+            val live = recLive && recPad == i
             var pc = when {
+                live && blinkOn -> Color.rgb(255, 90, 70)
+                live -> Color.rgb(120, 40, 34)
                 rec && blinkOn -> Color.rgb(255, 90, 70)
                 rec -> Color.rgb(120, 40, 34)
                 soloOn -> Color.rgb(0, 229, 255)
@@ -648,8 +654,8 @@ class PadGridView(context: Context) : View(context) {
             }
             if (recArmed && !rec) pc = tint(pc, Color.rgb(255, 70, 55), 0.25f)
             val tg = if (i < toolGlow.size) toolGlow[i] else 0
-            if (tg == 2) pc = Color.rgb(255, 70, 205)
-            else if (tg == 1) pc = tint(pc, Color.rgb(255, 70, 205), 0.22f)
+            if (tg == 2) pc = Color.rgb(80, 170, 255)
+            else if (tg == 1) pc = tint(pc, Color.rgb(80, 170, 255), 0.22f)
             paint.fill(pc)
             val rad = if (ZuluTheme.retro) 0f else 5f * d
             canvas.drawRoundRect(l, t, l + padW, t + padH, rad, rad, paint)
