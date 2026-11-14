@@ -937,6 +937,21 @@ void AudioEngine::setParam(int p, float v, bool on) {
     paramManualMask.store(m);
 }
 
+void AudioEngine::setLink(int idx, int src, int dst, float amount, float prob, int chop, float delay, float soft, bool on) {
+    if (idx < 0 || idx >= 16) return;
+    links[idx].src.store(src);
+    links[idx].dst.store(dst);
+    links[idx].amount.store(amount);
+    links[idx].prob.store(prob < 0.f ? 0.f : (prob > 1.f ? 1.f : prob));
+    links[idx].chop.store(chop < 0 ? 0 : (chop > 5 ? 5 : chop));
+    links[idx].delay.store(delay < 0.f ? 0.f : (delay > 0.25f ? 0.25f : delay));
+    links[idx].soft.store(soft < 0.f ? 0.f : (soft > 1.f ? 1.f : soft));
+    links[idx].on.store(on && src >= 8 && dst >= 8);
+    linkPhase[idx] = 0.f;
+    linkPass[idx] = true;
+    linkSm[idx] = 0.f;
+}
+
 void AudioEngine::setFxParam(int fx, int k, float v) {
     if (fx < 0 || fx >= kNumSlots || k < 0 || k > 7) return;
     if (v < 0.f) v = 0.f;
@@ -1562,6 +1577,50 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(
                 if (tg < 0) continue;
                 applyAssign(tg, clamp01(baseNorm[tg] + dep * amt * clfoVal(L)),
                             fcT, qT, lrT, ldT, rwT, btT, rtT, drT);
+            }
+
+            for (int l = 0; l < 16; l++) {
+                if (!links[l].on.load(std::memory_order_relaxed)) continue;
+                int src = links[l].src.load(std::memory_order_relaxed);
+                int dst = links[l].dst.load(std::memory_order_relaxed);
+                int sS = src - 8, dS = dst - 8;
+                if (sS < 0 || dS < 0 || sS >= kNumSlots * 8 || dS >= kNumSlots * 8) continue;
+                float amt = links[l].amount.load(std::memory_order_relaxed);
+                if (amt == 0.f) continue;
+                int chop = links[l].chop.load(std::memory_order_relaxed);
+                float b = fmaxf(bpm.load(std::memory_order_relaxed), 40.f);
+                static const float cDivs[5] = {1.f, 0.5f, 0.25f, 0.125f, 0.33333f};
+                float per = (60.f / b) * (chop > 0 ? cDivs[chop - 1] : 0.25f) * fs;
+                if (per < 2.f) per = 2.f;
+                linkPhase[l] += 1.f;
+                if (linkPhase[l] >= per) {
+                    linkPhase[l] -= per;
+                    float pr = links[l].prob.load(std::memory_order_relaxed);
+                    noiseState = noiseState * 1103515245u + 12345u;
+                    linkPass[l] = ((float)(noiseState >> 16) / 65536.f) < pr;
+                }
+                if (!linkPass[l]) continue;
+                if (chop > 0 && (linkPhase[l] / per) >= 0.5f) continue;
+                float sv = fxP(sS / 8, sS % 8) - 0.5f;
+                float dly = links[l].delay.load(std::memory_order_relaxed) * fs;
+                int di = (int)dly;
+                float dv;
+                if (di >= 1 && di < kLinkBuf - 2) {
+                    int rp = linkWr[l] - di;
+                    if (rp < 0) rp += kLinkBuf;
+                    float fr = dly - (float)di;
+                    int rp2 = rp - 1;
+                    if (rp2 < 0) rp2 += kLinkBuf;
+                    dv = linkBuf[l][rp] * (1.f - fr) + linkBuf[l][rp2] * fr;
+                } else {
+                    dv = sv;
+                }
+                linkBuf[l][linkWr[l]] = sv;
+                linkWr[l] = (linkWr[l] + 1) % kLinkBuf;
+                float soft = links[l].soft.load(std::memory_order_relaxed);
+                float coef = soft > 0.f ? (0.35f * (1.f - soft) * (1.f - soft) + 0.0008f) : 1.f;
+                linkSm[l] += coef * (dv - linkSm[l]);
+                fxMod[dS / 8][dS % 8] += linkSm[l] * amt * 2.f;
             }
 
             int atg = arpTarget.load(std::memory_order_relaxed);

@@ -26,6 +26,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.ByteArrayInputStream
@@ -1350,6 +1351,10 @@ class MainActivity : Activity() {
             }
         }
         ppage.onAssignCycle = { k -> cycleParamAssign(k) }
+        ppage.onParamLongPress = { k ->
+            val fx = paramFx
+            if (fx >= 0) openCommDialog(fx, k)
+        }
         ppage.onExit = { closeParamPage() }
         ppage.shiftCheck = { shiftActive() }
         ppage.onMasterToggle = {
@@ -2532,6 +2537,15 @@ class MainActivity : Activity() {
                 }
             }
             json.put("presets", presets)
+            val linksJ = JSONArray()
+            for (g in 0 until 9) {
+                val ga = JSONArray()
+                for (lk in bankLinks[g]) {
+                    ga.put(JSONArray(listOf(lk.src, lk.dst, lk.amount, lk.prob, lk.chop, lk.delay, lk.soft)))
+                }
+                linksJ.put(ga)
+            }
+            json.put("links", linksJ)
             val banks = JSONArray()
             for (b in 0 until 8) {
                 val frames = engine.nativeBankFrames(b)
@@ -2736,6 +2750,21 @@ class MainActivity : Activity() {
                     pad.userPresets[i] = true
                 }
             }
+            val linksJ = json.optJSONArray("links")
+            for (g in 0 until 9) {
+                bankLinks[g].clear()
+                val ga = linksJ?.optJSONArray(g) ?: continue
+                for (j in 0 until ga.length()) {
+                    val a = ga.optJSONArray(j) ?: continue
+                    if (a.length() < 7) continue
+                    bankLinks[g].add(ParamLink(
+                        a.optInt(0), a.optInt(1), a.optDouble(2, 0.5).toFloat(),
+                        a.optDouble(3, 1.0).toFloat(), a.optInt(4, 0),
+                        a.optDouble(5, 0.0).toFloat(), a.optDouble(6, 0.0).toFloat()
+                    ))
+                }
+            }
+            pushLinks()
             pad.invalidate()
             pushArp()
             refreshScaleHighlight()
@@ -2946,6 +2975,8 @@ class MainActivity : Activity() {
             arpGateIdx = i
             pushArp()
         }
+        header("COMMUNICATION")
+        row(listOf("TIRETTES"), "comm") { _ -> openCommDialog() }
         header("SLICES (BOUCLES)")
         row(listOf("2", "4", "8", "12", "16"), "slices") { i ->
             arpSlicesIdx = i
@@ -3552,6 +3583,214 @@ class MainActivity : Activity() {
     }
 
     private var quantRec = true
+
+    data class ParamLink(
+        val src: Int, val dst: Int, val amount: Float, val prob: Float,
+        val chop: Int, val delay: Float, val soft: Float
+    )
+    private val bankLinks = Array(9) { ArrayList<ParamLink>() }
+    private var activeGroup = 0
+
+    private fun pushLinks() {
+        for (idx in 0 until 16) {
+            engine.nativeSetLink(idx, -1, -1, 0f, 1f, 0, 0f, 0f, false)
+        }
+        val ls = bankLinks[activeGroup]
+        for ((idx, lk) in ls.withIndex()) {
+            if (idx >= 16) break
+            engine.nativeSetLink(
+                idx, lk.src, lk.dst, lk.amount, lk.prob, lk.chop, lk.delay, lk.soft, true
+            )
+        }
+    }
+
+    private fun groupParamTargets(): List<Int> {
+        val out = ArrayList<Int>()
+        val p = userPresets[activeGroup] ?: return out
+        for (f in 0 until min(51, p.fxOn.size)) {
+            if (!p.fxOn[f]) continue
+            val slot = fxSlot(f)
+            val defs = fxParamDefs[slot] ?: continue
+            for (k in defs.indices) out.add(8 + slot * 8 + k)
+        }
+        return out
+    }
+
+    private val chopNames = listOf("OFF", "1/4", "1/8", "1/16", "1/32", "1/8T")
+
+    private fun openCommDialog(focusSlot: Int = -1, focusK: Int = -1) {
+        val dd = resources.displayMetrics.density
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        val pad = (10 * dd).toInt()
+        box.setPadding(pad, pad, pad, pad)
+        scroll.addView(box)
+
+        val focusT = if (focusSlot >= 0) 8 + focusSlot * 8 + focusK else -1
+        val ls = bankLinks[activeGroup]
+
+        fun rebuild() {
+            box.removeAllViews()
+            val title = TextView(this)
+            title.text = "COMMUNICATION \u00b7 GROUPE ${activeGroup + 1}"
+            title.setTextColor(amber)
+            title.textSize = 13f
+            title.typeface = markerFont(this)
+            box.addView(title)
+            val hint = TextView(this)
+            hint.text = "CONNEXIONS ENTRE TIRETTES DU GROUPE \u00b7 MAINTENIR UNE TIRETTE POUR VOIR"
+            hint.setTextColor(silk)
+            hint.textSize = 9f
+            box.addView(hint)
+
+            var shown = 0
+            for ((li, lk) in ls.withIndex()) {
+                if (focusT >= 0 && lk.src != focusT && lk.dst != focusT) continue
+                shown++
+                val row = LinearLayout(this)
+                row.orientation = LinearLayout.VERTICAL
+                val bg = GradientDrawable()
+                bg.setColor(Color.rgb(16, 18, 24))
+                bg.setStroke((1 * dd).toInt(), silk)
+                bg.cornerRadius = 6 * dd
+                row.background = bg
+                row.setPadding(pad, pad, pad, pad)
+
+                val name = TextView(this)
+                name.text = linkParamName(lk.src) + "  \u2192  " + linkParamName(lk.dst)
+                name.setTextColor(Color.rgb(236, 224, 196))
+                name.textSize = 11f
+                name.typeface = markerFont(this)
+                row.addView(name)
+
+                fun slider(label: String, init: Float, onChange: (Float) -> Unit): SeekBar {
+                    val lab = TextView(this)
+                    lab.text = label
+                    lab.setTextColor(silk)
+                    lab.textSize = 9f
+                    row.addView(lab)
+                    val sb = SeekBar(this)
+                    sb.max = 100
+                    sb.progress = (init * 100f).toInt().coerceIn(0, 100)
+                    sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(s: SeekBar?, v: Int, fromUser: Boolean) {
+                            if (fromUser) onChange(v / 100f)
+                        }
+                        override fun onStartTrackingTouch(s: SeekBar?) {}
+                        override fun onStopTrackingTouch(s: SeekBar?) {}
+                    })
+                    row.addView(sb, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, (26 * dd).toInt()))
+                    return sb
+                }
+
+                slider("INTENSIT\u00c9") { v ->
+                    ls[li] = lk.copy(amount = v)
+                    pushLinks()
+                }
+                slider("PROBABILIT\u00c9", lk.prob) { v ->
+                    ls[li] = lk.copy(prob = v)
+                    pushLinks()
+                }
+                slider("RETARD", lk.delay) { v ->
+                    ls[li] = lk.copy(delay = v)
+                    pushLinks()
+                }
+                slider("DOUCEUR", lk.soft) { v ->
+                    ls[li] = lk.copy(soft = v)
+                    pushLinks()
+                }
+
+                val btnRow = LinearLayout(this)
+                val chopB = makeButton("HACHIS : " + chopNames[lk.chop.coerceIn(0, 5)], silk)
+                chopB.setOnClickListener {
+                    val nc = (lk.chop + 1) % 6
+                    ls[li] = lk.copy(chop = nc)
+                    chopB.text = "HACHIS : " + chopNames[nc]
+                    pushLinks()
+                    rebuild()
+                }
+                btnRow.addView(chopB, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                val delB = makeButton("SUPPR", red)
+                delB.setOnClickListener {
+                    ls.removeAt(li)
+                    pushLinks()
+                    rebuild()
+                }
+                btnRow.addView(delB, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                row.addView(btnRow)
+                box.addView(row)
+            }
+            if (shown == 0 && focusT < 0) {
+                val empty = TextView(this)
+                empty.text = "AUCUNE CONNEXION DANS CE GROUPE"
+                empty.setTextColor(silk)
+                empty.textSize = 10f
+                box.addView(empty)
+            }
+
+            if (focusT < 0) {
+                val addTitle = TextView(this)
+                addTitle.text = "NOUVELLE CONNEXION"
+                addTitle.setTextColor(green)
+                addTitle.textSize = 11f
+                addTitle.typeface = markerFont(this)
+                box.addView(addTitle)
+                val targets = groupParamTargets()
+                if (targets.size < 2) {
+                    val emp = TextView(this)
+                    emp.text = "GROUPE VIDE \u2014 SAUVEGARDER AU MOINS UN EFFET DANS LE SLOT ${activeGroup + 1}"
+                    emp.setTextColor(silk)
+                    emp.textSize = 9f
+                    box.addView(emp)
+                } else {
+                    var srcIdx = 0
+                    var dstIdx = 1
+                    val srcB = makeButton(linkParamName(targets[0]), turquoise)
+                    srcB.setOnClickListener {
+                        srcIdx = (srcIdx + 1) % targets.size
+                        srcB.text = linkParamName(targets[srcIdx])
+                    }
+                    val dstB = makeButton(linkParamName(targets[1]), violet)
+                    dstB.setOnClickListener {
+                        dstIdx = (dstIdx + 1) % targets.size
+                        dstB.text = linkParamName(targets[dstIdx])
+                    }
+                    val selRow = LinearLayout(this)
+                    selRow.addView(srcB, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    selRow.addView(dstB, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    box.addView(selRow)
+                    val addB = makeButton("AJOUTER", green)
+                    addB.setOnClickListener {
+                        if (ls.size < 16 && targets[srcIdx] != targets[dstIdx]) {
+                            ls.add(ParamLink(targets[srcIdx], targets[dstIdx], 0.5f, 1f, 0, 0f, 0f))
+                            pushLinks()
+                            rebuild()
+                        }
+                    }
+                    box.addView(addB)
+                }
+            }
+        }
+        rebuild()
+
+        android.app.AlertDialog.Builder(this)
+            .setView(scroll)
+            .setNegativeButton("FERMER") { d, _ -> d.dismiss() }
+            .show()
+    }
+
+    private fun linkParamName(t: Int): String {
+        if (t < 8) return "?"
+        val slot = t - 8
+        val k = slot % 8
+        val s = slot / 8
+        val fxName = fxNameBySlot[s] ?: "S"
+        val defs = fxParamDefs[s]
+        val paramName = defs?.getOrNull(k) ?: "P$k"
+        return "$fxName \u00b7 $paramName"
+    }
 
     private fun stopSampleRec() {
         engine.nativeStopRec()
@@ -4673,6 +4912,8 @@ class MainActivity : Activity() {
                 engine.nativeSetFilterType(activeFilter)
             }
             pad.activePreset = i
+            activeGroup = i
+            pushLinks()
         }
         pad.invalidate()
         refreshPresetRow()

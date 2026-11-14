@@ -62,6 +62,17 @@
 - **Longueur de boucle** : pendant que REC est armé (destination choisie, avant le lancement), la rangée 1–9 règle la longueur. Optionnel.
 - **Boucles quantisées** : à l'arrêt manuel, la longueur est arrondie au temps le plus proche pour boucler proprement au tempo. Débrayable dans le menu (ENREGISTREMENT → BOUCLES QUANTISÉES).
 
+## Communication entre tirettes (v0.43)
+- Les tirettes d'un même **groupe** (slot 1–9) peuvent se parler : le mouvement d'une tirette influence une autre.
+- **Maintenir une tirette** (~0,5 s) = ouvre la boîte **COMMUNICATION** : on voit ses connexions (source et destination) et on règle chaque connexion :
+  - **INTENSITÉ** : force de l'influence (0–100 %)
+  - **PROBABILITÉ** : chance que le message passe (100 % = toujours)
+  - **HACHIS** : gate rythmique au tempo (OFF, 1/4, 1/8, 1/16, 1/32, 1/8T)
+  - **RETARD** : la communication arrive en écho (jusqu'à 250 ms)
+  - **DOUCEUR** : l'influence monte doucement (vent qui soulève les feuilles)
+- Accès aussi via **OUTILS → COMMUNICATION → TIRETTES** (connexions du groupe actif + création de nouvelles connexions).
+- Les connexions sont **sauvegardées par groupe** dans le projet. Un groupe n'influence pas les autres.
+
 ## BPM
 - Glisser verticalement l'écran BPM = ajuster.
 - Tapper dessus en rythme = tap tempo.

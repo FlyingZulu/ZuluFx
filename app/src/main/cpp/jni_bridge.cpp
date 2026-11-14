@@ -70,6 +70,13 @@ Java_com_zulu_AudioEngine_nativeSetArpTarget(JNIEnv*, jobject, jint tg, jfloat a
 }
 
 JNIEXPORT void JNICALL
+Java_com_zulu_AudioEngine_nativeSetLink(JNIEnv*, jobject, jint idx, jint src, jint dst,
+                                         jfloat amount, jfloat prob, jint chop,
+                                         jfloat delay, jfloat soft, jboolean on) {
+    if (g) g->setLink(idx, src, dst, amount, prob, chop, delay, soft, on == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
 Java_com_zulu_AudioEngine_nativeSetCustomLfo(JNIEnv* env, jobject, jint idx, jfloatArray arr,
                                              jboolean on, jint rateIdx, jfloat depth,
                                              jfloat amount, jint target, jint wave) {

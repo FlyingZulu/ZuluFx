@@ -19,6 +19,7 @@ class AudioEngine {
     external fun nativeSetArp(on: Boolean, mode: Int, rate: Int, oct: Int, gate: Int, octJump: Boolean)
     external fun nativeSetArpSlices(n: Int)
     external fun nativeSetArpTarget(target: Int, amount: Float)
+    external fun nativeSetLink(idx: Int, src: Int, dst: Int, amount: Float, prob: Float, chop: Int, delay: Float, soft: Float, on: Boolean)
     external fun nativeSetArpXy(x: Float, touch: Boolean)
     external fun nativeSetAssign(axis: Int, p: Int)
     external fun nativeSetBend(b: Boolean, x: Float, level: Float)

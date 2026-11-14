@@ -84,6 +84,7 @@ public:
     void setStutter(bool s) { stutter.store(s); }
     void setGenTouch(bool t) { genTouch.store(t); }
     void setEco(bool e) { ecoMode.store(e); }
+    void setLink(int idx, int src, int dst, float amount, float prob, int chop, float delay, float soft, bool on);
     void genHit(int type, float x, float y);
     void setBpm(float b) { bpm.store(b); }
     void setArp(bool on, int mode, int rate, int oct, int gate, bool octJump) {
@@ -329,6 +330,20 @@ private:
     int gateRelL = 0, gateRelR = 0;
 
     float kik8Click = 0.f, kik8Lp = 0.f;
+
+    struct Link {
+        std::atomic<int> src{-1}, dst{-1};
+        std::atomic<float> amount{0.f}, prob{1.f}, delay{0.f}, soft{0.f};
+        std::atomic<int> chop{0};
+        std::atomic<bool> on{false};
+    };
+    Link links[16];
+    float linkPhase[16] = {0.f};
+    bool linkPass[16] = {true};
+    static constexpr int kLinkBuf = 12002;
+    float linkBuf[16][kLinkBuf] = {{0.f}};
+    int linkWr[16] = {0};
+    float linkSm[16] = {0.f};
     float voyPh = 0.f, voyVibPh = 0.f, voyMix = 0.f;
     float voyF1[3] = {0.f}, voyF1b[3] = {0.f}, voyF2[3] = {0.f}, voyF2b[3] = {0.f};
     float malX[8] = {0.f}, malY[8] = {0.f};

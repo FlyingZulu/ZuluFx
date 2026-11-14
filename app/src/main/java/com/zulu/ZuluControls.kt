@@ -1335,6 +1335,7 @@ class ParamPageView(context: Context) : View(context) {
     private val marker = markerFont(context)
     var onParam: ((Int, Float) -> Unit)? = null
     var onAssignCycle: ((Int) -> Unit)? = null
+    var onParamLongPress: ((Int) -> Unit)? = null
     var onExit: (() -> Unit)? = null
     var onMasterToggle: (() -> Unit)? = null
     var onSnapToggle: (() -> Unit)? = null
@@ -1346,6 +1347,10 @@ class ParamPageView(context: Context) : View(context) {
     private var values = FloatArray(0)
     private var assigns = IntArray(0)
     private var dragSlot = -1
+    private val longHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var longPending: Runnable? = null
+    private var downX = 0f
+    private var downY = 0f
 
     private val pBg = Paint().apply { color = Color.rgb(14, 15, 20) }
     private val pScrew = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(60, 64, 76) }
@@ -1413,10 +1418,30 @@ class ParamPageView(context: Context) : View(context) {
                     return true
                 }
                 dragSlot = (e.x * n / width).toInt().coerceIn(0, n - 1)
+                downX = e.x
+                downY = e.y
+                val slot = dragSlot
+                longPending = Runnable {
+                    longPending = null
+                    dragSlot = -1
+                    onParamLongPress?.invoke(slot)
+                }
+                longHandler.postDelayed(longPending!!, 450)
                 setFromY(dragSlot, e.y)
             }
-            MotionEvent.ACTION_MOVE -> if (dragSlot >= 0) setFromY(dragSlot, e.y)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragSlot = -1
+            MotionEvent.ACTION_MOVE -> {
+                if (longPending != null &&
+                    (Math.abs(e.x - downX) > 8 * dd || Math.abs(e.y - downY) > 8 * dd)) {
+                    longHandler.removeCallbacks(longPending!!)
+                    longPending = null
+                }
+                if (dragSlot >= 0) setFromY(dragSlot, e.y)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                longPending?.let { longHandler.removeCallbacks(it) }
+                longPending = null
+                dragSlot = -1
+            }
         }
         return true
     }
